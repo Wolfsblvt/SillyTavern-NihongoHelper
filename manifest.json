@@ -1,0 +1,14 @@
+{
+    "display_name": "Nihongo Helper",
+    "loading_order": 42,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "Wolfsblvt",
+    "version": "0.1.0",
+    "homePage": "https://github.com/Wolfsblvt/SillyTavern-NihongoHelper",
+    "hooks": {
+        "activate": "init"
+    }
+}

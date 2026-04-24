@@ -1,0 +1,42 @@
+/* ===== Nihongo Helper - Furigana Styles ===== */
+
+/* Base ruby styling */
+#chat .mes ruby {
+    ruby-align: center;
+}
+
+#chat .mes ruby rt {
+    font-size: 0.55em;
+    line-height: 1;
+    user-select: none;
+    color: var(--SmartThemeQuoteColor, inherit);
+    opacity: 0.85;
+}
+
+/* Reserve space for furigana even when hidden (prevents layout shifts) */
+#chat .mes ruby rt {
+    visibility: visible;
+}
+
+/* Hover-only mode: hide furigana text but keep space reserved */
+#chat.nihongo-furigana-hover .mes ruby rt {
+    visibility: hidden;
+}
+
+/* Show furigana on hover of the parent paragraph/block */
+#chat.nihongo-furigana-hover .mes .mes_text p:hover ruby rt,
+#chat.nihongo-furigana-hover .mes .mes_text > span:hover ruby rt,
+#chat.nihongo-furigana-hover .mes .mes_reasoning p:hover ruby rt,
+#chat.nihongo-furigana-hover .mes .mes_reasoning > span:hover ruby rt {
+    visibility: visible;
+}
+
+/* Disabled state: fully hide furigana and collapse space */
+#chat.nihongo-furigana-disabled .mes ruby rt {
+    display: none;
+}
+
+/* Processed span wrapper should be inline */
+#chat .mes .nihongo-processed {
+    display: inline;
+}
