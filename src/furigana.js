@@ -6,16 +6,29 @@ let tokenizer = null;
 let tokenizerLoading = false;
 
 /**
- * Creates a debounced function.
+ * Creates a throttled function that fires at most once per interval,
+ * with a trailing call to catch the last invocation.
  * @param {Function} fn
- * @param {number} delay
+ * @param {number} interval
  * @returns {Function}
  */
-function debounce(fn, delay) {
+function throttle(fn, interval) {
+    let lastCall = 0;
     let timer = null;
     return (...args) => {
-        if (timer) clearTimeout(timer);
-        timer = setTimeout(() => fn(...args), delay);
+        const now = Date.now();
+        const remaining = interval - (now - lastCall);
+        if (remaining <= 0) {
+            if (timer) { clearTimeout(timer); timer = null; }
+            lastCall = now;
+            fn(...args);
+        } else if (!timer) {
+            timer = setTimeout(() => {
+                lastCall = Date.now();
+                timer = null;
+                fn(...args);
+            }, remaining);
+        }
     };
 }
 
@@ -47,6 +60,31 @@ function containsKanji(text) {
 }
 
 /**
+ * Checks if a character is Japanese (kanji, hiragana, katakana).
+ * @param {string} ch Single character
+ * @returns {boolean}
+ */
+function isJapanese(ch) {
+    const code = ch.charCodeAt(0);
+    return isKanji(ch)
+        || (code >= 0x3040 && code <= 0x309F)  // Hiragana
+        || (code >= 0x30A0 && code <= 0x30FF)  // Katakana
+        || (code >= 0xFF66 && code <= 0xFF9F); // Half-width Katakana
+}
+
+/**
+ * Checks if a string contains any Japanese characters.
+ * @param {string} text
+ * @returns {boolean}
+ */
+function containsJapanese(text) {
+    for (const ch of text) {
+        if (isJapanese(ch)) return true;
+    }
+    return false;
+}
+
+/**
  * Converts katakana to hiragana.
  * @param {string} str
  * @returns {string}
@@ -73,7 +111,7 @@ function buildRuby(surface, reading) {
     // Simple case: entire surface is kanji
     const allKanji = [...surface].every(isKanji);
     if (allKanji) {
-        return `<ruby>${surface}<rp>(</rp><rt>${reading}</rt><rp>)</rp></ruby>`;
+        return `<ruby>${surface}<rt>${reading}</rt></ruby>`;
     }
 
     // Mixed kanji/kana: try to split and align readings
@@ -192,14 +230,14 @@ function processMessageElement(element, force = false) {
         stripFurigana(element);
     }
 
-    // Walk all text nodes
+    // Walk all text nodes that contain any Japanese characters
     const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
         acceptNode(node) {
             // Skip if inside a ruby element, code block, or already processed
             const parent = node.parentElement;
             if (!parent) return NodeFilter.FILTER_REJECT;
             if (parent.closest('ruby, code, pre, .nihongo-processed')) return NodeFilter.FILTER_REJECT;
-            if (!containsKanji(node.textContent || '')) return NodeFilter.FILTER_REJECT;
+            if (!containsJapanese(node.textContent || '')) return NodeFilter.FILTER_REJECT;
             return NodeFilter.FILTER_ACCEPT;
         },
     });
@@ -211,13 +249,12 @@ function processMessageElement(element, force = false) {
 
     for (const textNode of textNodes) {
         const text = textNode.textContent || '';
-        const html = addFuriganaToText(text);
-        if (html !== text) {
-            const span = document.createElement('span');
-            span.classList.add('nihongo-processed');
-            span.innerHTML = html;
-            textNode.parentNode?.replaceChild(span, textNode);
-        }
+        // For text with kanji, add furigana; for pure kana, just wrap for font-size
+        const html = containsKanji(text) ? addFuriganaToText(text) : text;
+        const span = document.createElement('span');
+        span.classList.add('nihongo-processed');
+        span.innerHTML = html;
+        textNode.parentNode?.replaceChild(span, textNode);
     }
 }
 
@@ -410,16 +447,16 @@ export async function initFurigana() {
     });
 
     // === Streaming ===
-    // Debounced tokenizer run for new streaming content
-    const debouncedStreamProcess = debounce(() => {
+    // Throttled tokenizer run - fires at most once per interval, not just at the end
+    let throttledStreamProcess = throttle(() => {
         if (!tokenizer || !nihongoSettings.enabled) return;
         const lastMes = document.querySelector('#chat .mes:last-child .mes_text');
         if (lastMes instanceof HTMLElement) {
             processStreamingElement(lastMes);
         }
-    }, 250);
+    }, nihongoSettings.streamInterval);
 
-    eventSource.on(eventTypes.STREAM_TOKEN_RECEIVED, debouncedStreamProcess);
+    eventSource.on(eventTypes.STREAM_TOKEN_RECEIVED, (...args) => throttledStreamProcess(...args));
 
     // Reset streaming cache when generation starts
     eventSource.on(eventTypes.GENERATION_STARTED, () => {

@@ -5,6 +5,10 @@
     ruby-align: center;
 }
 
+#chat .mes ruby rp {
+    display: none;
+}
+
 #chat .mes ruby rt {
     font-size: calc(1em * var(--nihongo-furigana-scale, 0.75));
     line-height: 1;

@@ -8,6 +8,7 @@ const defaultSettings = {
     hoverOnly: false,
     fontSize: 1.0,
     furiganaScale: 0.75,
+    streamInterval: 150,
 };
 
 let uiInjected = false;
@@ -44,6 +45,9 @@ export const nihongoSettings = {
     },
     get furiganaScale() {
         return Number(ensureSettings().furiganaScale) || 0.75;
+    },
+    get streamInterval() {
+        return Number(ensureSettings().streamInterval) || 150;
     },
 };
 
@@ -92,6 +96,15 @@ function applySettingsToUI() {
         furiganaScaleValue.textContent = `${settings.furiganaScale}x`;
     }
 
+    const streamIntervalInput = document.getElementById('nihongo_helper_stream_interval');
+    if (streamIntervalInput instanceof HTMLInputElement) {
+        streamIntervalInput.value = String(settings.streamInterval);
+    }
+    const streamIntervalValue = document.getElementById('nihongo_helper_stream_interval_value');
+    if (streamIntervalValue) {
+        streamIntervalValue.textContent = `${settings.streamInterval}ms`;
+    }
+
     applyCSSVariables();
 }
 
@@ -134,6 +147,15 @@ function registerSettingsEventListeners() {
             const display = document.getElementById('nihongo_helper_furigana_scale_value');
             if (display) display.textContent = `${settings.furiganaScale}x`;
             applyCSSVariables();
+        }
+    });
+
+    document.getElementById('nihongo_helper_stream_interval')?.addEventListener('input', (e) => {
+        if (e.target instanceof HTMLInputElement) {
+            settings.streamInterval = parseInt(e.target.value, 10);
+            saveSettingsDebounced();
+            const display = document.getElementById('nihongo_helper_stream_interval_value');
+            if (display) display.textContent = `${settings.streamInterval}ms`;
         }
     });
 }
