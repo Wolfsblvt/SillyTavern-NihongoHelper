@@ -6,6 +6,8 @@ import { EXTENSION_KEY, EXTENSION_NAME } from '../index.js';
 const defaultSettings = {
     enabled: true,
     hoverOnly: false,
+    fontSize: 1.0,
+    furiganaScale: 0.75,
 };
 
 let uiInjected = false;
@@ -37,7 +39,24 @@ export const nihongoSettings = {
     get hoverOnly() {
         return Boolean(ensureSettings().hoverOnly);
     },
+    get fontSize() {
+        return Number(ensureSettings().fontSize) || 1.0;
+    },
+    get furiganaScale() {
+        return Number(ensureSettings().furiganaScale) || 0.75;
+    },
 };
+
+/**
+ * Applies CSS custom properties for font size and furigana scale.
+ */
+function applyCSSVariables() {
+    const chatEl = document.getElementById('chat');
+    if (chatEl) {
+        chatEl.style.setProperty('--nihongo-font-size', `${nihongoSettings.fontSize}`);
+        chatEl.style.setProperty('--nihongo-furigana-scale', `${nihongoSettings.furiganaScale}`);
+    }
+}
 
 /**
  * Applies settings to UI elements.
@@ -54,6 +73,26 @@ function applySettingsToUI() {
     if (hoverOnlyToggle instanceof HTMLInputElement) {
         hoverOnlyToggle.checked = settings.hoverOnly;
     }
+
+    const fontSizeInput = document.getElementById('nihongo_helper_font_size');
+    if (fontSizeInput instanceof HTMLInputElement) {
+        fontSizeInput.value = String(settings.fontSize);
+    }
+    const fontSizeValue = document.getElementById('nihongo_helper_font_size_value');
+    if (fontSizeValue) {
+        fontSizeValue.textContent = `${settings.fontSize}x`;
+    }
+
+    const furiganaScaleInput = document.getElementById('nihongo_helper_furigana_scale');
+    if (furiganaScaleInput instanceof HTMLInputElement) {
+        furiganaScaleInput.value = String(settings.furiganaScale);
+    }
+    const furiganaScaleValue = document.getElementById('nihongo_helper_furigana_scale_value');
+    if (furiganaScaleValue) {
+        furiganaScaleValue.textContent = `${settings.furiganaScale}x`;
+    }
+
+    applyCSSVariables();
 }
 
 /**
@@ -75,6 +114,26 @@ function registerSettingsEventListeners() {
             settings.hoverOnly = e.target.checked;
             saveSettingsDebounced();
             document.getElementById('chat')?.classList.toggle('nihongo-furigana-hover', settings.hoverOnly);
+        }
+    });
+
+    document.getElementById('nihongo_helper_font_size')?.addEventListener('input', (e) => {
+        if (e.target instanceof HTMLInputElement) {
+            settings.fontSize = parseFloat(e.target.value);
+            saveSettingsDebounced();
+            const display = document.getElementById('nihongo_helper_font_size_value');
+            if (display) display.textContent = `${settings.fontSize}x`;
+            applyCSSVariables();
+        }
+    });
+
+    document.getElementById('nihongo_helper_furigana_scale')?.addEventListener('input', (e) => {
+        if (e.target instanceof HTMLInputElement) {
+            settings.furiganaScale = parseFloat(e.target.value);
+            saveSettingsDebounced();
+            const display = document.getElementById('nihongo_helper_furigana_scale_value');
+            if (display) display.textContent = `${settings.furiganaScale}x`;
+            applyCSSVariables();
         }
     });
 }

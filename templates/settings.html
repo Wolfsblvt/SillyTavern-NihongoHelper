@@ -17,6 +17,18 @@
                         <small class="notes">Space is reserved even when hidden, preventing layout shifts</small>
                     </div>
                 </label>
+                <div class="flex-container flexFlowColumn" style="margin-top: 8px;">
+                    <label for="nihongo_helper_font_size">
+                        <span>Japanese text size: <span id="nihongo_helper_font_size_value">1x</span></span>
+                    </label>
+                    <input type="range" id="nihongo_helper_font_size" min="0.5" max="2.0" step="0.05" value="1.0" />
+                </div>
+                <div class="flex-container flexFlowColumn" style="margin-top: 4px;">
+                    <label for="nihongo_helper_furigana_scale">
+                        <span>Furigana size: <span id="nihongo_helper_furigana_scale_value">0.75x</span></span>
+                    </label>
+                    <input type="range" id="nihongo_helper_furigana_scale" min="0.3" max="1.5" step="0.05" value="0.75" />
+                </div>
             </div>
         </div>
     </div>

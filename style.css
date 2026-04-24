@@ -6,11 +6,16 @@
 }
 
 #chat .mes ruby rt {
-    font-size: 0.55em;
+    font-size: calc(1em * var(--nihongo-furigana-scale, 0.75));
     line-height: 1;
     user-select: none;
     color: var(--SmartThemeQuoteColor, inherit);
     opacity: 0.85;
+}
+
+/* Japanese text font size scaling */
+#chat .mes .nihongo-processed {
+    font-size: calc(1em * var(--nihongo-font-size, 1));
 }
 
 /* Reserve space for furigana even when hidden (prevents layout shifts) */
