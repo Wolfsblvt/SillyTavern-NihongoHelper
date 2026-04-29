@@ -6,9 +6,12 @@ import { EXTENSION_KEY, EXTENSION_NAME } from '../index.js';
 const defaultSettings = {
     enabled: true,
     hoverOnly: false,
+    highlightKnown: true,
     fontSize: 1.0,
     furiganaScale: 0.75,
     streamInterval: 150,
+    kmSort: 'freq_asc',
+    kmFilter: 'all',
 };
 
 let uiInjected = false;
@@ -49,6 +52,23 @@ export const nihongoSettings = {
     get streamInterval() {
         return Number(ensureSettings().streamInterval) || 150;
     },
+    get highlightKnown() {
+        return Boolean(ensureSettings().highlightKnown);
+    },
+    get kmSort() {
+        return String(ensureSettings().kmSort || 'freq_asc');
+    },
+    set kmSort(val) {
+        ensureSettings().kmSort = val;
+        saveSettingsDebounced();
+    },
+    get kmFilter() {
+        return String(ensureSettings().kmFilter || 'all');
+    },
+    set kmFilter(val) {
+        ensureSettings().kmFilter = val;
+        saveSettingsDebounced();
+    },
 };
 
 /**
@@ -76,6 +96,11 @@ function applySettingsToUI() {
     const hoverOnlyToggle = document.getElementById('nihongo_helper_hover_only');
     if (hoverOnlyToggle instanceof HTMLInputElement) {
         hoverOnlyToggle.checked = settings.hoverOnly;
+    }
+
+    const highlightKnownToggle = document.getElementById('nihongo_helper_highlight_known');
+    if (highlightKnownToggle instanceof HTMLInputElement) {
+        highlightKnownToggle.checked = settings.highlightKnown;
     }
 
     const fontSizeInput = document.getElementById('nihongo_helper_font_size');
@@ -127,6 +152,14 @@ function registerSettingsEventListeners() {
             settings.hoverOnly = e.target.checked;
             saveSettingsDebounced();
             document.getElementById('chat')?.classList.toggle('nihongo-furigana-hover', settings.hoverOnly);
+        }
+    });
+
+    document.getElementById('nihongo_helper_highlight_known')?.addEventListener('change', (e) => {
+        if (e.target instanceof HTMLInputElement) {
+            settings.highlightKnown = e.target.checked;
+            saveSettingsDebounced();
+            document.getElementById('chat')?.classList.toggle('nihongo-highlight-known', settings.highlightKnown);
         }
     });
 
@@ -198,6 +231,7 @@ export async function injectSettingsUI() {
     if (chatEl) {
         chatEl.classList.toggle('nihongo-furigana-disabled', !nihongoSettings.enabled);
         chatEl.classList.toggle('nihongo-furigana-hover', nihongoSettings.hoverOnly);
+        chatEl.classList.toggle('nihongo-highlight-known', nihongoSettings.highlightKnown);
     }
 
     uiInjected = true;

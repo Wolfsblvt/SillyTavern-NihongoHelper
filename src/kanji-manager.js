@@ -2,7 +2,9 @@ import { saveSettingsDebounced } from '../../../../../script.js';
 import { extension_settings, renderExtensionTemplateAsync } from '../../../../extensions.js';
 import { Popup, POPUP_TYPE } from '../../../../popup.js';
 import { EXTENSION_KEY, EXTENSION_NAME } from '../index.js';
-import { loadKanjiData, queryKanji, getKanji, isKanjiDataLoaded } from './kanji-data.js';
+import { loadKanjiData, queryKanji, getKanji, getAllKanji, isKanjiDataLoaded } from './kanji-data.js';
+import { nihongoSettings } from './settings.js';
+import { attachKanjiTooltip, destroyTooltip } from './kanji-tooltip.js';
 
 const PAGE_SIZE = 200;
 
@@ -18,6 +20,8 @@ let currentSort = 'freq_asc';
 let currentSearch = '';
 let currentPage = 0;
 let currentResults = [];
+let totalKanjiCount = 0;
+let detailOpen = false;
 
 /**
  * Loads known kanji set from extension settings.
@@ -73,6 +77,29 @@ export function getKnownKanji() {
 }
 
 /**
+ * Gets the badge text to show on a kanji tile based on current sort.
+ * @param {import('./kanji-data.js').KanjiEntry} entry
+ * @returns {string}
+ */
+function getBadgeText(entry) {
+    switch (currentSort) {
+        case 'freq_asc':
+        case 'freq_desc':
+            return entry.f ? `#${entry.f}` : '';
+        case 'jlpt_easy':
+        case 'jlpt_hard':
+            return entry.jlpt ? `N${entry.jlpt}` : '';
+        case 'grade_asc':
+            return entry.g ? (entry.g <= 6 ? `G${entry.g}` : 'JH') : '';
+        case 'strokes_asc':
+        case 'strokes_desc':
+            return entry.s ? `${entry.s}画` : '';
+        default:
+            return '';
+    }
+}
+
+/**
  * Renders a page of kanji tiles into the grid.
  * @param {HTMLElement} grid
  */
@@ -86,20 +113,40 @@ function renderGrid(grid) {
 
     for (const entry of pageEntries) {
         const tile = document.createElement('div');
-        tile.className = 'nihongo-km-tile';
+        tile.className = 'nihongo-km-tile interactable';
+        tile.tabIndex = 0;
         if (knownKanji.has(entry.k)) {
             tile.classList.add('nihongo-km-tile-known');
         }
         tile.dataset.kanji = entry.k;
-        tile.textContent = entry.k;
+
+        // Kanji character
+        const kanjiSpan = document.createElement('span');
+        kanjiSpan.className = 'nihongo-km-tile-char';
+        kanjiSpan.textContent = entry.k;
+        tile.appendChild(kanjiSpan);
+
+        // Badge (context-aware based on sort)
+        const badge = getBadgeText(entry);
+        if (badge) {
+            const badgeEl = document.createElement('span');
+            badgeEl.className = 'nihongo-km-tile-badge';
+            badgeEl.textContent = badge;
+            tile.appendChild(badgeEl);
+        }
+
         tile.title = entry.m.slice(0, 3).join(', ');
         grid.appendChild(tile);
     }
 
-    // Update count display
+    // Update count display — "X of Y kanji" format
     const countEl = grid.closest('#nihongo_kanji_manager')?.querySelector('#nihongo_km_count');
     if (countEl) {
-        countEl.textContent = `${currentResults.length} kanji`;
+        if (currentSearch || currentFilter !== 'all') {
+            countEl.textContent = `${currentResults.length} of ${totalKanjiCount} kanji`;
+        } else {
+            countEl.textContent = `${currentResults.length} kanji`;
+        }
     }
     const knownCountEl = grid.closest('#nihongo_kanji_manager')?.querySelector('#nihongo_km_known_count');
     if (knownCountEl) {
@@ -139,6 +186,7 @@ function showDetail(container, char) {
     grid.style.display = 'none';
     header.style.display = 'none';
     detail.style.display = '';
+    detailOpen = true;
 
     // Populate
     const detailKanji = detail.querySelector('#nihongo_km_detail_kanji');
@@ -193,6 +241,7 @@ function hideDetail(container) {
     if (grid) grid.style.display = '';
     if (detail) detail.style.display = 'none';
     if (header) header.style.display = '';
+    detailOpen = false;
 }
 
 /**
@@ -216,6 +265,13 @@ export async function openKanjiManager() {
         await loadKanjiData();
     }
     loadKnownKanji();
+    totalKanjiCount = getAllKanji().length;
+
+    // Restore saved sort/filter
+    currentSort = nihongoSettings.kmSort;
+    currentFilter = nihongoSettings.kmFilter;
+    currentSearch = '';
+    detailOpen = false;
 
     const html = await renderExtensionTemplateAsync(
         `third-party/${EXTENSION_NAME}`,
@@ -227,13 +283,19 @@ export async function openKanjiManager() {
 
     activePopup = new Popup(html, POPUP_TYPE.DISPLAY, '', {
         large: true,
+        wider: true,
         allowVerticalScrolling: true,
         allowHorizontalScrolling: false,
         okButton: false,
         cancelButton: false,
     });
 
-    activePopup.show();
+    const popupResult = activePopup.show();
+
+    // Clean up tooltip when popup closes
+    popupResult.finally(() => {
+        destroyTooltip();
+    });
 
     // Wait for DOM
     requestAnimationFrame(() => {
@@ -242,6 +304,7 @@ export async function openKanjiManager() {
 
         const grid = container.querySelector('#nihongo_km_grid');
         const searchInput = container.querySelector('#nihongo_km_search');
+        const searchClearBtn = container.querySelector('#nihongo_km_search_clear');
         const filterSelect = container.querySelector('#nihongo_km_filter');
         const sortSelect = container.querySelector('#nihongo_km_sort');
         const backBtn = container.querySelector('#nihongo_km_detail_back');
@@ -249,36 +312,64 @@ export async function openKanjiManager() {
 
         if (!grid) return;
 
+        // Restore saved values to UI
+        if (filterSelect) filterSelect.value = currentFilter;
+        if (sortSelect) sortSelect.value = currentSort;
+
         // Initial render
         refreshGrid(grid);
 
-        // Search with debounce
+        // Search with debounce + clear button visibility
         let searchTimer = null;
         searchInput?.addEventListener('input', (e) => {
             if (searchTimer) clearTimeout(searchTimer);
+            const val = e.target.value;
+            if (searchClearBtn) searchClearBtn.style.display = val ? '' : 'none';
             searchTimer = setTimeout(() => {
-                currentSearch = e.target.value;
+                currentSearch = val;
                 refreshGrid(grid);
             }, 300);
         });
 
-        // Filter change
+        // Search clear button
+        searchClearBtn?.addEventListener('click', () => {
+            if (searchInput) {
+                searchInput.value = '';
+                searchInput.focus();
+            }
+            if (searchClearBtn) searchClearBtn.style.display = 'none';
+            currentSearch = '';
+            refreshGrid(grid);
+        });
+
+        // Filter change (persist)
         filterSelect?.addEventListener('change', (e) => {
             currentFilter = e.target.value;
+            nihongoSettings.kmFilter = currentFilter;
             refreshGrid(grid);
         });
 
-        // Sort change
+        // Sort change (persist)
         sortSelect?.addEventListener('change', (e) => {
             currentSort = e.target.value;
+            nihongoSettings.kmSort = currentSort;
             refreshGrid(grid);
         });
 
-        // Kanji tile click → show detail
+        // Kanji tile click / Enter → show detail
         grid.addEventListener('click', (e) => {
             const tile = e.target.closest('.nihongo-km-tile');
             if (tile && tile.dataset.kanji) {
                 showDetail(container, tile.dataset.kanji);
+            }
+        });
+        grid.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                const tile = e.target.closest('.nihongo-km-tile');
+                if (tile && tile.dataset.kanji) {
+                    e.preventDefault();
+                    showDetail(container, tile.dataset.kanji);
+                }
             }
         });
 
@@ -314,6 +405,19 @@ export async function openKanjiManager() {
             }
         });
 
+        // Keyboard: Escape/Backspace in detail view → back to grid (not close popup)
+        activePopup?.dlg?.addEventListener('keydown', (e) => {
+            if (!detailOpen) return;
+            if (e.key === 'Escape' || e.key === 'Backspace') {
+                // Don't close popup, just go back
+                if (e.target === document.body || container.contains(e.target)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    hideDetail(container);
+                }
+            }
+        }, true); // capture phase to beat popup's own handler
+
         // Infinite scroll for the grid
         const popupBody = activePopup?.dlg?.querySelector('.popup-body');
         if (popupBody) {
@@ -328,6 +432,12 @@ export async function openKanjiManager() {
                     }
                 }
             });
+        }
+
+        // Attach kanji tooltip to the grid, bounded by the popup dialog
+        const popupDialog = activePopup?.dlg;
+        if (popupDialog) {
+            attachKanjiTooltip(grid, { boundingEl: popupDialog });
         }
     });
 }

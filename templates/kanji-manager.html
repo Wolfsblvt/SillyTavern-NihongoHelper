@@ -2,7 +2,12 @@
     <div class="nihongo-km-header">
         <h3>Kanji Manager</h3>
         <div class="nihongo-km-controls">
-            <input type="text" id="nihongo_km_search" class="text_pole" placeholder="Search kanji, meaning, or reading..." />
+            <div class="nihongo-km-search-wrapper">
+                <input type="text" id="nihongo_km_search" class="text_pole" placeholder="Search kanji, meaning, or reading..." />
+                <button id="nihongo_km_search_clear" class="nihongo-km-search-clear interactable" title="Clear search" style="display: none;">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
             <select id="nihongo_km_filter" class="text_pole">
                 <option value="all">All Kanji</option>
                 <optgroup label="JLPT Level">

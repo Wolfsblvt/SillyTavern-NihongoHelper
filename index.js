@@ -1,6 +1,7 @@
 import { initSettings, injectSettingsUI } from './src/settings.js';
 import { initFurigana } from './src/furigana.js';
 import { initKanjiManager } from './src/kanji-manager.js';
+import { injectWandMenu } from './src/wand-menu.js';
 
 export const EXTENSION_KEY = 'nihongo_helper';
 export const EXTENSION_NAME = 'SillyTavern-NihongoHelper';
@@ -26,6 +27,9 @@ export async function init() {
 
     // Initialize kanji manager
     initKanjiManager();
+
+    // Add wand menu items
+    injectWandMenu();
 
     console.debug(`[${EXTENSION_NAME}] Extension activated`);
 

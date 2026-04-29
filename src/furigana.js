@@ -1,6 +1,7 @@
 import { EXTENSION_NAME } from '../index.js';
 import { nihongoSettings } from './settings.js';
 import { getKnownKanji } from './kanji-manager.js';
+import { getKanji as getKanjiEntry } from './kanji-data.js';
 
 /** @type {any} */
 let tokenizer = null;
@@ -97,13 +98,44 @@ function katakanaToHiragana(str) {
 }
 
 /**
+ * Wraps individual kanji characters with spans containing data attributes.
+ * Each kanji gets class="nihongo-kanji" plus data-kanji, data-freq, data-jlpt, data-grade.
+ * Known kanji additionally get class="nihongo-kanji-known".
+ * @param {string} kanjiStr One or more kanji characters
+ * @param {Set<string>} known Set of known kanji
+ * @returns {string} HTML with per-kanji spans
+ */
+function wrapKanji(kanjiStr, known) {
+    let out = '';
+    for (const ch of kanjiStr) {
+        if (!isKanji(ch)) {
+            out += ch;
+            continue;
+        }
+        const entry = getKanjiEntry(ch);
+        const classes = ['nihongo-kanji'];
+        if (known.has(ch)) classes.push('nihongo-kanji-known');
+
+        const attrs = [`data-kanji="${ch}"`];
+        if (entry) {
+            if (entry.f) attrs.push(`data-freq="${entry.f}"`);
+            if (entry.jlpt) attrs.push(`data-jlpt="${entry.jlpt}"`);
+            if (entry.g) attrs.push(`data-grade="${entry.g}"`);
+        }
+        out += `<span class="${classes.join(' ')}" ${attrs.join(' ')}>${ch}</span>`;
+    }
+    return out;
+}
+
+/**
  * Builds ruby HTML for a single token.
  * Tries to align furigana only over the kanji portions of the surface form.
  * @param {string} surface The surface form (as written)
  * @param {string} reading The reading in hiragana
+ * @param {Set<string>} known Set of known kanji
  * @returns {string} HTML string
  */
-function buildRuby(surface, reading) {
+function buildRuby(surface, reading, known) {
     // If the surface has no kanji, no ruby needed
     if (!containsKanji(surface)) {
         return surface;
@@ -112,7 +144,7 @@ function buildRuby(surface, reading) {
     // Simple case: entire surface is kanji
     const allKanji = [...surface].every(isKanji);
     if (allKanji) {
-        return `<ruby>${surface}<rt>${reading}</rt></ruby>`;
+        return `<ruby>${wrapKanji(surface, known)}<rt>${reading}</rt></ruby>`;
     }
 
     // Mixed kanji/kana: try to split and align readings
@@ -162,8 +194,10 @@ function buildRuby(surface, reading) {
     let html = '';
     for (const part of parts) {
         if (part.type === 'kanji' && !readingUsed) {
-            html += `<ruby>${part.text}<rt>${remainingReading}</rt></ruby>`;
+            html += `<ruby>${wrapKanji(part.text, known)}<rt>${remainingReading}</rt></ruby>`;
             readingUsed = true;
+        } else if (part.type === 'kanji') {
+            html += wrapKanji(part.text, known);
         } else {
             html += part.text;
         }
@@ -195,11 +229,15 @@ function addFuriganaToText(text) {
             // Skip furigana if every kanji in the token is marked as known
             const kanjiChars = [...surface].filter(isKanji);
             if (known.size > 0 && kanjiChars.length > 0 && kanjiChars.every(ch => known.has(ch))) {
-                result += surface;
+                // Still wrap individual kanji for highlighting/data even without furigana
+                result += wrapKanji(surface, known);
             } else {
                 const hiraganaReading = katakanaToHiragana(reading);
-                result += buildRuby(surface, hiraganaReading);
+                result += buildRuby(surface, hiraganaReading, known);
             }
+        } else if (containsKanji(surface)) {
+            // Kanji without reading (rare) — still wrap for data attributes
+            result += wrapKanji(surface, known);
         } else {
             result += surface;
         }

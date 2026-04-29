@@ -50,6 +50,16 @@
     display: inline;
 }
 
+/* Per-kanji wrapping (inline, no visual change by default) */
+#chat .mes .nihongo-kanji {
+    display: inline;
+}
+
+/* Known kanji highlighting — blends current text color with green */
+#chat.nihongo-highlight-known .mes .nihongo-kanji-known {
+    color: color-mix(in srgb, currentColor 45%, #4caf50);
+}
+
 /* ===== Kanji Manager Styles ===== */
 
 #nihongo_kanji_manager {
@@ -89,6 +99,38 @@
     max-width: 300px;
 }
 
+/* Search wrapper with clear button */
+.nihongo-km-search-wrapper {
+    position: relative;
+    flex: 1 1 150px;
+    min-width: 120px;
+    max-width: 300px;
+}
+
+.nihongo-km-search-wrapper input {
+    width: 100%;
+    padding-right: 28px;
+}
+
+.nihongo-km-search-clear {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    opacity: 0.5;
+    padding: 2px 4px;
+    font-size: 0.85em;
+    color: inherit;
+    line-height: 1;
+}
+
+.nihongo-km-search-clear:hover {
+    opacity: 1;
+}
+
 .nihongo-km-stats {
     display: flex;
     gap: 16px;
@@ -106,6 +148,7 @@
 
 /* Kanji Tile */
 .nihongo-km-tile {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -117,6 +160,20 @@
     border: 1px solid transparent;
     transition: background 0.15s, border-color 0.15s, transform 0.1s;
     user-select: none;
+}
+
+.nihongo-km-tile-char {
+    line-height: 1;
+}
+
+.nihongo-km-tile-badge {
+    position: absolute;
+    bottom: 2px;
+    right: 3px;
+    font-size: 0.4em;
+    opacity: 0.5;
+    line-height: 1;
+    pointer-events: none;
 }
 
 .nihongo-km-tile:hover {
@@ -203,4 +260,97 @@
 .nihongo-km-reading {
     font-size: 1.1em;
     font-family: "Noto Sans JP", "Yu Gothic", "Hiragino Kaku Gothic Pro", sans-serif;
+}
+
+/* ===== Kanji Tooltip ===== */
+
+.nihongo-tooltip {
+    position: fixed;
+    z-index: 100000;
+    pointer-events: auto;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--SmartThemeBorderColor, #555);
+    background: var(--SmartThemeBlurTintColor, #1a1a2e);
+    color: var(--SmartThemeBodyColor, #ddd);
+    overflow: hidden;
+    animation: nihongo-tooltip-in 0.12s ease-out;
+}
+
+@keyframes nihongo-tooltip-in {
+    from { opacity: 0; transform: scale(0.95); }
+    to   { opacity: 1; transform: scale(1); }
+}
+
+.nihongo-tooltip-inner {
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.nihongo-tooltip-inner.nihongo-tooltip-known {
+    border-left: 3px solid #4caf50;
+}
+
+.nihongo-tooltip-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.nihongo-tooltip-kanji {
+    font-size: 2em;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.nihongo-tooltip-meanings {
+    font-size: 0.9em;
+    opacity: 0.85;
+    line-height: 1.3;
+}
+
+.nihongo-tooltip-readings {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 0.85em;
+}
+
+.nihongo-tooltip-row {
+    display: flex;
+    gap: 6px;
+    align-items: baseline;
+}
+
+.nihongo-tooltip-label {
+    font-weight: bold;
+    opacity: 0.6;
+    min-width: 16px;
+    font-size: 0.9em;
+}
+
+.nihongo-tooltip-meta {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-top: 2px;
+}
+
+.nihongo-tooltip-tag {
+    font-size: 0.75em;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    opacity: 0.7;
+    white-space: nowrap;
+}
+
+.nihongo-tooltip-tag-known {
+    background: rgba(76, 175, 80, 0.2);
+    border-color: rgba(76, 175, 80, 0.4);
+    color: #81c784;
+    opacity: 1;
 }
