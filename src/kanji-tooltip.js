@@ -1,6 +1,6 @@
 import { getKanji, isKanjiDataLoaded } from './kanji-data.js';
 import { getKnownKanji, toggleKnown } from './kanji-manager.js';
-import { lookupMeaning } from './meaning-provider.js';
+import { lookupMeaning, isMeaningAvailable } from './meaning-provider.js';
 
 /**
  * Generic kanji tooltip module.
@@ -15,7 +15,7 @@ import { lookupMeaning } from './meaning-provider.js';
 
 const TOOLTIP_ID = 'nihongo_kanji_tooltip';
 const SHOW_DELAY = 300;
-const HIDE_DELAY = 350;
+const HIDE_DELAY = 400;
 const TOOLTIP_WIDTH = 280;
 const TOOLTIP_MAX_HEIGHT = 350;
 
@@ -29,6 +29,12 @@ let hideTimer = null;
 let currentKey = null;
 /** @type {HTMLElement|null} */
 let tooltipParent = null;
+/** @type {HTMLElement|null} - the element the cursor is currently over (target or tooltip) */
+let hoveredTarget = null;
+/** @type {{ key: string, el: HTMLElement, type: string, word?: string, reading?: string, pos?: string }|null} */
+let pendingTarget = null;
+/** @type {boolean} */
+let mouseOverTooltip = false;
 /** @type {WeakMap<HTMLElement, { onMove: Function, onLeave: Function, onScroll: Function }>} */
 const attachedContainers = new WeakMap();
 
@@ -53,9 +59,11 @@ function ensureTooltip() {
 
     // Keep tooltip visible while hovering over it
     tooltipEl.addEventListener('mouseenter', () => {
+        mouseOverTooltip = true;
         cancelHide();
     });
     tooltipEl.addEventListener('mouseleave', () => {
+        mouseOverTooltip = false;
         scheduleHide();
     });
 
@@ -333,19 +341,69 @@ function positionTooltip(target, boundingEl) {
 
 function cancelShow() {
     if (showTimer) { clearTimeout(showTimer); showTimer = null; }
+    pendingTarget = null;
 }
 
 function cancelHide() {
     if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
 }
 
+/** Hides the tooltip immediately. */
+function hideTooltip() {
+    cancelShow();
+    cancelHide();
+    const tip = ensureTooltip();
+    tip.style.display = 'none';
+    currentKey = null;
+}
+
+/**
+ * Schedules a hide after HIDE_DELAY.
+ * When the timer fires, re-checks whether the cursor is still over
+ * the tooltip or the original target element — if so, cancels the hide.
+ */
 function scheduleHide() {
     cancelShow();
+    cancelHide();
     hideTimer = setTimeout(() => {
+        hideTimer = null;
+        // If the mouse came back to the tooltip or a valid target, don't hide
+        if (mouseOverTooltip || hoveredTarget) return;
         const tip = ensureTooltip();
         tip.style.display = 'none';
         currentKey = null;
     }, HIDE_DELAY);
+}
+
+/**
+ * Schedules showing a tooltip after SHOW_DELAY.
+ * When the timer fires, re-checks whether the cursor is still over
+ * the same target element — if not, cancels the show.
+ */
+function scheduleShow(found, boundingEl) {
+    cancelShow();
+    cancelHide();
+    pendingTarget = found;
+    showTimer = setTimeout(() => {
+        showTimer = null;
+        // Verify cursor is still over this target
+        if (!hoveredTarget || (pendingTarget && pendingTarget.key !== found.key)) {
+            pendingTarget = null;
+            return;
+        }
+        pendingTarget = null;
+        let ok = false;
+        if (found.type === 'word') {
+            ok = populateWordTooltip(found.word, found.reading || '', found.pos || '');
+        } else if (found.type === 'selection') {
+            ok = populateWordTooltip(found.word, found.reading || '', found.pos || '');
+        } else {
+            ok = populateKanjiTooltip(found.word);
+        }
+        if (!ok) return;
+        positionTooltip(found.el, boundingEl);
+        currentKey = found.key;
+    }, SHOW_DELAY);
 }
 
 /**
@@ -366,8 +424,9 @@ function findTooltipTarget(target) {
     const wordSpan = target.closest('.nihongo-word[data-word]');
     if (wordSpan) {
         const word = wordSpan.dataset.word;
-        // Skip kana-only words — no useful tooltip content yet
-        if (/[\u4e00-\u9faf\u3400-\u4dbf]/.test(word)) {
+        const hasKanji = /[\u4e00-\u9faf\u3400-\u4dbf]/.test(word);
+        // Show tooltip if word contains kanji OR if JMdict is loaded (kana-only words have meanings)
+        if (hasKanji || isMeaningAvailable()) {
             const reading = wordSpan.dataset.reading || '';
             const pos = wordSpan.dataset.pos || '';
             return { type: 'word', key: `w:${word}`, el: wordSpan, word, reading, pos };
@@ -395,37 +454,32 @@ export function attachKanjiTooltip(container, options = {}) {
     const onMove = (e) => {
         const found = findTooltipTarget(e.target);
         if (!found) {
-            if (currentKey) scheduleHide();
+            hoveredTarget = null;
+            // Not over a valid target — schedule hide if tooltip is showing
+            if (currentKey && !mouseOverTooltip) scheduleHide();
             return;
         }
 
+        hoveredTarget = found.el;
         cancelHide();
 
+        // Already showing this exact tooltip
         if (found.key === currentKey) return;
 
-        cancelShow();
-        showTimer = setTimeout(() => {
-            let ok = false;
-            if (found.type === 'word') {
-                ok = populateWordTooltip(found.word, found.reading || '', found.pos || '');
-            } else {
-                ok = populateKanjiTooltip(found.word);
-            }
-            if (!ok) return;
-            positionTooltip(found.el, boundingEl);
-            currentKey = found.key;
-        }, currentKey ? 50 : SHOW_DELAY);
+        // Moving to a different target — hide the old one first, then schedule new
+        if (currentKey) hideTooltip();
+
+        scheduleShow(found, boundingEl);
     };
 
     const onLeave = () => {
+        hoveredTarget = null;
         scheduleHide();
     };
 
     const onScroll = () => {
-        cancelShow();
-        const tip = ensureTooltip();
-        tip.style.display = 'none';
-        currentKey = null;
+        hoveredTarget = null;
+        hideTooltip();
     };
 
     container.addEventListener('mousemove', onMove);
@@ -460,6 +514,88 @@ export function destroyTooltip() {
     }
     tooltipEl = null;
     currentKey = null;
+    hoveredTarget = null;
+    mouseOverTooltip = false;
+    pendingTarget = null;
+}
+
+// ===== Selection Lookup Helpers =====
+
+/** Regex matching strings composed entirely of Japanese characters (kanji, hiragana, katakana, prolonged sound mark). */
+const JP_ONLY_RE = /^[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF\u3400-\u4DBF\u30FC]+$/;
+
+/** Converts full-width katakana to hiragana for dictionary lookups. */
+function katakanaToHiragana(str) {
+    return str.replace(/[\u30A1-\u30F6]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0x60));
+}
+
+/**
+ * Positions the tooltip near a DOMRect (e.g. from a text selection).
+ * Prefers below-right, falls back to above.
+ * @param {DOMRect} rect
+ */
+function positionTooltipAtRect(rect) {
+    const tip = ensureTooltip();
+    tip.style.display = '';
+    tip.style.visibility = 'hidden';
+    tip.style.position = 'fixed';
+    tip.style.width = `${TOOLTIP_WIDTH}px`;
+    tip.style.maxHeight = `${TOOLTIP_MAX_HEIGHT}px`;
+
+    const tipRect = tip.getBoundingClientRect();
+    const gap = 8;
+    let left = rect.left;
+    let top = rect.bottom + gap;
+
+    // If below goes off-screen, show above
+    const tipHeight = tipRect.height || TOOLTIP_MAX_HEIGHT;
+    if (top + tipHeight > window.innerHeight) {
+        top = rect.top - tipHeight - gap;
+    }
+    if (top < 0) top = gap;
+
+    // Horizontal constraint
+    if (left + TOOLTIP_WIDTH > window.innerWidth) {
+        left = window.innerWidth - TOOLTIP_WIDTH - gap;
+    }
+    if (left < 0) left = gap;
+
+    tip.style.left = `${left}px`;
+    tip.style.top = `${top}px`;
+    tip.style.visibility = '';
+}
+
+/**
+ * Handles mouseup inside chat in inspect mode.
+ * If user selected Japanese text, looks it up in the dictionary and shows a tooltip.
+ */
+function onSelectionLookup() {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed) return;
+
+    const text = sel.toString().trim();
+    if (!text || text.length > 30) return; // sanity limit
+    if (!JP_ONLY_RE.test(text)) return;
+    if (!isMeaningAvailable()) return;
+
+    // Try lookup: exact → katakana→hiragana → bail
+    let meaning = lookupMeaning(text);
+    const asHiragana = katakanaToHiragana(text);
+    if (!meaning && asHiragana !== text) {
+        meaning = lookupMeaning(asHiragana);
+    }
+
+    if (!meaning) return;
+
+    // Build a fake found-target for populateWordTooltip
+    const ok = populateWordTooltip(text, '', '');
+    if (!ok) return;
+
+    // Position near the selection
+    const range = sel.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    positionTooltipAtRect(rect);
+    currentKey = `sel:${text}`;
 }
 
 // ===== Chat Inspect Mode =====
@@ -471,6 +607,8 @@ let inspectActive = false;
 let inspectContainer = null;
 /** @type {((e: KeyboardEvent) => void)|null} */
 let inspectEscHandler = null;
+/** @type {(() => void)|null} */
+let selectionHandler = null;
 
 /**
  * Returns whether chat inspect mode is currently active.
@@ -496,6 +634,10 @@ export function enableChatInspect() {
 
     attachKanjiTooltip(chat);
 
+    // Selection lookup: mouseup on chat triggers dictionary lookup
+    selectionHandler = () => onSelectionLookup();
+    chat.addEventListener('mouseup', selectionHandler);
+
     // Hide the wand dropdown menu
     const dropdown = document.getElementById('extensionsMenu');
     if (dropdown) dropdown.style.display = 'none';
@@ -507,8 +649,8 @@ export function enableChatInspect() {
         indicator.id = INDICATOR_ID;
         indicator.className = 'nihongo-inspect-indicator';
         indicator.innerHTML = `
-            <span>Kanji Inspect Mode</span>
-            <span class="nihongo-inspect-hint">Hover kanji for details · Ctrl+Shift+K to toggle</span>
+            <span>Inspect Mode</span>
+            <span class="nihongo-inspect-hint">Hover words · Select text to look up · Ctrl+Shift+K to toggle</span>
             <button class="nihongo-inspect-close interactable" title="Exit inspect mode">
                 <i class="fa-solid fa-xmark"></i>
             </button>
@@ -553,6 +695,10 @@ export function disableChatInspect() {
     if (inspectContainer) {
         inspectContainer.classList.remove(INSPECT_CLASS);
         detachKanjiTooltip(inspectContainer);
+        if (selectionHandler) {
+            inspectContainer.removeEventListener('mouseup', selectionHandler);
+            selectionHandler = null;
+        }
         inspectContainer = null;
     }
 

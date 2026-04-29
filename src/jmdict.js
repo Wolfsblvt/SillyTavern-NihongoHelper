@@ -1,11 +1,9 @@
-import { EXTENSION_NAME } from '../index.js';
-
 /**
  * JMdict local dictionary provider.
  * Loads data/jmdict.json and provides synchronous word lookup.
  */
 
-const EXTENSION_PATH = `scripts/extensions/third-party/${EXTENSION_NAME}`;
+const EXTENSION_PATH = 'scripts/extensions/third-party/SillyTavern-NihongoHelper';
 
 /** @type {Object|null} */
 let jmdata = null;
@@ -27,9 +25,9 @@ export async function loadJMdict() {
         jmdata = await resp.json();
         buildIndex();
         loaded = true;
-        console.log(`[${EXTENSION_NAME}] JMdict loaded: ${jmdata.words.length} entries, ${index.size} index keys`);
+        console.log(`[NihongoHelper] JMdict loaded: ${jmdata.words.length} entries, ${index.size} index keys`);
     } catch (err) {
-        console.warn(`[${EXTENSION_NAME}] Failed to load JMdict:`, err);
+        console.warn(`[NihongoHelper] Failed to load JMdict:`, err);
     } finally {
         loading = false;
     }

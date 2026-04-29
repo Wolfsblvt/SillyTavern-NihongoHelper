@@ -51,7 +51,7 @@ export function injectWandMenu() {
     inspectBtn.classList.add('list-group-item', 'flex-container', 'flexGap5', 'interactable');
     inspectBtn.innerHTML = `
         <div class="fa-solid fa-magnifying-glass extensionsMenuExtensionButton"></div>
-        <span>Inspect Kanji</span>
+        <span>Inspect Mode</span>
     `;
     inspectBtn.addEventListener('click', (e) => {
         e.stopPropagation();
