@@ -36,8 +36,8 @@ let hoveredTarget = null;
 let pendingTarget = null;
 /** @type {boolean} */
 let mouseOverTooltip = false;
-/** @type {boolean} - true when a selection-based tooltip is showing (sticky) */
-let selectionActive = false;
+/** @type {{ word: string }|null} - non-null when a selection tooltip should persist (even during peek) */
+let selectionState = null;
 /** @type {WeakMap<HTMLElement, { onMove: Function, onLeave: Function, onScroll: Function }>} */
 const attachedContainers = new WeakMap();
 
@@ -354,14 +354,13 @@ function cancelHide() {
     if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
 }
 
-/** Hides the tooltip immediately. */
+/** Hides the tooltip immediately. Does NOT clear selectionState — use clearSelection() for that. */
 function hideTooltip() {
     cancelShow();
     cancelHide();
     const tip = ensureTooltip();
     tip.style.display = 'none';
     currentKey = null;
-    selectionActive = false;
 }
 
 /**
@@ -376,6 +375,13 @@ function scheduleHide() {
         hideTimer = null;
         // If the mouse came back to the tooltip or a valid target, don't hide
         if (mouseOverTooltip || hoveredTarget) return;
+        // If a selection tooltip should persist, restore it instead of hiding
+        if (selectionState) {
+            // Already showing the selection tooltip — just keep it
+            if (currentKey === `sel:${selectionState.word}`) return;
+            restoreSelectionTooltip();
+            return;
+        }
         const tip = ensureTooltip();
         tip.style.display = 'none';
         currentKey = null;
@@ -416,7 +422,7 @@ function scheduleShow(found, boundingEl) {
         if (!ok) return;
         positionTooltip(found.el, boundingEl);
         currentKey = found.key;
-        selectionActive = false;
+        // selectionState is intentionally NOT cleared — this is a "peek" tooltip
     }, SHOW_DELAY);
 }
 
@@ -466,9 +472,6 @@ export function attachKanjiTooltip(container, options = {}) {
     tooltipParent = options.appendTo || null;
 
     const onMove = (e) => {
-        // Don't let mousemove interfere with selection tooltips
-        if (selectionActive) return;
-
         const found = findTooltipTarget(e.target);
         if (!found) {
             hoveredTarget = null;
@@ -489,12 +492,13 @@ export function attachKanjiTooltip(container, options = {}) {
 
     const onLeave = () => {
         hoveredTarget = null;
-        if (!selectionActive) scheduleHide();
+        scheduleHide();
     };
 
     const onScroll = () => {
         hoveredTarget = null;
-        hideTooltip(); // also clears selectionActive
+        selectionState = null;
+        hideTooltip();
     };
 
     container.addEventListener('mousemove', onMove);
@@ -532,7 +536,7 @@ export function destroyTooltip() {
     hoveredTarget = null;
     mouseOverTooltip = false;
     pendingTarget = null;
-    selectionActive = false;
+    selectionState = null;
 }
 
 // ===== Selection Lookup Helpers =====
@@ -582,14 +586,37 @@ function positionTooltipAtRect(rect) {
 }
 
 /**
+ * Re-shows the selection tooltip from stored selectionState.
+ * Verifies the selection is still active before restoring.
+ */
+function restoreSelectionTooltip() {
+    if (!selectionState) return;
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed) {
+        selectionState = null;
+        return;
+    }
+    const ok = populateWordTooltip(selectionState.word, '', '');
+    if (!ok) { selectionState = null; return; }
+    const range = sel.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    positionTooltipAtRect(rect);
+    currentKey = `sel:${selectionState.word}`;
+}
+
+/**
  * Handles mouseup inside chat in inspect mode.
  * If user selected Japanese text, looks it up in the dictionary and shows a tooltip.
+ * If user clicked without selecting, dismisses the selection tooltip.
  */
 function onSelectionLookup() {
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed) {
         // Clicked without selecting — dismiss any active selection tooltip
-        if (selectionActive) hideTooltip();
+        if (selectionState) {
+            selectionState = null;
+            hideTooltip();
+        }
         return;
     }
 
@@ -618,7 +645,7 @@ function onSelectionLookup() {
     const rect = range.getBoundingClientRect();
     positionTooltipAtRect(rect);
     currentKey = `sel:${text}`;
-    selectionActive = true;
+    selectionState = { word: text };
 }
 
 // ===== Chat Inspect Mode =====
