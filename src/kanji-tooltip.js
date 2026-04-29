@@ -1,5 +1,6 @@
 import { getKanji, isKanjiDataLoaded } from './kanji-data.js';
 import { getKnownKanji, toggleKnown } from './kanji-manager.js';
+import { lookupMeaning } from './meaning-provider.js';
 
 /**
  * Generic kanji tooltip module.
@@ -175,16 +176,56 @@ function populateKanjiTooltip(char) {
 }
 
 /**
- * Populates tooltip content for a word (with kanji breakdown).
- * @param {string} word The surface form
- * @param {string} reading The hiragana reading
- * @param {string} pos Part of speech from kuromoji
- * @returns {boolean} True if content was populated
+ * Groups consecutive senses that share the same POS into sections,
+ * then renders Jisho-style HTML with numbered definitions.
+ * @param {Object} meaningResult from lookupMeaning()
+ * @returns {string} HTML string
  */
+function renderSenses(meaningResult) {
+    if (!meaningResult || !meaningResult.senses.length) return '';
+
+    // Group consecutive senses by POS
+    const groups = [];
+    let lastPosKey = null;
+    for (const sense of meaningResult.senses) {
+        const posKey = sense.pos.join(', ');
+        if (posKey !== lastPosKey) {
+            groups.push({ pos: posKey, defs: [] });
+            lastPosKey = posKey;
+        }
+        groups[groups.length - 1].defs.push(sense);
+    }
+
+    let defNum = 1;
+    let html = '<div class="nihongo-wt-senses">';
+    for (const group of groups) {
+        if (group.pos) {
+            html += `<div class="nihongo-wt-pos-header">${group.pos}</div>`;
+        }
+        for (const def of group.defs) {
+            html += `<div class="nihongo-wt-def">`;
+            html += `<span class="nihongo-wt-def-num">${defNum}.</span>`;
+            html += `<span>${def.glosses.join('; ')}</span>`;
+            html += '</div>';
+            const notes = [...(def.misc || []), ...(def.info || []), ...(def.field || [])];
+            if (notes.length) {
+                html += `<div class="nihongo-wt-def-notes">${notes.join(', ')}</div>`;
+            }
+            defNum++;
+        }
+    }
+    html += '</div>';
+    return html;
+}
+
 function populateWordTooltip(word, reading, pos) {
     const tip = ensureTooltip();
 
     const jishoUrl = `https://jisho.org/search/${encodeURIComponent(word)}%20%23words`;
+
+    // Look up meanings from dictionary
+    const meaning = lookupMeaning(word, reading);
+    const sensesHtml = renderSenses(meaning);
 
     // Extract kanji characters in order of appearance
     const kanjiChars = [];
@@ -201,6 +242,9 @@ function populateWordTooltip(word, reading, pos) {
            </div>`
         : '';
 
+    // Use POS from dictionary if available, fall back to kuromoji POS
+    const displayPos = meaning && meaning.senses.length ? '' : (pos ? `<div class="nihongo-wt-pos">${pos}</div>` : '');
+
     tip.innerHTML = `
         <div class="nihongo-tooltip-inner nihongo-wt-inner">
             <div class="nihongo-wt-word-section">
@@ -208,8 +252,8 @@ function populateWordTooltip(word, reading, pos) {
                     <span class="nihongo-wt-word">${word}</span>
                     ${reading && reading !== word ? `<span class="nihongo-wt-reading">${reading}</span>` : ''}
                 </div>
-                ${pos ? `<div class="nihongo-wt-pos">${pos}</div>` : ''}
-                <div class="nihongo-wt-meaning-placeholder">Meaning lookup not yet available</div>
+                ${displayPos}
+                ${sensesHtml || '<div class="nihongo-wt-meaning-placeholder">No definition found</div>'}
                 <div class="nihongo-tooltip-actions">
                     <a class="nihongo-tooltip-jisho-link" href="${jishoUrl}" target="_blank" rel="noopener" title="Look up on Jisho.org">
                         Jisho ↗

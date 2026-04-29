@@ -35,13 +35,16 @@ A SillyTavern extension to help with learning Japanese through chat interactions
   - Known toggle, Jisho link, smooth animations
 - [x] **Word Tooltip** — Hover over any word in inspect mode to see word-level details
   - Word surface form, reading, part of speech
+  - **JMdict dictionary meanings** — Jisho-style grouped definitions with POS headers, numbered senses, misc notes
   - Jisho.org link for word lookup (uses `#words` search)
   - Compact kanji breakdown: each kanji in the word shown with meanings, readings, JLPT, frequency
-  - Meaning placeholder for future dictionary integration
+  - Known kanji toggle (checkmark icon) per kanji in breakdown
+  - On/kun reading labels (音/訓) in kanji blocks
 - [x] **`{{knownKanji}}` Macro** — Comma-separated list of known kanji for use in system prompts
 - [x] **`{{knownKanjiCount}}` Macro** — Number of known kanji
 
 ### Planned
+- [ ] **Meaning Provider System** — Pluggable architecture for word meanings (JMdict built-in, Jisho API fallback, LLM future)
 - [ ] **Vocabulary Sidebar / Popup** — Click any word with furigana to see dictionary entry, meanings, example sentences
 - [ ] **Feedback/Correction Renderer** — Styled rendering for AI correction blocks (grammar, translation, notes)
 - [ ] **Word Frequency Highlights** — Color-code kanji/words by JLPT level or frequency tier
@@ -60,6 +63,7 @@ Install via SillyTavern's extension installer or clone into `public/scripts/exte
 ## Dependencies
 
 - **kuromoji.js** — Japanese morphological analyzer for deterministic furigana generation (bundled in `lib/`)
+- **JMdict** — Japanese-English dictionary data from [jmdict-simplified](https://github.com/scriptin/jmdict-simplified) (CC BY-SA 4.0), 22K+ common entries (built via `scripts/build-jmdict.cjs`)
 
 ## License
 

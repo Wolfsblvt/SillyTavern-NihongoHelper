@@ -4,6 +4,7 @@ import { initKanjiManager } from './src/kanji-manager.js';
 import { injectWandMenu } from './src/wand-menu.js';
 import { registerInspectShortcut } from './src/kanji-tooltip.js';
 import { registerMacros } from './src/macros.js';
+import { initMeaningProvider } from './src/meaning-provider.js';
 
 export const EXTENSION_KEY = 'nihongo_helper';
 export const EXTENSION_NAME = 'SillyTavern-NihongoHelper';
@@ -38,6 +39,9 @@ export async function init() {
 
     // Register macros ({{knownKanji}}, {{knownKanjiCount}})
     registerMacros();
+
+    // Load meaning providers (JMdict) in background
+    initMeaningProvider();
 
     console.debug(`[${EXTENSION_NAME}] Extension activated`);
 
