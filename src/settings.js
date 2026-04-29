@@ -158,6 +158,7 @@ function registerSettingsEventListeners() {
             if (display) display.textContent = `${settings.streamInterval}ms`;
         }
     });
+
 }
 
 /**

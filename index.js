@@ -1,5 +1,6 @@
 import { initSettings, injectSettingsUI } from './src/settings.js';
 import { initFurigana } from './src/furigana.js';
+import { initKanjiManager } from './src/kanji-manager.js';
 
 export const EXTENSION_KEY = 'nihongo_helper';
 export const EXTENSION_NAME = 'SillyTavern-NihongoHelper';
@@ -22,6 +23,9 @@ export async function init() {
 
     // Initialize furigana processing
     await initFurigana();
+
+    // Initialize kanji manager
+    initKanjiManager();
 
     console.debug(`[${EXTENSION_NAME}] Extension activated`);
 

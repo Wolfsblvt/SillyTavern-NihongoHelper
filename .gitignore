@@ -1,2 +1,5 @@
 # Dependencies / bundled libraries
 lib/
+
+# Raw data source (processed kanji.json IS tracked)
+data/kanji-raw.json

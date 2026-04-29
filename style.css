@@ -49,3 +49,158 @@
 #chat .mes .nihongo-processed {
     display: inline;
 }
+
+/* ===== Kanji Manager Styles ===== */
+
+#nihongo_kanji_manager {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 400px;
+}
+
+/* Header / Controls */
+.nihongo-km-header {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--SmartThemeBorderColor, #444);
+    margin-bottom: 10px;
+    flex-shrink: 0;
+}
+
+.nihongo-km-header h3 {
+    margin: 0;
+    font-size: 1.2em;
+}
+
+.nihongo-km-controls {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.nihongo-km-controls input,
+.nihongo-km-controls select {
+    flex: 1 1 150px;
+    min-width: 120px;
+    max-width: 300px;
+}
+
+.nihongo-km-stats {
+    display: flex;
+    gap: 16px;
+    font-size: 0.85em;
+    opacity: 0.7;
+}
+
+/* Kanji Grid */
+.nihongo-km-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+    gap: 4px;
+    padding: 4px 0;
+}
+
+/* Kanji Tile */
+.nihongo-km-tile {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 1;
+    font-size: 1.5em;
+    border-radius: 6px;
+    cursor: pointer;
+    background: var(--SmartThemeBlurTintColor, rgba(255, 255, 255, 0.05));
+    border: 1px solid transparent;
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+    user-select: none;
+}
+
+.nihongo-km-tile:hover {
+    background: var(--SmartThemeQuoteColor, rgba(255, 255, 255, 0.15));
+    border-color: var(--SmartThemeBorderColor, #666);
+    transform: scale(1.08);
+}
+
+.nihongo-km-tile-known {
+    background: rgba(76, 175, 80, 0.15);
+    border-color: rgba(76, 175, 80, 0.4);
+}
+
+.nihongo-km-tile-known:hover {
+    background: rgba(76, 175, 80, 0.3);
+}
+
+/* Detail View */
+.nihongo-km-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.nihongo-km-detail-header {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.nihongo-km-detail-body {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+}
+
+.nihongo-km-detail-kanji {
+    font-size: 6em;
+    line-height: 1;
+    min-width: 1.2em;
+    text-align: center;
+    padding: 16px;
+    border-radius: 12px;
+    background: var(--SmartThemeBlurTintColor, rgba(255, 255, 255, 0.05));
+    border: 2px solid var(--SmartThemeBorderColor, #444);
+    flex-shrink: 0;
+}
+
+.nihongo-km-detail-kanji-known {
+    border-color: rgba(76, 175, 80, 0.6);
+    background: rgba(76, 175, 80, 0.1);
+}
+
+.nihongo-km-detail-info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
+.nihongo-km-detail-row {
+    display: flex;
+    gap: 12px;
+    align-items: baseline;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.1));
+}
+
+.nihongo-km-detail-label {
+    font-weight: bold;
+    min-width: 80px;
+    flex-shrink: 0;
+    font-size: 0.85em;
+    opacity: 0.7;
+    text-transform: uppercase;
+}
+
+.nihongo-km-detail-value {
+    flex: 1;
+    word-break: break-word;
+}
+
+.nihongo-km-reading {
+    font-size: 1.1em;
+    font-family: "Noto Sans JP", "Yu Gothic", "Hiragino Kaku Gothic Pro", sans-serif;
+}

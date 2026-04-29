@@ -1,0 +1,94 @@
+<div id="nihongo_kanji_manager">
+    <div class="nihongo-km-header">
+        <h3>Kanji Manager</h3>
+        <div class="nihongo-km-controls">
+            <input type="text" id="nihongo_km_search" class="text_pole" placeholder="Search kanji, meaning, or reading..." />
+            <select id="nihongo_km_filter" class="text_pole">
+                <option value="all">All Kanji</option>
+                <optgroup label="JLPT Level">
+                    <option value="jlpt5">JLPT N5 (easiest)</option>
+                    <option value="jlpt4">JLPT N4</option>
+                    <option value="jlpt3">JLPT N3</option>
+                    <option value="jlpt2">JLPT N2</option>
+                    <option value="jlpt1">JLPT N1 (hardest)</option>
+                </optgroup>
+                <optgroup label="School Grade">
+                    <option value="grade1">Grade 1</option>
+                    <option value="grade2">Grade 2</option>
+                    <option value="grade3">Grade 3</option>
+                    <option value="grade4">Grade 4</option>
+                    <option value="grade5">Grade 5</option>
+                    <option value="grade6">Grade 6</option>
+                    <option value="grade8">Junior High</option>
+                </optgroup>
+                <optgroup label="Known Status">
+                    <option value="known">Known Only</option>
+                    <option value="unknown">Unknown Only</option>
+                </optgroup>
+            </select>
+            <select id="nihongo_km_sort" class="text_pole">
+                <option value="freq_asc">Frequency (common first)</option>
+                <option value="freq_desc">Frequency (rare first)</option>
+                <option value="grade_asc">Grade (easy first)</option>
+                <option value="jlpt_easy">JLPT (N5 → N1)</option>
+                <option value="jlpt_hard">JLPT (N1 → N5)</option>
+                <option value="strokes_asc">Strokes (few first)</option>
+                <option value="strokes_desc">Strokes (many first)</option>
+            </select>
+        </div>
+        <div class="nihongo-km-stats">
+            <span id="nihongo_km_count">0 kanji</span>
+            <span id="nihongo_km_known_count">0 known</span>
+        </div>
+    </div>
+
+    <div id="nihongo_km_grid" class="nihongo-km-grid">
+        <!-- Kanji tiles rendered dynamically -->
+    </div>
+
+    <div id="nihongo_km_detail" class="nihongo-km-detail" style="display: none;">
+        <div class="nihongo-km-detail-header">
+            <button id="nihongo_km_detail_back" class="menu_button menu_button_icon" title="Back to grid">
+                <i class="fa-solid fa-arrow-left"></i>
+                <span>Back</span>
+            </button>
+            <button id="nihongo_km_detail_toggle_known" class="menu_button menu_button_icon" title="Toggle known status">
+                <i class="fa-solid fa-star"></i>
+                <span>Mark Known</span>
+            </button>
+        </div>
+        <div class="nihongo-km-detail-body">
+            <div class="nihongo-km-detail-kanji" id="nihongo_km_detail_kanji"></div>
+            <div class="nihongo-km-detail-info">
+                <div class="nihongo-km-detail-row">
+                    <span class="nihongo-km-detail-label">Meanings</span>
+                    <span id="nihongo_km_detail_meanings" class="nihongo-km-detail-value"></span>
+                </div>
+                <div class="nihongo-km-detail-row">
+                    <span class="nihongo-km-detail-label">On'yomi</span>
+                    <span id="nihongo_km_detail_onyomi" class="nihongo-km-detail-value nihongo-km-reading"></span>
+                </div>
+                <div class="nihongo-km-detail-row">
+                    <span class="nihongo-km-detail-label">Kun'yomi</span>
+                    <span id="nihongo_km_detail_kunyomi" class="nihongo-km-detail-value nihongo-km-reading"></span>
+                </div>
+                <div class="nihongo-km-detail-row">
+                    <span class="nihongo-km-detail-label">JLPT</span>
+                    <span id="nihongo_km_detail_jlpt" class="nihongo-km-detail-value"></span>
+                </div>
+                <div class="nihongo-km-detail-row">
+                    <span class="nihongo-km-detail-label">Grade</span>
+                    <span id="nihongo_km_detail_grade" class="nihongo-km-detail-value"></span>
+                </div>
+                <div class="nihongo-km-detail-row">
+                    <span class="nihongo-km-detail-label">Strokes</span>
+                    <span id="nihongo_km_detail_strokes" class="nihongo-km-detail-value"></span>
+                </div>
+                <div class="nihongo-km-detail-row">
+                    <span class="nihongo-km-detail-label">Frequency</span>
+                    <span id="nihongo_km_detail_freq" class="nihongo-km-detail-value"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
