@@ -1,5 +1,5 @@
 import { getKanji } from './kanji-data.js';
-import { getKnownKanji } from './kanji-manager.js';
+import { getKnownKanji, toggleKnown } from './kanji-manager.js';
 
 /**
  * Generic kanji tooltip module.
@@ -78,6 +78,8 @@ function populateTooltip(char) {
     const isKnown = known.has(char);
     const knownClass = isKnown ? ' nihongo-tooltip-known' : '';
 
+    const jishoUrl = `https://jisho.org/search/${encodeURIComponent(char)}%20%23kanji`;
+
     tip.innerHTML = `
         <div class="nihongo-tooltip-inner${knownClass}">
             <div class="nihongo-tooltip-top">
@@ -95,8 +97,52 @@ function populateTooltip(char) {
                 ${entry.f ? `<span class="nihongo-tooltip-tag">#${entry.f}</span>` : ''}
                 ${isKnown ? '<span class="nihongo-tooltip-tag nihongo-tooltip-tag-known">Known</span>' : ''}
             </div>
+            <div class="nihongo-tooltip-actions">
+                <button class="nihongo-tooltip-known-btn interactable" data-kanji="${char}" title="Toggle known status">
+                    <i class="${isKnown ? 'fa-solid' : 'fa-regular'} fa-star"></i>
+                    <span>${isKnown ? 'Known' : 'Mark Known'}</span>
+                </button>
+                <a class="nihongo-tooltip-jisho-link" href="${jishoUrl}" target="_blank" rel="noopener" title="Look up on Jisho.org">
+                    Jisho ↗
+                </a>
+            </div>
         </div>
     `;
+
+    // Wire up known toggle button
+    const knownBtn = tip.querySelector('.nihongo-tooltip-known-btn');
+    if (knownBtn) {
+        knownBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const ch = knownBtn.dataset.kanji;
+            if (!ch) return;
+            const nowKnown = toggleKnown(ch);
+            // Update button
+            const icon = knownBtn.querySelector('i');
+            const span = knownBtn.querySelector('span');
+            if (icon) icon.className = nowKnown ? 'fa-solid fa-star' : 'fa-regular fa-star';
+            if (span) span.textContent = nowKnown ? 'Known' : 'Mark Known';
+            // Update border
+            const inner = tip.querySelector('.nihongo-tooltip-inner');
+            if (inner) inner.classList.toggle('nihongo-tooltip-known', nowKnown);
+            // Update known tag
+            const meta = tip.querySelector('.nihongo-tooltip-meta');
+            if (meta) {
+                const existingTag = meta.querySelector('.nihongo-tooltip-tag-known');
+                if (nowKnown && !existingTag) {
+                    const tag = document.createElement('span');
+                    tag.className = 'nihongo-tooltip-tag nihongo-tooltip-tag-known';
+                    tag.textContent = 'Known';
+                    meta.appendChild(tag);
+                } else if (!nowKnown && existingTag) {
+                    existingTag.remove();
+                }
+            }
+            // Update the kanji span in the DOM if in chat inspect mode
+            const chatSpans = document.querySelectorAll(`.nihongo-kanji[data-kanji="${ch}"]`);
+            chatSpans.forEach(s => s.classList.toggle('nihongo-kanji-known', nowKnown));
+        });
+    }
 
     return true;
 }
@@ -311,6 +357,10 @@ export function enableChatInspect() {
 
     attachKanjiTooltip(chat);
 
+    // Hide the wand dropdown menu
+    const dropdown = document.getElementById('extensionsMenu');
+    if (dropdown) dropdown.style.display = 'none';
+
     // Floating indicator bar
     let indicator = document.getElementById(INDICATOR_ID);
     if (!indicator) {
@@ -319,7 +369,7 @@ export function enableChatInspect() {
         indicator.className = 'nihongo-inspect-indicator';
         indicator.innerHTML = `
             <span>Kanji Inspect Mode</span>
-            <span class="nihongo-inspect-hint">Hover kanji for details</span>
+            <span class="nihongo-inspect-hint">Hover kanji for details · Ctrl+Shift+K to toggle</span>
             <button class="nihongo-inspect-close interactable" title="Exit inspect mode">
                 <i class="fa-solid fa-xmark"></i>
             </button>
@@ -338,6 +388,20 @@ export function enableChatInspect() {
         }
     };
     document.addEventListener('keydown', inspectEscHandler, true);
+}
+
+/**
+ * Registers the global Ctrl+Shift+K keyboard shortcut to toggle inspect mode.
+ * Call once during initialization.
+ */
+export function registerInspectShortcut() {
+    document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.shiftKey && e.key === 'K') {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleChatInspect();
+        }
+    });
 }
 
 /**

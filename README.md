@@ -2,7 +2,8 @@
 
 A SillyTavern extension to help with learning Japanese through chat interactions.
 
-## Status: Work in Progress 🚧
+> [!CAUTION]
+> Status: This is a work in progress 🚧
 
 ## Features
 
@@ -14,27 +15,37 @@ A SillyTavern extension to help with learning Japanese through chat interactions
 - [x] **Hover-only Mode** — Furigana only appears on hover, with space reserved to prevent layout shifts
 - [x] **Font Size Controls** — Adjustable Japanese text size and furigana scale via range sliders
 - [x] **Settings Panel** — Enable/disable furigana, hover mode, font sizes, streaming interval
+- [x] **Kanji Manager** — Comprehensive kanji browser/manager popup (2998 kanji)
+  - Browse and filter by JLPT level (N5–N1), school grade, known/unknown status
+  - Sort by frequency, grade, JLPT, or stroke count with context-aware badges
+  - Per-kanji detail view with meanings, on/kun readings, JLPT, grade, strokes, frequency
+  - Mark kanji as "known" with date tracking — known kanji are excluded from furigana
+  - Search by kanji character, meaning, or reading
+  - Infinite scroll, persisted sort/filter preferences
+  - Full keyboard navigation: arrow keys, Enter/Space, Escape/Backspace
+  - Jisho.org integration link in detail view
+- [x] **Known Kanji Highlighting** — Known kanji in chat get subtle color highlighting (toggle in settings)
+- [x] **Kanji Inspect Mode** — Hover over any kanji in chat to see a tooltip with details
+  - Toggle via wand menu or `Ctrl+Shift+K` shortcut
+  - Tooltip shows meanings, readings, JLPT/grade/strokes/frequency tags
+  - Toggle "known" status and open Jisho.org directly from the tooltip
+  - Escape to exit, floating indicator bar shows active state
+- [x] **Kanji Tooltip** — Compact hover tooltip available in both Kanji Manager and Inspect Mode
+  - Smart positioning (right → left → below), constrained within parent
+  - Known toggle, Jisho link, smooth animations
 
 ### Planned
-- [ ] **Kanji Manager** — Comprehensive kanji browser/manager popup
-  - Browse kanji by JLPT level, RTK order, frequency, school grade
-  - Per-kanji detail view with meanings, readings, frequency stats
-  - Mark kanji as "known" to exclude from furigana
-  - Smart partial furigana: only shows readings for unknown kanji
-  - Extensible data model for future integrations (Jisho, etc.)
 - [ ] **`{{knownKanji}}` Macro** — Expose known kanji list for use in system prompts
 - [ ] **Vocabulary Sidebar / Popup** — Click any word with furigana to see dictionary entry, meanings, example sentences
 - [ ] **Feedback/Correction Renderer** — Styled rendering for AI correction blocks (grammar, translation, notes)
 - [ ] **Word Frequency Highlights** — Color-code kanji/words by JLPT level or frequency tier
-- [ ] **Session Vocabulary Log** — Collect new words from conversations into a reviewable list; export to Anki CSV (manual trigger, not necessarily fully automatic)
+- [ ] **Session Vocabulary Log** — Collect new words from conversations into a reviewable list; export to Anki CSV
 
 ### Maybe / Future Ideas
 - [ ] **Grammar Pattern Detection** — Highlight grammar patterns (て-form, conditional, passive, etc.) with hover tooltips
 - [ ] **Reading Practice Mode** — Hide all kanji and show only furigana, forcing hiragana reading
 - [ ] **Adaptive Difficulty System** — Track exposure to words/grammar; feed into system prompt for gradual complexity increase
-- [ ] **Conversation Review Mode** — Post-session structured review: new vocab, grammar points, common mistakes (slash command)
-- [ ] **Kanji Detail on Hover/Click in Text** — Shift+hover or click on any kanji in chat to see details inline
-- [ ] **Jisho Integration** — Link to or fetch data from Jisho.org for detailed kanji/word lookups
+- [ ] **Conversation Review Mode** — Post-session structured review: new vocab, grammar points, common mistakes
 
 ## Installation
 

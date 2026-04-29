@@ -150,6 +150,7 @@ function renderGrid(grid) {
             tile.appendChild(badgeEl);
         }
 
+        tile.tabIndex = 0;
         tile.title = entry.m.slice(0, 3).join(', ');
         grid.appendChild(tile);
     }
@@ -227,6 +228,12 @@ function showDetail(container, char) {
     setField('nihongo_km_detail_strokes', entry.s ? String(entry.s) : '—');
     setField('nihongo_km_detail_freq', entry.f ? `#${entry.f}` : '—');
 
+    // Jisho link
+    const jishoLink = detail.querySelector('#nihongo_km_detail_jisho');
+    if (jishoLink) {
+        jishoLink.href = `https://jisho.org/search/${encodeURIComponent(entry.k)}%20%23kanji`;
+    }
+
     // Known since date
     const knownDateRow = detail.querySelector('#nihongo_km_detail_known_since_row');
     const knownDateEl = detail.querySelector('#nihongo_km_detail_known_since');
@@ -242,6 +249,12 @@ function showDetail(container, char) {
 
     // Toggle known button state
     updateToggleButton(detail, entry.k);
+
+    // Focus back button
+    const backButton = detail.querySelector('#nihongo_km_detail_back');
+    if (backButton) {
+        backButton.focus();
+    }
 }
 
 /**
@@ -429,6 +442,28 @@ export async function openKanjiManager() {
                 tile.classList.toggle('nihongo-km-tile-known', knownKanji.has(char));
                 const knownCountEl = container.querySelector('#nihongo_km_known_count');
                 if (knownCountEl) knownCountEl.textContent = `${knownKanji.size} known`;
+            } else if (['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp'].includes(e.key)) {
+                e.preventDefault();
+                const tiles = [...grid.querySelectorAll('.nihongo-km-tile')];
+                const idx = tiles.indexOf(tile);
+                if (idx === -1) return;
+
+                // Calculate columns from grid layout
+                const gridStyle = getComputedStyle(grid);
+                const cols = gridStyle.gridTemplateColumns.split(' ').length || 1;
+
+                let nextIdx = idx;
+                switch (e.key) {
+                    case 'ArrowRight': nextIdx = idx + 1; break;
+                    case 'ArrowLeft': nextIdx = idx - 1; break;
+                    case 'ArrowDown': nextIdx = idx + cols; break;
+                    case 'ArrowUp': nextIdx = idx - cols; break;
+                }
+
+                if (nextIdx >= 0 && nextIdx < tiles.length) {
+                    tiles[nextIdx].focus();
+                    tiles[nextIdx].scrollIntoView({ block: 'nearest' });
+                }
             }
         });
 
@@ -489,12 +524,13 @@ export async function openKanjiManager() {
         });
 
         // Infinite scroll for the grid
-        const popupBody = activePopup?.dlg?.querySelector('.popup-body');
-        if (popupBody) {
-            popupBody.addEventListener('scroll', () => {
+        // The actual scrollable element is .popup-content (overflow-y: auto via vertical_scrolling_dialogue_popup)
+        const scrollContainer = activePopup?.dlg?.querySelector('.popup-content');
+        if (scrollContainer) {
+            scrollContainer.addEventListener('scroll', () => {
                 if (grid.style.display === 'none') return;
-                const { scrollTop, scrollHeight, clientHeight } = popupBody;
-                if (scrollTop + clientHeight >= scrollHeight - 100) {
+                const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
+                if (scrollTop + clientHeight >= scrollHeight - 200) {
                     const maxPages = Math.ceil(currentResults.length / PAGE_SIZE);
                     if (currentPage + 1 < maxPages) {
                         currentPage++;
