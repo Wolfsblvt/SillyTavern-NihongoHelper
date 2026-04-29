@@ -44,6 +44,12 @@ A SillyTavern extension to help with learning Japanese through chat interactions
 - [x] **`{{knownKanjiCount}}` Macro** — Number of known kanji
 
 ### Planned
+- [ ] **Inflection Detection & De-inflection** — Recognize conjugated/inflected forms (masu, te, ta, negative, etc.) and auto-chain to dictionary form
+  - Local de-inflection rules (~100 verb/adjective patterns) → try JMdict lookup on dictionary form
+  - Tooltip shows "X is the Y-form of Z" note with clickable link to the base word
+  - Jisho API fallback for words not found locally (scrape inflection analysis from Jisho HTML)
+  - Persistent cache in extension settings with `_version` field for future-proof invalidation
+  - Settings button to clear cached lookup data
 - [ ] **Meaning Provider System** — Pluggable architecture for word meanings (JMdict built-in, Jisho API fallback, LLM future)
 - [ ] **Vocabulary Sidebar / Popup** — Click any word with furigana to see dictionary entry, meanings, example sentences
 - [ ] **Feedback/Correction Renderer** — Styled rendering for AI correction blocks (grammar, translation, notes)

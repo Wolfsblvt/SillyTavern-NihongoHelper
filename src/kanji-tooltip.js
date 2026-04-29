@@ -497,7 +497,12 @@ export function attachKanjiTooltip(container, options = {}) {
 
     const onScroll = () => {
         hoveredTarget = null;
-        selectionState = null;
+        cancelShow();
+        cancelHide();
+        if (selectionState) {
+            restoreSelectionTooltip();
+            return;
+        }
         hideTooltip();
     };
 
@@ -620,6 +625,12 @@ function onSelectionLookup() {
         return;
     }
 
+    // New selection made — always dismiss previous selection tooltip
+    if (selectionState) {
+        selectionState = null;
+        hideTooltip();
+    }
+
     const text = sel.toString().trim();
     if (!text || text.length > 30) return; // sanity limit
     if (!JP_ONLY_RE.test(text)) return;
@@ -659,6 +670,8 @@ let inspectContainer = null;
 let inspectEscHandler = null;
 /** @type {(() => void)|null} */
 let selectionHandler = null;
+/** @type {(() => void)|null} */
+let resizeHandler = null;
 
 /**
  * Returns whether chat inspect mode is currently active.
@@ -687,6 +700,12 @@ export function enableChatInspect() {
     // Selection lookup: mouseup on chat triggers dictionary lookup
     selectionHandler = () => onSelectionLookup();
     chat.addEventListener('mouseup', selectionHandler);
+
+    // Reposition selection tooltip on window resize/zoom
+    resizeHandler = () => {
+        if (selectionState) restoreSelectionTooltip();
+    };
+    window.addEventListener('resize', resizeHandler);
 
     // Hide the wand dropdown menu
     const dropdown = document.getElementById('extensionsMenu');
@@ -753,6 +772,11 @@ export function disableChatInspect() {
     }
 
     destroyTooltip();
+
+    if (resizeHandler) {
+        window.removeEventListener('resize', resizeHandler);
+        resizeHandler = null;
+    }
 
     const indicator = document.getElementById(INDICATOR_ID);
     if (indicator) indicator.style.display = 'none';
