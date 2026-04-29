@@ -78,13 +78,15 @@ function renderKanjiBlock(char) {
             <div class="nihongo-wt-kanji-info">
                 <div class="nihongo-wt-kanji-meanings">${entry.m.slice(0, 3).join(', ')}</div>
                 <div class="nihongo-wt-kanji-meta">
-                    ${entry.on.length ? `<span class="nihongo-wt-kanji-reading">${entry.on.slice(0, 2).join('、')}</span>` : ''}
-                    ${entry.kun.length ? `<span class="nihongo-wt-kanji-reading">${entry.kun.slice(0, 2).join('、')}</span>` : ''}
+                    ${entry.on.length ? `<span class="nihongo-wt-kanji-reading"><span class="nihongo-wt-reading-label">音</span>${entry.on.slice(0, 2).join('、')}</span>` : ''}
+                    ${entry.kun.length ? `<span class="nihongo-wt-kanji-reading"><span class="nihongo-wt-reading-label">訓</span>${entry.kun.slice(0, 2).join('、')}</span>` : ''}
                     ${entry.jlpt ? `<span class="nihongo-tooltip-tag">N${entry.jlpt}</span>` : ''}
                     ${entry.f ? `<span class="nihongo-tooltip-tag">#${entry.f}</span>` : ''}
-                    ${isKnown ? '<span class="nihongo-tooltip-tag nihongo-tooltip-tag-known">Known</span>' : ''}
                 </div>
             </div>
+            <button class="nihongo-tooltip-known-btn nihongo-wt-known-toggle" data-kanji="${char}" title="${isKnown ? 'Mark as not known' : 'Mark as known'}">
+                <i class="${isKnown ? 'fa-solid' : 'fa-regular'} fa-circle-check"></i>
+            </button>
         </div>
     `;
 }
@@ -100,32 +102,20 @@ function wireKnownButtons(tip) {
             const ch = knownBtn.dataset.kanji;
             if (!ch) return;
             const nowKnown = toggleKnown(ch);
-            // Update button
+            // Update button icon
             const icon = knownBtn.querySelector('i');
+            if (icon) icon.className = nowKnown ? 'fa-solid fa-circle-check' : 'fa-regular fa-circle-check';
+            // Update button text if present
             const span = knownBtn.querySelector('span');
-            if (icon) icon.className = nowKnown ? 'fa-solid fa-star' : 'fa-regular fa-star';
             if (span) span.textContent = nowKnown ? 'Known' : 'Mark Known';
-            // Update border on single-kanji tooltip
+            // Update title
+            knownBtn.title = nowKnown ? 'Mark as not known' : 'Mark as known';
+            // Update border on standalone kanji tooltip
             const inner = tip.querySelector('.nihongo-tooltip-inner');
             if (inner) inner.classList.toggle('nihongo-tooltip-known', nowKnown);
-            // Update known tag in the same block
-            const block = knownBtn.closest('.nihongo-tooltip-inner, .nihongo-wt-kanji-block');
-            if (block) {
-                block.classList.toggle('nihongo-wt-kanji-known', nowKnown);
-                block.classList.toggle('nihongo-tooltip-known', nowKnown);
-                const existingTag = block.querySelector('.nihongo-tooltip-tag-known');
-                if (nowKnown && !existingTag) {
-                    const metaEl = block.querySelector('.nihongo-tooltip-meta, .nihongo-wt-kanji-meta');
-                    if (metaEl) {
-                        const tag = document.createElement('span');
-                        tag.className = 'nihongo-tooltip-tag nihongo-tooltip-tag-known';
-                        tag.textContent = 'Known';
-                        metaEl.appendChild(tag);
-                    }
-                } else if (!nowKnown && existingTag) {
-                    existingTag.remove();
-                }
-            }
+            // Update kanji block in word tooltip
+            const block = knownBtn.closest('.nihongo-wt-kanji-block');
+            if (block) block.classList.toggle('nihongo-wt-kanji-known', nowKnown);
             // Update the kanji spans in the DOM
             document.querySelectorAll(`.nihongo-kanji[data-kanji="${ch}"]`)
                 .forEach(s => s.classList.toggle('nihongo-kanji-known', nowKnown));
@@ -167,11 +157,10 @@ function populateKanjiTooltip(char) {
                 ${entry.g ? `<span class="nihongo-tooltip-tag">${entry.g <= 6 ? 'G' + entry.g : 'JH'}</span>` : ''}
                 ${entry.s ? `<span class="nihongo-tooltip-tag">${entry.s}画</span>` : ''}
                 ${entry.f ? `<span class="nihongo-tooltip-tag">#${entry.f}</span>` : ''}
-                ${isKnown ? '<span class="nihongo-tooltip-tag nihongo-tooltip-tag-known">Known</span>' : ''}
             </div>
             <div class="nihongo-tooltip-actions">
-                <button class="nihongo-tooltip-known-btn interactable" data-kanji="${char}" title="Toggle known status">
-                    <i class="${isKnown ? 'fa-solid' : 'fa-regular'} fa-star"></i>
+                <button class="nihongo-tooltip-known-btn interactable" data-kanji="${char}" title="${isKnown ? 'Mark as not known' : 'Mark as known'}">
+                    <i class="${isKnown ? 'fa-solid' : 'fa-regular'} fa-circle-check"></i>
                     <span>${isKnown ? 'Known' : 'Mark Known'}</span>
                 </button>
                 <a class="nihongo-tooltip-jisho-link" href="${jishoUrl}" target="_blank" rel="noopener" title="Look up on Jisho.org">
