@@ -1,5 +1,6 @@
 import { EXTENSION_NAME } from '../index.js';
 import { nihongoSettings } from './settings.js';
+import { getKnownKanji } from './kanji-manager.js';
 
 /** @type {any} */
 let tokenizer = null;
@@ -161,7 +162,7 @@ function buildRuby(surface, reading) {
     let html = '';
     for (const part of parts) {
         if (part.type === 'kanji' && !readingUsed) {
-            html += `<ruby>${part.text}<rp>(</rp><rt>${remainingReading}</rt><rp>)</rp></ruby>`;
+            html += `<ruby>${part.text}<rt>${remainingReading}</rt></ruby>`;
             readingUsed = true;
         } else {
             html += part.text;
@@ -184,13 +185,21 @@ function addFuriganaToText(text) {
     const tokens = tokenizer.tokenize(text);
     let result = '';
 
+    const known = getKnownKanji();
+
     for (const token of tokens) {
         const surface = token.surface_form;
         const reading = token.reading;
 
         if (reading && containsKanji(surface)) {
-            const hiraganaReading = katakanaToHiragana(reading);
-            result += buildRuby(surface, hiraganaReading);
+            // Skip furigana if every kanji in the token is marked as known
+            const kanjiChars = [...surface].filter(isKanji);
+            if (known.size > 0 && kanjiChars.length > 0 && kanjiChars.every(ch => known.has(ch))) {
+                result += surface;
+            } else {
+                const hiraganaReading = katakanaToHiragana(reading);
+                result += buildRuby(surface, hiraganaReading);
+            }
         } else {
             result += surface;
         }

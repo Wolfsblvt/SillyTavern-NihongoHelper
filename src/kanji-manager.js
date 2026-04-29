@@ -2,7 +2,7 @@ import { saveSettingsDebounced } from '../../../../../script.js';
 import { extension_settings, renderExtensionTemplateAsync } from '../../../../extensions.js';
 import { Popup, POPUP_TYPE } from '../../../../popup.js';
 import { EXTENSION_KEY, EXTENSION_NAME } from '../index.js';
-import { loadKanjiData, queryKanji, getKanji, isKanjiDataLoaded, getAllKanji } from './kanji-data.js';
+import { loadKanjiData, queryKanji, getKanji, isKanjiDataLoaded } from './kanji-data.js';
 
 const PAGE_SIZE = 200;
 
@@ -288,7 +288,6 @@ export async function openKanjiManager() {
         });
 
         // Toggle known in detail view
-        let detailKanji = null;
         const detailKanjiEl = container.querySelector('#nihongo_km_detail_kanji');
 
         toggleKnownBtn?.addEventListener('click', () => {
