@@ -295,10 +295,11 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
+    border-left: 3px solid transparent;
 }
 
 .nihongo-tooltip-inner.nihongo-tooltip-known {
-    border-left: 3px solid #4caf50;
+    border-left-color: #4caf50;
 }
 
 .nihongo-tooltip-top {
@@ -591,11 +592,12 @@
     border-radius: 4px;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.06);
+    border-left: 2px solid transparent;
     position: relative;
 }
 
 .nihongo-wt-kanji-block.nihongo-wt-kanji-known {
-    border-left: 2px solid #4caf50;
+    border-left-color: #4caf50;
 }
 
 .nihongo-wt-kanji-char {
@@ -700,7 +702,7 @@
 
 .nihongo-inspect-indicator {
     position: fixed;
-    top: 0;
+    top: var(--topBarBlockSize);
     left: 50%;
     transform: translateX(-50%);
     z-index: 10001;

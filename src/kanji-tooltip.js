@@ -18,7 +18,7 @@ import { deinflect } from './deinflect.js';
 const TOOLTIP_ID = 'nihongo_kanji_tooltip';
 const SHOW_DELAY = 300;
 const HIDE_DELAY = 400;
-const TOOLTIP_WIDTH = 280;
+const TOOLTIP_WIDTH = 320;
 const TOOLTIP_MAX_HEIGHT = 350;
 
 /** @type {HTMLElement|null} */
@@ -37,9 +37,11 @@ let hoveredTarget = null;
 let pendingTarget = null;
 /** @type {boolean} */
 let mouseOverTooltip = false;
+/** @type {boolean} - true while the user is dragging a text selection */
+let isSelecting = false;
 /** @type {{ word: string }|null} - non-null when a selection tooltip should persist (even during peek) */
 let selectionState = null;
-/** @type {WeakMap<HTMLElement, { onMove: Function, onLeave: Function, onScroll: Function }>} */
+/** @type {WeakMap<HTMLElement, { onMove: Function, onLeave: Function, onScroll: Function, onMouseDown?: Function, onMouseUp?: Function }>} */
 const attachedContainers = new WeakMap();
 
 /**
@@ -524,11 +526,20 @@ export function attachKanjiTooltip(container, options = {}) {
     tooltipParent = options.appendTo || null;
 
     const onMove = (e) => {
+        // Suppress hover tooltips while user is dragging a selection
+        if (isSelecting) return;
+
         const found = findTooltipTarget(e.target);
         if (!found) {
             hoveredTarget = null;
             // Not over a valid target — schedule hide if tooltip is showing
             if (currentKey && !mouseOverTooltip) scheduleHide();
+            return;
+        }
+
+        // Don't show hover tooltip for elements inside the current selection
+        const sel = window.getSelection();
+        if (sel && !sel.isCollapsed && sel.containsNode(found.el, true)) {
             return;
         }
 
@@ -558,11 +569,26 @@ export function attachKanjiTooltip(container, options = {}) {
         hideTooltip();
     };
 
+    const onMouseDown = () => {
+        isSelecting = true;
+        // Hide any hover tooltip immediately when starting a selection
+        if (currentKey && !currentKey.startsWith('sel:')) {
+            cancelShow();
+            hideTooltip();
+        }
+    };
+
+    const onMouseUp = () => {
+        isSelecting = false;
+    };
+
     container.addEventListener('mousemove', onMove);
     container.addEventListener('mouseleave', onLeave);
     container.addEventListener('scroll', onScroll, true);
+    container.addEventListener('mousedown', onMouseDown);
+    container.addEventListener('mouseup', onMouseUp);
 
-    attachedContainers.set(container, { onMove, onLeave, onScroll });
+    attachedContainers.set(container, { onMove, onLeave, onScroll, onMouseDown, onMouseUp });
 }
 
 /**
@@ -572,6 +598,8 @@ export function attachKanjiTooltip(container, options = {}) {
 export function detachKanjiTooltip(container) {
     const handlers = attachedContainers.get(container);
     if (!handlers) return;
+    if (handlers.onMouseDown) container.removeEventListener('mousedown', handlers.onMouseDown);
+    if (handlers.onMouseUp) container.removeEventListener('mouseup', handlers.onMouseUp);
 
     container.removeEventListener('mousemove', handlers.onMove);
     container.removeEventListener('mouseleave', handlers.onLeave);
