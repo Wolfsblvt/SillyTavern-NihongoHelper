@@ -12,6 +12,7 @@ const defaultSettings = {
     streamInterval: 150,
     kmSort: 'freq_asc',
     kmFilter: 'all',
+    meaningSpoiler: 'off',
 };
 
 let uiInjected = false;
@@ -68,6 +69,9 @@ export const nihongoSettings = {
     set kmFilter(val) {
         ensureSettings().kmFilter = val;
         saveSettingsDebounced();
+    },
+    get meaningSpoiler() {
+        return String(ensureSettings().meaningSpoiler || 'off');
     },
 };
 
@@ -130,6 +134,11 @@ function applySettingsToUI() {
         streamIntervalValue.textContent = `${settings.streamInterval}ms`;
     }
 
+    const spoilerSelect = document.getElementById('nihongo_helper_meaning_spoiler');
+    if (spoilerSelect instanceof HTMLSelectElement) {
+        spoilerSelect.value = settings.meaningSpoiler;
+    }
+
     applyCSSVariables();
 }
 
@@ -189,6 +198,13 @@ function registerSettingsEventListeners() {
             saveSettingsDebounced();
             const display = document.getElementById('nihongo_helper_stream_interval_value');
             if (display) display.textContent = `${settings.streamInterval}ms`;
+        }
+    });
+
+    document.getElementById('nihongo_helper_meaning_spoiler')?.addEventListener('change', (e) => {
+        if (e.target instanceof HTMLSelectElement) {
+            settings.meaningSpoiler = e.target.value;
+            saveSettingsDebounced();
         }
     });
 

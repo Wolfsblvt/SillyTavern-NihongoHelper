@@ -40,6 +40,18 @@
                     <input type="range" id="nihongo_helper_stream_interval" min="50" max="1000" step="50" value="150" />
                     <small class="notes">How often furigana is refreshed during streaming. Lower = more frequent but heavier.</small>
                 </div>
+                <div class="flex-container flexFlowColumn" style="margin-top: 8px;">
+                    <label for="nihongo_helper_meaning_spoiler">
+                        <span>Meaning spoiler</span>
+                    </label>
+                    <select id="nihongo_helper_meaning_spoiler" class="text_pole">
+                        <option value="off">Show immediately</option>
+                        <option value="hover">Reveal on hover</option>
+                        <option value="delay2">Reveal after 2s</option>
+                        <option value="delay5">Reveal after 5s</option>
+                    </select>
+                    <small class="notes">Hide word meanings behind a spoiler blur to test your knowledge first</small>
+                </div>
                 <hr style="margin: 8px 0;" />
                 <div class="flex-container">
                     <button id="nihongo_helper_open_kanji_manager" class="menu_button menu_button_icon" title="Open the Kanji Manager to browse, search, and mark kanji as known">

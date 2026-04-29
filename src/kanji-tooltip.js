@@ -1,6 +1,7 @@
 import { getKanji, isKanjiDataLoaded } from './kanji-data.js';
 import { getKnownKanji, toggleKnown } from './kanji-manager.js';
 import { lookupMeaning, isMeaningAvailable } from './meaning-provider.js';
+import { nihongoSettings } from './settings.js';
 
 /**
  * Generic kanji tooltip module.
@@ -35,6 +36,8 @@ let hoveredTarget = null;
 let pendingTarget = null;
 /** @type {boolean} */
 let mouseOverTooltip = false;
+/** @type {boolean} - true when a selection-based tooltip is showing (sticky) */
+let selectionActive = false;
 /** @type {WeakMap<HTMLElement, { onMove: Function, onLeave: Function, onScroll: Function }>} */
 const attachedContainers = new WeakMap();
 
@@ -204,8 +207,11 @@ function renderSenses(meaningResult) {
         groups[groups.length - 1].defs.push(sense);
     }
 
+    const spoiler = nihongoSettings.meaningSpoiler;
+    const spoilerAttr = spoiler !== 'off' ? ` data-spoiler="${spoiler}"` : '';
+
     let defNum = 1;
-    let html = '<div class="nihongo-wt-senses">';
+    let html = `<div class="nihongo-wt-senses"${spoilerAttr}>`;
     for (const group of groups) {
         if (group.pos) {
             html += `<div class="nihongo-wt-pos-header">${group.pos}</div>`;
@@ -355,6 +361,7 @@ function hideTooltip() {
     const tip = ensureTooltip();
     tip.style.display = 'none';
     currentKey = null;
+    selectionActive = false;
 }
 
 /**
@@ -379,6 +386,8 @@ function scheduleHide() {
  * Schedules showing a tooltip after SHOW_DELAY.
  * When the timer fires, re-checks whether the cursor is still over
  * the same target element — if not, cancels the show.
+ * If another tooltip is currently visible, it is hidden right before
+ * the new one appears (not before).
  */
 function scheduleShow(found, boundingEl) {
     cancelShow();
@@ -392,10 +401,14 @@ function scheduleShow(found, boundingEl) {
             return;
         }
         pendingTarget = null;
+        // Hide any currently visible tooltip before showing the new one
+        if (currentKey) {
+            const tip = ensureTooltip();
+            tip.style.display = 'none';
+            currentKey = null;
+        }
         let ok = false;
         if (found.type === 'word') {
-            ok = populateWordTooltip(found.word, found.reading || '', found.pos || '');
-        } else if (found.type === 'selection') {
             ok = populateWordTooltip(found.word, found.reading || '', found.pos || '');
         } else {
             ok = populateKanjiTooltip(found.word);
@@ -403,6 +416,7 @@ function scheduleShow(found, boundingEl) {
         if (!ok) return;
         positionTooltip(found.el, boundingEl);
         currentKey = found.key;
+        selectionActive = false;
     }, SHOW_DELAY);
 }
 
@@ -425,8 +439,8 @@ function findTooltipTarget(target) {
     if (wordSpan) {
         const word = wordSpan.dataset.word;
         const hasKanji = /[\u4e00-\u9faf\u3400-\u4dbf]/.test(word);
-        // Show tooltip if word contains kanji OR if JMdict is loaded (kana-only words have meanings)
-        if (hasKanji || isMeaningAvailable()) {
+        // Only show hover tooltip for words containing kanji
+        if (hasKanji) {
             const reading = wordSpan.dataset.reading || '';
             const pos = wordSpan.dataset.pos || '';
             return { type: 'word', key: `w:${word}`, el: wordSpan, word, reading, pos };
@@ -452,6 +466,9 @@ export function attachKanjiTooltip(container, options = {}) {
     tooltipParent = options.appendTo || null;
 
     const onMove = (e) => {
+        // Don't let mousemove interfere with selection tooltips
+        if (selectionActive) return;
+
         const found = findTooltipTarget(e.target);
         if (!found) {
             hoveredTarget = null;
@@ -466,20 +483,18 @@ export function attachKanjiTooltip(container, options = {}) {
         // Already showing this exact tooltip
         if (found.key === currentKey) return;
 
-        // Moving to a different target — hide the old one first, then schedule new
-        if (currentKey) hideTooltip();
-
+        // Schedule the new tooltip — the old one will be hidden when the new one shows
         scheduleShow(found, boundingEl);
     };
 
     const onLeave = () => {
         hoveredTarget = null;
-        scheduleHide();
+        if (!selectionActive) scheduleHide();
     };
 
     const onScroll = () => {
         hoveredTarget = null;
-        hideTooltip();
+        hideTooltip(); // also clears selectionActive
     };
 
     container.addEventListener('mousemove', onMove);
@@ -517,6 +532,7 @@ export function destroyTooltip() {
     hoveredTarget = null;
     mouseOverTooltip = false;
     pendingTarget = null;
+    selectionActive = false;
 }
 
 // ===== Selection Lookup Helpers =====
@@ -571,7 +587,11 @@ function positionTooltipAtRect(rect) {
  */
 function onSelectionLookup() {
     const sel = window.getSelection();
-    if (!sel || sel.isCollapsed) return;
+    if (!sel || sel.isCollapsed) {
+        // Clicked without selecting — dismiss any active selection tooltip
+        if (selectionActive) hideTooltip();
+        return;
+    }
 
     const text = sel.toString().trim();
     if (!text || text.length > 30) return; // sanity limit
@@ -587,7 +607,9 @@ function onSelectionLookup() {
 
     if (!meaning) return;
 
-    // Build a fake found-target for populateWordTooltip
+    // Hide any existing tooltip first
+    hideTooltip();
+
     const ok = populateWordTooltip(text, '', '');
     if (!ok) return;
 
@@ -596,6 +618,7 @@ function onSelectionLookup() {
     const rect = range.getBoundingClientRect();
     positionTooltipAtRect(rect);
     currentKey = `sel:${text}`;
+    selectionActive = true;
 }
 
 // ===== Chat Inspect Mode =====

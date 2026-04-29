@@ -274,6 +274,7 @@
     background: var(--SmartThemeBlurTintColor, #1a1a2e);
     color: var(--SmartThemeBodyColor, #ddd);
     overflow: hidden;
+    overflow-y: clip;
     animation: nihongo-tooltip-in 0.12s ease-out;
 }
 
@@ -422,8 +423,8 @@
 /* ===== Word Tooltip ===== */
 
 .nihongo-wt-inner {
-    max-height: 340px;
-    overflow-y: auto;
+    max-height: none;
+    overflow-y: visible;
 }
 
 .nihongo-wt-word-section {
@@ -509,6 +510,69 @@
     line-height: 1.3;
 }
 
+/* ── Meaning spoiler (Discord-style blur) ── */
+
+.nihongo-wt-senses[data-spoiler] {
+    position: relative;
+    cursor: pointer;
+}
+
+.nihongo-wt-senses[data-spoiler]::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    transition: opacity 0.25s ease, backdrop-filter 0.25s ease;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.nihongo-wt-senses[data-spoiler] > * {
+    filter: blur(5px);
+    transition: filter 0.25s ease;
+    user-select: none;
+}
+
+/* Hover mode: reveal on hover */
+.nihongo-wt-senses[data-spoiler="hover"]:hover::after {
+    opacity: 0;
+    backdrop-filter: blur(0);
+    -webkit-backdrop-filter: blur(0);
+}
+
+.nihongo-wt-senses[data-spoiler="hover"]:hover > * {
+    filter: blur(0);
+    user-select: auto;
+}
+
+/* Delay modes: reveal via animation after N seconds */
+.nihongo-wt-senses[data-spoiler="delay2"]::after {
+    animation: nihongo-spoiler-reveal-overlay 0.3s ease 2s forwards;
+}
+
+.nihongo-wt-senses[data-spoiler="delay2"] > * {
+    animation: nihongo-spoiler-reveal-content 0.3s ease 2s forwards;
+}
+
+.nihongo-wt-senses[data-spoiler="delay5"]::after {
+    animation: nihongo-spoiler-reveal-overlay 0.3s ease 5s forwards;
+}
+
+.nihongo-wt-senses[data-spoiler="delay5"] > * {
+    animation: nihongo-spoiler-reveal-content 0.3s ease 5s forwards;
+}
+
+@keyframes nihongo-spoiler-reveal-overlay {
+    to { opacity: 0; backdrop-filter: blur(0); -webkit-backdrop-filter: blur(0); }
+}
+
+@keyframes nihongo-spoiler-reveal-content {
+    to { filter: blur(0); user-select: auto; }
+}
+
 .nihongo-wt-kanji-section {
     margin-top: 4px;
     padding-top: 6px;
@@ -516,6 +580,8 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
+    max-height: clamp(120px, 20vh, 240px);
+    overflow-y: auto;
 }
 
 .nihongo-wt-section-label {
@@ -622,11 +688,11 @@
 
 /* ===== Chat Inspect Mode ===== */
 
-#chat.nihongo-inspect-mode .nihongo-word {
+#chat.nihongo-inspect-mode .nihongo-word:has(.nihongo-kanji) {
     cursor: help;
 }
 
-#chat.nihongo-inspect-mode .nihongo-word:hover {
+#chat.nihongo-inspect-mode .nihongo-word:has(.nihongo-kanji):hover {
     background: rgba(255, 255, 255, 0.06);
     border-radius: 2px;
 }
