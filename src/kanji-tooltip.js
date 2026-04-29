@@ -14,7 +14,7 @@ import { getKnownKanji, toggleKnown } from './kanji-manager.js';
 
 const TOOLTIP_ID = 'nihongo_kanji_tooltip';
 const SHOW_DELAY = 300;
-const HIDE_DELAY = 150;
+const HIDE_DELAY = 350;
 const TOOLTIP_WIDTH = 280;
 const TOOLTIP_MAX_HEIGHT = 350;
 
@@ -322,9 +322,12 @@ function findTooltipTarget(target) {
     const wordSpan = target.closest('.nihongo-word[data-word]');
     if (wordSpan) {
         const word = wordSpan.dataset.word;
-        const reading = wordSpan.dataset.reading || '';
-        const pos = wordSpan.dataset.pos || '';
-        return { type: 'word', key: `w:${word}`, el: wordSpan, word, reading, pos };
+        // Skip kana-only words — no useful tooltip content yet
+        if (/[\u4e00-\u9faf\u3400-\u4dbf]/.test(word)) {
+            const reading = wordSpan.dataset.reading || '';
+            const pos = wordSpan.dataset.pos || '';
+            return { type: 'word', key: `w:${word}`, el: wordSpan, word, reading, pos };
+        }
     }
     // Fallback: bare kanji span (without word wrapper)
     const kanjiSpan = target.closest('.nihongo-kanji[data-kanji]');

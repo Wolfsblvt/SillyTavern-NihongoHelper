@@ -396,7 +396,13 @@
 }
 
 .nihongo-tooltip-known-btn .fa-circle-check {
+    color: inherit;
+    opacity: 0.6;
+}
+
+.nihongo-tooltip-known-btn .fa-solid.fa-circle-check {
     color: #4caf50;
+    opacity: 1;
 }
 
 .nihongo-tooltip-jisho-link {
@@ -526,10 +532,14 @@
 
 .nihongo-wt-reading-label {
     display: inline-block;
-    font-size: 0.85em;
-    opacity: 0.5;
-    font-weight: bold;
+    font-size: 0.8em;
+    padding: 0 3px;
     margin-right: 3px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.1);
+    opacity: 0.65;
+    font-weight: 600;
+    vertical-align: baseline;
 }
 
 .nihongo-wt-known-toggle {
@@ -556,6 +566,10 @@
 }
 
 .nihongo-wt-known-toggle .fa-circle-check {
+    color: inherit;
+}
+
+.nihongo-wt-kanji-known .nihongo-wt-known-toggle .fa-circle-check {
     color: #4caf50;
 }
 
