@@ -1,4 +1,4 @@
-import { getKanji } from './kanji-data.js';
+import { getKanji, isKanjiDataLoaded } from './kanji-data.js';
 import { getKnownKanji, toggleKnown } from './kanji-manager.js';
 
 /**
@@ -15,8 +15,8 @@ import { getKnownKanji, toggleKnown } from './kanji-manager.js';
 const TOOLTIP_ID = 'nihongo_kanji_tooltip';
 const SHOW_DELAY = 300;
 const HIDE_DELAY = 150;
-const TOOLTIP_WIDTH = 260;
-const TOOLTIP_MAX_HEIGHT = 200;
+const TOOLTIP_WIDTH = 280;
+const TOOLTIP_MAX_HEIGHT = 350;
 
 /** @type {HTMLElement|null} */
 let tooltipEl = null;
@@ -25,7 +25,7 @@ let showTimer = null;
 /** @type {number|null} */
 let hideTimer = null;
 /** @type {string|null} */
-let currentChar = null;
+let currentKey = null;
 /** @type {HTMLElement|null} */
 let tooltipParent = null;
 /** @type {WeakMap<HTMLElement, { onMove: Function, onLeave: Function, onScroll: Function }>} */
@@ -62,11 +62,83 @@ function ensureTooltip() {
 }
 
 /**
- * Populates tooltip content for a kanji character.
+ * Renders a compact kanji block for use inside the word tooltip.
+ * @param {string} char
+ * @returns {string} HTML string
+ */
+function renderKanjiBlock(char) {
+    const entry = getKanji(char);
+    if (!entry) return '';
+    const known = getKnownKanji();
+    const isKnown = known.has(char);
+    const knownClass = isKnown ? ' nihongo-wt-kanji-known' : '';
+    return `
+        <div class="nihongo-wt-kanji-block${knownClass}" data-kanji="${char}">
+            <span class="nihongo-wt-kanji-char">${char}</span>
+            <div class="nihongo-wt-kanji-info">
+                <div class="nihongo-wt-kanji-meanings">${entry.m.slice(0, 3).join(', ')}</div>
+                <div class="nihongo-wt-kanji-meta">
+                    ${entry.on.length ? `<span class="nihongo-wt-kanji-reading">${entry.on.slice(0, 2).join('、')}</span>` : ''}
+                    ${entry.kun.length ? `<span class="nihongo-wt-kanji-reading">${entry.kun.slice(0, 2).join('、')}</span>` : ''}
+                    ${entry.jlpt ? `<span class="nihongo-tooltip-tag">N${entry.jlpt}</span>` : ''}
+                    ${entry.f ? `<span class="nihongo-tooltip-tag">#${entry.f}</span>` : ''}
+                    ${isKnown ? '<span class="nihongo-tooltip-tag nihongo-tooltip-tag-known">Known</span>' : ''}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Wires up all known toggle buttons inside the tooltip.
+ * @param {HTMLElement} tip
+ */
+function wireKnownButtons(tip) {
+    tip.querySelectorAll('.nihongo-tooltip-known-btn').forEach(knownBtn => {
+        knownBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const ch = knownBtn.dataset.kanji;
+            if (!ch) return;
+            const nowKnown = toggleKnown(ch);
+            // Update button
+            const icon = knownBtn.querySelector('i');
+            const span = knownBtn.querySelector('span');
+            if (icon) icon.className = nowKnown ? 'fa-solid fa-star' : 'fa-regular fa-star';
+            if (span) span.textContent = nowKnown ? 'Known' : 'Mark Known';
+            // Update border on single-kanji tooltip
+            const inner = tip.querySelector('.nihongo-tooltip-inner');
+            if (inner) inner.classList.toggle('nihongo-tooltip-known', nowKnown);
+            // Update known tag in the same block
+            const block = knownBtn.closest('.nihongo-tooltip-inner, .nihongo-wt-kanji-block');
+            if (block) {
+                block.classList.toggle('nihongo-wt-kanji-known', nowKnown);
+                block.classList.toggle('nihongo-tooltip-known', nowKnown);
+                const existingTag = block.querySelector('.nihongo-tooltip-tag-known');
+                if (nowKnown && !existingTag) {
+                    const metaEl = block.querySelector('.nihongo-tooltip-meta, .nihongo-wt-kanji-meta');
+                    if (metaEl) {
+                        const tag = document.createElement('span');
+                        tag.className = 'nihongo-tooltip-tag nihongo-tooltip-tag-known';
+                        tag.textContent = 'Known';
+                        metaEl.appendChild(tag);
+                    }
+                } else if (!nowKnown && existingTag) {
+                    existingTag.remove();
+                }
+            }
+            // Update the kanji spans in the DOM
+            document.querySelectorAll(`.nihongo-kanji[data-kanji="${ch}"]`)
+                .forEach(s => s.classList.toggle('nihongo-kanji-known', nowKnown));
+        });
+    });
+}
+
+/**
+ * Populates tooltip content for a single kanji character.
  * @param {string} char
  * @returns {boolean} True if content was populated
  */
-function populateTooltip(char) {
+function populateKanjiTooltip(char) {
     const entry = getKanji(char);
     const tip = ensureTooltip();
     if (!entry) {
@@ -109,41 +181,57 @@ function populateTooltip(char) {
         </div>
     `;
 
-    // Wire up known toggle button
-    const knownBtn = tip.querySelector('.nihongo-tooltip-known-btn');
-    if (knownBtn) {
-        knownBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const ch = knownBtn.dataset.kanji;
-            if (!ch) return;
-            const nowKnown = toggleKnown(ch);
-            // Update button
-            const icon = knownBtn.querySelector('i');
-            const span = knownBtn.querySelector('span');
-            if (icon) icon.className = nowKnown ? 'fa-solid fa-star' : 'fa-regular fa-star';
-            if (span) span.textContent = nowKnown ? 'Known' : 'Mark Known';
-            // Update border
-            const inner = tip.querySelector('.nihongo-tooltip-inner');
-            if (inner) inner.classList.toggle('nihongo-tooltip-known', nowKnown);
-            // Update known tag
-            const meta = tip.querySelector('.nihongo-tooltip-meta');
-            if (meta) {
-                const existingTag = meta.querySelector('.nihongo-tooltip-tag-known');
-                if (nowKnown && !existingTag) {
-                    const tag = document.createElement('span');
-                    tag.className = 'nihongo-tooltip-tag nihongo-tooltip-tag-known';
-                    tag.textContent = 'Known';
-                    meta.appendChild(tag);
-                } else if (!nowKnown && existingTag) {
-                    existingTag.remove();
-                }
-            }
-            // Update the kanji span in the DOM if in chat inspect mode
-            const chatSpans = document.querySelectorAll(`.nihongo-kanji[data-kanji="${ch}"]`);
-            chatSpans.forEach(s => s.classList.toggle('nihongo-kanji-known', nowKnown));
-        });
+    wireKnownButtons(tip);
+    return true;
+}
+
+/**
+ * Populates tooltip content for a word (with kanji breakdown).
+ * @param {string} word The surface form
+ * @param {string} reading The hiragana reading
+ * @param {string} pos Part of speech from kuromoji
+ * @returns {boolean} True if content was populated
+ */
+function populateWordTooltip(word, reading, pos) {
+    const tip = ensureTooltip();
+
+    const jishoUrl = `https://jisho.org/search/${encodeURIComponent(word)}%20%23words`;
+
+    // Extract kanji characters in order of appearance
+    const kanjiChars = [];
+    for (const ch of word) {
+        if (getKanji(ch) && !kanjiChars.includes(ch)) {
+            kanjiChars.push(ch);
+        }
     }
 
+    const kanjiBlocksHtml = kanjiChars.length > 0 && isKanjiDataLoaded()
+        ? `<div class="nihongo-wt-kanji-section">
+               <div class="nihongo-wt-section-label">Kanji</div>
+               ${kanjiChars.map(renderKanjiBlock).join('')}
+           </div>`
+        : '';
+
+    tip.innerHTML = `
+        <div class="nihongo-tooltip-inner nihongo-wt-inner">
+            <div class="nihongo-wt-word-section">
+                <div class="nihongo-wt-word-top">
+                    <span class="nihongo-wt-word">${word}</span>
+                    ${reading && reading !== word ? `<span class="nihongo-wt-reading">${reading}</span>` : ''}
+                </div>
+                ${pos ? `<div class="nihongo-wt-pos">${pos}</div>` : ''}
+                <div class="nihongo-wt-meaning-placeholder">Meaning lookup not yet available</div>
+                <div class="nihongo-tooltip-actions">
+                    <a class="nihongo-tooltip-jisho-link" href="${jishoUrl}" target="_blank" rel="noopener" title="Look up on Jisho.org">
+                        Jisho ↗
+                    </a>
+                </div>
+            </div>
+            ${kanjiBlocksHtml}
+        </div>
+    `;
+
+    wireKnownButtons(tip);
     return true;
 }
 
@@ -223,26 +311,35 @@ function scheduleHide() {
     hideTimer = setTimeout(() => {
         const tip = ensureTooltip();
         tip.style.display = 'none';
-        currentChar = null;
+        currentKey = null;
     }, HIDE_DELAY);
 }
 
 /**
- * Finds the kanji character from a hovered element.
- * Works with:
- *   - .nihongo-km-tile[data-kanji] (Kanji Manager grid)
- *   - .nihongo-kanji[data-kanji]   (in-message kanji spans)
+ * Finds the tooltip target from a hovered element.
+ * Priority:
+ *   1. .nihongo-km-tile[data-kanji] → kanji tooltip (Kanji Manager)
+ *   2. .nihongo-word[data-word]     → word tooltip (in-message, contains kanji blocks)
+ *   3. .nihongo-kanji[data-kanji]   → kanji tooltip fallback (in-message without word wrapper)
  * @param {EventTarget|null} target
- * @returns {{ char: string, el: HTMLElement }|null}
+ * @returns {{ type: 'word'|'kanji', key: string, el: HTMLElement, word?: string, reading?: string, pos?: string }|null}
  */
-function findKanjiTarget(target) {
+function findTooltipTarget(target) {
     if (!(target instanceof HTMLElement)) return null;
-    // Kanji Manager tile
+    // Kanji Manager tile — always kanji tooltip
     const tile = target.closest('.nihongo-km-tile[data-kanji]');
-    if (tile) return { char: tile.dataset.kanji, el: tile };
-    // In-message kanji span
-    const span = target.closest('.nihongo-kanji[data-kanji]');
-    if (span) return { char: span.dataset.kanji, el: span };
+    if (tile) return { type: 'kanji', key: `k:${tile.dataset.kanji}`, el: tile, word: tile.dataset.kanji };
+    // In-message word span — word tooltip
+    const wordSpan = target.closest('.nihongo-word[data-word]');
+    if (wordSpan) {
+        const word = wordSpan.dataset.word;
+        const reading = wordSpan.dataset.reading || '';
+        const pos = wordSpan.dataset.pos || '';
+        return { type: 'word', key: `w:${word}`, el: wordSpan, word, reading, pos };
+    }
+    // Fallback: bare kanji span (without word wrapper)
+    const kanjiSpan = target.closest('.nihongo-kanji[data-kanji]');
+    if (kanjiSpan) return { type: 'kanji', key: `k:${kanjiSpan.dataset.kanji}`, el: kanjiSpan, word: kanjiSpan.dataset.kanji };
     return null;
 }
 
@@ -260,22 +357,28 @@ export function attachKanjiTooltip(container, options = {}) {
     tooltipParent = options.appendTo || null;
 
     const onMove = (e) => {
-        const found = findKanjiTarget(e.target);
+        const found = findTooltipTarget(e.target);
         if (!found) {
-            if (currentChar) scheduleHide();
+            if (currentKey) scheduleHide();
             return;
         }
 
         cancelHide();
 
-        if (found.char === currentChar) return;
+        if (found.key === currentKey) return;
 
         cancelShow();
         showTimer = setTimeout(() => {
-            if (!populateTooltip(found.char)) return;
+            let ok = false;
+            if (found.type === 'word') {
+                ok = populateWordTooltip(found.word, found.reading || '', found.pos || '');
+            } else {
+                ok = populateKanjiTooltip(found.word);
+            }
+            if (!ok) return;
             positionTooltip(found.el, boundingEl);
-            currentChar = found.char;
-        }, currentChar ? 50 : SHOW_DELAY); // Faster switch between kanji
+            currentKey = found.key;
+        }, currentKey ? 50 : SHOW_DELAY);
     };
 
     const onLeave = () => {
@@ -286,7 +389,7 @@ export function attachKanjiTooltip(container, options = {}) {
         cancelShow();
         const tip = ensureTooltip();
         tip.style.display = 'none';
-        currentChar = null;
+        currentKey = null;
     };
 
     container.addEventListener('mousemove', onMove);
@@ -320,7 +423,7 @@ export function destroyTooltip() {
         tooltipEl.parentNode.removeChild(tooltipEl);
     }
     tooltipEl = null;
-    currentChar = null;
+    currentKey = null;
 }
 
 // ===== Chat Inspect Mode =====

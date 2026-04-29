@@ -98,6 +98,15 @@ function katakanaToHiragana(str) {
 }
 
 /**
+ * Escapes a string for use in an HTML attribute value.
+ * @param {string} str
+ * @returns {string}
+ */
+function escapeAttr(str) {
+    return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/**
  * Wraps individual kanji characters with spans containing data attributes.
  * Each kanji gets class="nihongo-kanji" plus data-kanji, data-freq, data-jlpt, data-grade.
  * Known kanji additionally get class="nihongo-kanji-known".
@@ -224,20 +233,24 @@ function addFuriganaToText(text) {
     for (const token of tokens) {
         const surface = token.surface_form;
         const reading = token.reading;
+        const pos = token.pos || '';
 
         if (reading && containsKanji(surface)) {
+            const hiraganaReading = katakanaToHiragana(reading);
             // Skip furigana if every kanji in the token is marked as known
             const kanjiChars = [...surface].filter(isKanji);
-            if (known.size > 0 && kanjiChars.length > 0 && kanjiChars.every(ch => known.has(ch))) {
-                // Still wrap individual kanji for highlighting/data even without furigana
-                result += wrapKanji(surface, known);
-            } else {
-                const hiraganaReading = katakanaToHiragana(reading);
-                result += buildRuby(surface, hiraganaReading, known);
-            }
+            const allKnown = known.size > 0 && kanjiChars.length > 0 && kanjiChars.every(ch => known.has(ch));
+            const inner = allKnown
+                ? wrapKanji(surface, known)
+                : buildRuby(surface, hiraganaReading, known);
+            result += `<span class="nihongo-word" data-word="${escapeAttr(surface)}" data-reading="${escapeAttr(hiraganaReading)}" data-pos="${escapeAttr(pos)}">${inner}</span>`;
         } else if (containsKanji(surface)) {
             // Kanji without reading (rare) — still wrap for data attributes
-            result += wrapKanji(surface, known);
+            result += `<span class="nihongo-word" data-word="${escapeAttr(surface)}" data-pos="${escapeAttr(pos)}">${wrapKanji(surface, known)}</span>`;
+        } else if (containsJapanese(surface)) {
+            // Pure kana token — wrap so tooltip can find word boundaries
+            const hiraganaReading = reading ? katakanaToHiragana(reading) : '';
+            result += `<span class="nihongo-word" data-word="${escapeAttr(surface)}" data-reading="${escapeAttr(hiraganaReading)}" data-pos="${escapeAttr(pos)}">${surface}</span>`;
         } else {
             result += surface;
         }

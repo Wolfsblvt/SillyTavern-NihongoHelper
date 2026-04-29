@@ -33,9 +33,15 @@ A SillyTavern extension to help with learning Japanese through chat interactions
 - [x] **Kanji Tooltip** — Compact hover tooltip available in both Kanji Manager and Inspect Mode
   - Smart positioning (right → left → below), constrained within parent
   - Known toggle, Jisho link, smooth animations
+- [x] **Word Tooltip** — Hover over any word in inspect mode to see word-level details
+  - Word surface form, reading, part of speech
+  - Jisho.org link for word lookup (uses `#words` search)
+  - Compact kanji breakdown: each kanji in the word shown with meanings, readings, JLPT, frequency
+  - Meaning placeholder for future dictionary integration
+- [x] **`{{knownKanji}}` Macro** — Comma-separated list of known kanji for use in system prompts
+- [x] **`{{knownKanjiCount}}` Macro** — Number of known kanji
 
 ### Planned
-- [ ] **`{{knownKanji}}` Macro** — Expose known kanji list for use in system prompts
 - [ ] **Vocabulary Sidebar / Popup** — Click any word with furigana to see dictionary entry, meanings, example sentences
 - [ ] **Feedback/Correction Renderer** — Styled rendering for AI correction blocks (grammar, translation, notes)
 - [ ] **Word Frequency Highlights** — Color-code kanji/words by JLPT level or frequency tier

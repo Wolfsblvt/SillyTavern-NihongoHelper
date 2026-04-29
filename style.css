@@ -402,7 +402,126 @@
     text-decoration: underline;
 }
 
+/* ===== Word Tooltip ===== */
+
+.nihongo-wt-inner {
+    max-height: 340px;
+    overflow-y: auto;
+}
+
+.nihongo-wt-word-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.nihongo-wt-word-top {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.nihongo-wt-word {
+    font-size: 1.6em;
+    line-height: 1.2;
+    font-family: "Noto Sans JP", "Yu Gothic", "Hiragino Kaku Gothic Pro", sans-serif;
+}
+
+.nihongo-wt-reading {
+    font-size: 0.9em;
+    opacity: 0.7;
+    font-family: "Noto Sans JP", "Yu Gothic", "Hiragino Kaku Gothic Pro", sans-serif;
+}
+
+.nihongo-wt-pos {
+    font-size: 0.78em;
+    opacity: 0.5;
+    font-style: italic;
+}
+
+.nihongo-wt-meaning-placeholder {
+    font-size: 0.82em;
+    opacity: 0.35;
+    font-style: italic;
+}
+
+.nihongo-wt-kanji-section {
+    margin-top: 4px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.nihongo-wt-section-label {
+    font-size: 0.7em;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.4;
+    margin-bottom: 2px;
+}
+
+.nihongo-wt-kanji-block {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.nihongo-wt-kanji-block.nihongo-wt-kanji-known {
+    border-left: 2px solid #4caf50;
+}
+
+.nihongo-wt-kanji-char {
+    font-size: 1.5em;
+    line-height: 1;
+    flex-shrink: 0;
+    font-family: "Noto Sans JP", "Yu Gothic", "Hiragino Kaku Gothic Pro", sans-serif;
+}
+
+.nihongo-wt-kanji-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.nihongo-wt-kanji-meanings {
+    font-size: 0.82em;
+    opacity: 0.85;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nihongo-wt-kanji-meta {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.nihongo-wt-kanji-reading {
+    font-size: 0.75em;
+    opacity: 0.6;
+    font-family: "Noto Sans JP", "Yu Gothic", "Hiragino Kaku Gothic Pro", sans-serif;
+}
+
 /* ===== Chat Inspect Mode ===== */
+
+#chat.nihongo-inspect-mode .nihongo-word {
+    cursor: help;
+}
+
+#chat.nihongo-inspect-mode .nihongo-word:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 2px;
+}
 
 #chat.nihongo-inspect-mode .nihongo-kanji {
     cursor: help;
