@@ -1,5 +1,6 @@
 import { EXTENSION_NAME } from '../index.js';
 import { openKanjiManager } from './kanji-manager.js';
+import { toggleChatInspect, isChatInspectActive } from './kanji-tooltip.js';
 
 /**
  * Injects the Nihongo Helper sub-menu into the wand/extensions menu.
@@ -44,7 +45,30 @@ export function injectWandMenu() {
         openKanjiManager();
     });
 
+    // Inspect Kanji button
+    const inspectBtn = document.createElement('div');
+    inspectBtn.id = 'nihongo_wand_inspect_kanji';
+    inspectBtn.classList.add('list-group-item', 'flex-container', 'flexGap5', 'interactable');
+    inspectBtn.innerHTML = `
+        <div class="fa-solid fa-magnifying-glass extensionsMenuExtensionButton"></div>
+        <span>Inspect Kanji</span>
+    `;
+    inspectBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleChatInspect();
+        // Update visual state
+        const icon = inspectBtn.querySelector('.fa-magnifying-glass');
+        if (isChatInspectActive()) {
+            inspectBtn.classList.add('nihongo-wand-active');
+            if (icon) icon.classList.add('fa-beat-fade');
+        } else {
+            inspectBtn.classList.remove('nihongo-wand-active');
+            if (icon) icon.classList.remove('fa-beat-fade');
+        }
+    });
+
     subMenu.appendChild(kanjiManagerBtn);
+    subMenu.appendChild(inspectBtn);
     container.appendChild(menuToggle);
     container.appendChild(subMenu);
     extensionsMenu.appendChild(container);

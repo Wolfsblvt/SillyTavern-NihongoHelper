@@ -102,7 +102,7 @@ function katakanaToHiragana(str) {
  * Each kanji gets class="nihongo-kanji" plus data-kanji, data-freq, data-jlpt, data-grade.
  * Known kanji additionally get class="nihongo-kanji-known".
  * @param {string} kanjiStr One or more kanji characters
- * @param {Set<string>} known Set of known kanji
+ * @param {Set<string>|Map<string, any>} known Known kanji collection
  * @returns {string} HTML with per-kanji spans
  */
 function wrapKanji(kanjiStr, known) {
@@ -132,7 +132,7 @@ function wrapKanji(kanjiStr, known) {
  * Tries to align furigana only over the kanji portions of the surface form.
  * @param {string} surface The surface form (as written)
  * @param {string} reading The reading in hiragana
- * @param {Set<string>} known Set of known kanji
+ * @param {Set<string>|Map<string, any>} known Known kanji collection
  * @returns {string} HTML string
  */
 function buildRuby(surface, reading, known) {

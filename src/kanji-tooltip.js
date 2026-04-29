@@ -26,6 +26,8 @@ let showTimer = null;
 let hideTimer = null;
 /** @type {string|null} */
 let currentChar = null;
+/** @type {HTMLElement|null} */
+let tooltipParent = null;
 /** @type {WeakMap<HTMLElement, { onMove: Function, onLeave: Function, onScroll: Function }>} */
 const attachedContainers = new WeakMap();
 
@@ -34,13 +36,19 @@ const attachedContainers = new WeakMap();
  * @returns {HTMLElement}
  */
 function ensureTooltip() {
-    if (tooltipEl && document.body.contains(tooltipEl)) return tooltipEl;
+    const parent = tooltipParent || document.body;
+    if (tooltipEl && parent.contains(tooltipEl)) return tooltipEl;
+
+    // Remove stale element if parent changed
+    if (tooltipEl && tooltipEl.parentNode) {
+        tooltipEl.parentNode.removeChild(tooltipEl);
+    }
 
     tooltipEl = document.createElement('div');
     tooltipEl.id = TOOLTIP_ID;
     tooltipEl.className = 'nihongo-tooltip';
     tooltipEl.style.display = 'none';
-    document.body.appendChild(tooltipEl);
+    parent.appendChild(tooltipEl);
 
     // Keep tooltip visible while hovering over it
     tooltipEl.addEventListener('mouseenter', () => {
@@ -197,11 +205,13 @@ function findKanjiTarget(target) {
  * @param {HTMLElement} container The element to listen on (delegated)
  * @param {Object} [options]
  * @param {HTMLElement} [options.boundingEl] Constraining element for positioning
+ * @param {HTMLElement} [options.appendTo] Where to append the tooltip DOM (default: document.body). Use the dialog element for modal popups.
  */
 export function attachKanjiTooltip(container, options = {}) {
     if (attachedContainers.has(container)) return;
 
     const boundingEl = options.boundingEl || null;
+    tooltipParent = options.appendTo || null;
 
     const onMove = (e) => {
         const found = findKanjiTarget(e.target);
@@ -265,4 +275,104 @@ export function destroyTooltip() {
     }
     tooltipEl = null;
     currentChar = null;
+}
+
+// ===== Chat Inspect Mode =====
+
+const INSPECT_CLASS = 'nihongo-inspect-mode';
+const INDICATOR_ID = 'nihongo_inspect_indicator';
+let inspectActive = false;
+/** @type {HTMLElement|null} */
+let inspectContainer = null;
+/** @type {((e: KeyboardEvent) => void)|null} */
+let inspectEscHandler = null;
+
+/**
+ * Returns whether chat inspect mode is currently active.
+ * @returns {boolean}
+ */
+export function isChatInspectActive() {
+    return inspectActive;
+}
+
+/**
+ * Enables kanji inspect mode on the chat area.
+ * Hover over any kanji in messages to see a tooltip with details.
+ */
+export function enableChatInspect() {
+    if (inspectActive) return;
+    const chat = document.getElementById('chat');
+    if (!chat) return;
+
+    inspectActive = true;
+    inspectContainer = chat;
+    tooltipParent = null; // append to body (no modal in the way)
+    chat.classList.add(INSPECT_CLASS);
+
+    attachKanjiTooltip(chat);
+
+    // Floating indicator bar
+    let indicator = document.getElementById(INDICATOR_ID);
+    if (!indicator) {
+        indicator = document.createElement('div');
+        indicator.id = INDICATOR_ID;
+        indicator.className = 'nihongo-inspect-indicator';
+        indicator.innerHTML = `
+            <span>Kanji Inspect Mode</span>
+            <span class="nihongo-inspect-hint">Hover kanji for details</span>
+            <button class="nihongo-inspect-close interactable" title="Exit inspect mode">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        `;
+        document.body.appendChild(indicator);
+        indicator.querySelector('.nihongo-inspect-close')?.addEventListener('click', disableChatInspect);
+    }
+    indicator.style.display = '';
+
+    // Escape to exit
+    inspectEscHandler = (e) => {
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            disableChatInspect();
+        }
+    };
+    document.addEventListener('keydown', inspectEscHandler, true);
+}
+
+/**
+ * Disables kanji inspect mode.
+ */
+export function disableChatInspect() {
+    if (!inspectActive) return;
+    inspectActive = false;
+
+    if (inspectContainer) {
+        inspectContainer.classList.remove(INSPECT_CLASS);
+        detachKanjiTooltip(inspectContainer);
+        inspectContainer = null;
+    }
+
+    destroyTooltip();
+
+    const indicator = document.getElementById(INDICATOR_ID);
+    if (indicator) indicator.style.display = 'none';
+
+    if (inspectEscHandler) {
+        document.removeEventListener('keydown', inspectEscHandler, true);
+        inspectEscHandler = null;
+    }
+}
+
+/**
+ * Toggles kanji inspect mode.
+ * @returns {boolean} New state
+ */
+export function toggleChatInspect() {
+    if (inspectActive) {
+        disableChatInspect();
+    } else {
+        enableChatInspect();
+    }
+    return inspectActive;
 }

@@ -111,10 +111,10 @@ export const FILTER_OPTIONS = {
  * @param {string} [options.filter='all']
  * @param {string} [options.sort='freq_asc']
  * @param {string} [options.search='']
- * @param {Set<string>} [options.knownKanji]
+ * @param {Set<string>|Map<string, any>} [options.knownKanji]
  * @returns {KanjiEntry[]}
  */
-export function queryKanji({ filter = 'all', sort = 'freq_asc', search = '', knownKanji = new Set() } = {}) {
+export function queryKanji({ filter = 'all', sort = 'freq_asc', search = '', knownKanji = new Map() } = {}) {
     let entries = [...kanjiData];
 
     // Apply text search (kanji char, meanings, readings)

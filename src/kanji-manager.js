@@ -8,8 +8,8 @@ import { attachKanjiTooltip, destroyTooltip } from './kanji-tooltip.js';
 
 const PAGE_SIZE = 200;
 
-/** @type {Set<string>} */
-let knownKanji = new Set();
+/** @type {Map<string, string>} kanji → ISO date string */
+let knownKanji = new Map();
 
 /** @type {Popup|null} */
 let activePopup = null;
@@ -22,24 +22,31 @@ let currentPage = 0;
 let currentResults = [];
 let totalKanjiCount = 0;
 let detailOpen = false;
+let lastDetailChar = null;
 
 /**
- * Loads known kanji set from extension settings.
+ * Loads known kanji map from extension settings.
+ * Supports both legacy array format and new object-with-dates format.
  */
 function loadKnownKanji() {
     const settings = extension_settings[EXTENSION_KEY];
-    if (settings && Array.isArray(settings.knownKanji)) {
-        knownKanji = new Set(settings.knownKanji);
+    if (!settings) return;
+    const raw = settings.knownKanji;
+    if (Array.isArray(raw)) {
+        // Legacy: plain array of characters — migrate to map with null dates
+        knownKanji = new Map(raw.map(k => [k, null]));
+    } else if (raw && typeof raw === 'object') {
+        knownKanji = new Map(Object.entries(raw));
     }
 }
 
 /**
- * Saves known kanji set to extension settings.
+ * Saves known kanji map to extension settings.
  */
 function saveKnownKanji() {
     const settings = extension_settings[EXTENSION_KEY];
     if (settings) {
-        settings.knownKanji = [...knownKanji];
+        settings.knownKanji = Object.fromEntries(knownKanji);
         saveSettingsDebounced();
     }
 }
@@ -53,7 +60,7 @@ export function toggleKnown(char) {
     if (knownKanji.has(char)) {
         knownKanji.delete(char);
     } else {
-        knownKanji.add(char);
+        knownKanji.set(char, new Date().toISOString());
     }
     saveKnownKanji();
     return knownKanji.has(char);
@@ -69,11 +76,20 @@ export function isKnown(char) {
 }
 
 /**
- * Returns the set of known kanji.
- * @returns {Set<string>}
+ * Returns the map of known kanji (kanji → date string).
+ * @returns {Map<string, string>}
  */
 export function getKnownKanji() {
     return knownKanji;
+}
+
+/**
+ * Returns the date a kanji was marked as known, or null.
+ * @param {string} char
+ * @returns {string|null}
+ */
+export function getKnownDate(char) {
+    return knownKanji.get(char) || null;
 }
 
 /**
@@ -114,7 +130,6 @@ function renderGrid(grid) {
     for (const entry of pageEntries) {
         const tile = document.createElement('div');
         tile.className = 'nihongo-km-tile interactable';
-        tile.tabIndex = 0;
         if (knownKanji.has(entry.k)) {
             tile.classList.add('nihongo-km-tile-known');
         }
@@ -187,6 +202,7 @@ function showDetail(container, char) {
     header.style.display = 'none';
     detail.style.display = '';
     detailOpen = true;
+    lastDetailChar = char;
 
     // Populate
     const detailKanji = detail.querySelector('#nihongo_km_detail_kanji');
@@ -210,6 +226,19 @@ function showDetail(container, char) {
     setField('nihongo_km_detail_grade', formatGrade(entry.g));
     setField('nihongo_km_detail_strokes', entry.s ? String(entry.s) : '—');
     setField('nihongo_km_detail_freq', entry.f ? `#${entry.f}` : '—');
+
+    // Known since date
+    const knownDateRow = detail.querySelector('#nihongo_km_detail_known_since_row');
+    const knownDateEl = detail.querySelector('#nihongo_km_detail_known_since');
+    if (knownDateRow && knownDateEl) {
+        const date = getKnownDate(entry.k);
+        if (date) {
+            knownDateRow.style.display = '';
+            knownDateEl.textContent = formatKnownDate(date);
+        } else {
+            knownDateRow.style.display = 'none';
+        }
+    }
 
     // Toggle known button state
     updateToggleButton(detail, entry.k);
@@ -242,13 +271,28 @@ function hideDetail(container) {
     if (detail) detail.style.display = 'none';
     if (header) header.style.display = '';
     detailOpen = false;
+
+    // Focus the tile we came from
+    if (lastDetailChar && grid) {
+        const tile = grid.querySelector(`.nihongo-km-tile[data-kanji="${lastDetailChar}"]`);
+        if (tile) tile.focus();
+    }
 }
 
 /**
- * Formats a grade number to a readable string.
- * @param {number|null} grade
+ * Formats an ISO date string to a human-readable "Known since" string.
+ * @param {string} isoDate
  * @returns {string}
  */
+function formatKnownDate(isoDate) {
+    try {
+        const d = new Date(isoDate);
+        return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    } catch {
+        return '—';
+    }
+}
+
 function formatGrade(grade) {
     if (!grade) return '—';
     if (grade >= 1 && grade <= 6) return `Grade ${grade}`;
@@ -288,6 +332,14 @@ export async function openKanjiManager() {
         allowHorizontalScrolling: false,
         okButton: false,
         cancelButton: false,
+        onClosing: () => {
+            if (detailOpen) {
+                const cont = activePopup?.dlg?.querySelector('#nihongo_kanji_manager');
+                if (cont) hideDetail(cont);
+                return false; // Prevent popup close
+            }
+            return true; // Allow popup close
+        },
     });
 
     const popupResult = activePopup.show();
@@ -356,7 +408,7 @@ export async function openKanjiManager() {
             refreshGrid(grid);
         });
 
-        // Kanji tile click / Enter → show detail
+        // Kanji tile click / Enter → show detail, Space → toggle known
         grid.addEventListener('click', (e) => {
             const tile = e.target.closest('.nihongo-km-tile');
             if (tile && tile.dataset.kanji) {
@@ -364,12 +416,19 @@ export async function openKanjiManager() {
             }
         });
         grid.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-                const tile = e.target.closest('.nihongo-km-tile');
-                if (tile && tile.dataset.kanji) {
-                    e.preventDefault();
-                    showDetail(container, tile.dataset.kanji);
-                }
+            const tile = e.target.closest('.nihongo-km-tile');
+            if (!tile || !tile.dataset.kanji) return;
+
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                showDetail(container, tile.dataset.kanji);
+            } else if (e.key === ' ') {
+                e.preventDefault();
+                const char = tile.dataset.kanji;
+                toggleKnown(char);
+                tile.classList.toggle('nihongo-km-tile-known', knownKanji.has(char));
+                const knownCountEl = container.querySelector('#nihongo_km_known_count');
+                if (knownCountEl) knownCountEl.textContent = `${knownKanji.size} known`;
             }
         });
 
@@ -392,6 +451,19 @@ export async function openKanjiManager() {
                 detailKanjiEl.classList.toggle('nihongo-km-detail-kanji-known', knownKanji.has(char));
             }
 
+            // Update known since row
+            const knownDateRow = container.querySelector('#nihongo_km_detail_known_since_row');
+            const knownDateEl = container.querySelector('#nihongo_km_detail_known_since');
+            if (knownDateRow && knownDateEl) {
+                const date = getKnownDate(char);
+                if (date) {
+                    knownDateRow.style.display = '';
+                    knownDateEl.textContent = formatKnownDate(date);
+                } else {
+                    knownDateRow.style.display = 'none';
+                }
+            }
+
             // Update the tile in the grid if visible
             const tile = grid.querySelector(`.nihongo-km-tile[data-kanji="${char}"]`);
             if (tile) {
@@ -405,18 +477,16 @@ export async function openKanjiManager() {
             }
         });
 
-        // Keyboard: Escape/Backspace in detail view → back to grid (not close popup)
+        // Backspace in detail view → back to grid (Escape is handled by onClosing)
         activePopup?.dlg?.addEventListener('keydown', (e) => {
             if (!detailOpen) return;
-            if (e.key === 'Escape' || e.key === 'Backspace') {
-                // Don't close popup, just go back
-                if (e.target === document.body || container.contains(e.target)) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    hideDetail(container);
-                }
+            if (e.key === 'Backspace') {
+                const tag = e.target?.tagName;
+                if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+                e.preventDefault();
+                hideDetail(container);
             }
-        }, true); // capture phase to beat popup's own handler
+        });
 
         // Infinite scroll for the grid
         const popupBody = activePopup?.dlg?.querySelector('.popup-body');
@@ -434,10 +504,10 @@ export async function openKanjiManager() {
             });
         }
 
-        // Attach kanji tooltip to the grid, bounded by the popup dialog
+        // Attach kanji tooltip to the grid, bounded by and appended to the popup dialog
         const popupDialog = activePopup?.dlg;
         if (popupDialog) {
-            attachKanjiTooltip(grid, { boundingEl: popupDialog });
+            attachKanjiTooltip(grid, { boundingEl: popupDialog, appendTo: popupDialog });
         }
     });
 }
