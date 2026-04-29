@@ -2,6 +2,7 @@ import { getKanji, isKanjiDataLoaded } from './kanji-data.js';
 import { getKnownKanji, toggleKnown } from './kanji-manager.js';
 import { lookupMeaning, isMeaningAvailable } from './meaning-provider.js';
 import { nihongoSettings } from './settings.js';
+import { deinflect } from './deinflect.js';
 
 /**
  * Generic kanji tooltip module.
@@ -232,14 +233,59 @@ function renderSenses(meaningResult) {
     return html;
 }
 
-function populateWordTooltip(word, reading, pos) {
-    const tip = ensureTooltip();
+/**
+ * Tries to resolve a word via deinflection.
+ * @param {string} word
+ * @param {string} [reading]
+ * @returns {{ baseWord: string, meaning: Object, inflection: { from: string, rule: string } }|null}
+ */
+function resolveWithDeinflection(word, reading) {
+    if (!isMeaningAvailable()) return null;
+    const candidates = deinflect(word);
+    for (const candidate of candidates) {
+        const meaning = lookupMeaning(candidate.word, reading);
+        if (meaning) {
+            return { baseWord: candidate.word, meaning, inflection: { from: word, rule: candidate.rule } };
+        }
+    }
+    return null;
+}
 
-    const jishoUrl = `https://jisho.org/search/${encodeURIComponent(word)}%20%23words`;
+/**
+ * @param {string} word
+ * @param {string} reading
+ * @param {string} pos
+ * @param {{ from: string, rule: string }|null} [inflection]
+ */
+function populateWordTooltip(word, reading, pos, inflection = null) {
+    const tip = ensureTooltip();
+    const originalWord = word;
 
     // Look up meanings from dictionary
     const meaning = lookupMeaning(word, reading);
-    const sensesHtml = renderSenses(meaning);
+    let sensesHtml = renderSenses(meaning);
+    let inflectionHtml = '';
+
+    // If no direct match, try deinflection
+    if (!meaning && !inflection) {
+        const resolved = resolveWithDeinflection(word, reading);
+        if (resolved) {
+            inflection = resolved.inflection;
+            sensesHtml = renderSenses(resolved.meaning);
+            // Use base word for kanji breakdown
+            word = resolved.baseWord;
+        }
+    }
+
+    // Render inflection note if present
+    if (inflection) {
+        inflectionHtml = `
+            <div class="nihongo-wt-inflection">
+                <span class="nihongo-wt-inflection-from">${inflection.from}</span>
+                <span class="nihongo-wt-inflection-label">${inflection.rule} of</span>
+                <span class="nihongo-wt-inflection-base">${word}</span>
+            </div>`;
+    }
 
     // Extract kanji characters in order of appearance
     const kanjiChars = [];
@@ -256,12 +302,18 @@ function populateWordTooltip(word, reading, pos) {
            </div>`
         : '';
 
+    // Nothing useful to show — bail
+    if (!sensesHtml && kanjiChars.length === 0) return false;
+
+    const jishoUrl = `https://jisho.org/search/${encodeURIComponent(originalWord)}%20%23words`;
+
     // Use POS from dictionary if available, fall back to kuromoji POS
     const displayPos = meaning && meaning.senses.length ? '' : (pos ? `<div class="nihongo-wt-pos">${pos}</div>` : '');
 
     tip.innerHTML = `
         <div class="nihongo-tooltip-inner nihongo-wt-inner">
             <div class="nihongo-wt-word-section">
+                ${inflectionHtml}
                 <div class="nihongo-wt-word-top">
                     <span class="nihongo-wt-word">${word}</span>
                     ${reading && reading !== word ? `<span class="nihongo-wt-reading">${reading}</span>` : ''}
@@ -636,19 +688,15 @@ function onSelectionLookup() {
     if (!JP_ONLY_RE.test(text)) return;
     if (!isMeaningAvailable()) return;
 
-    // Try lookup: exact → katakana→hiragana → bail
-    let meaning = lookupMeaning(text);
+    // Also try katakana→hiragana conversion for lookup
     const asHiragana = katakanaToHiragana(text);
-    if (!meaning && asHiragana !== text) {
-        meaning = lookupMeaning(asHiragana);
-    }
-
-    if (!meaning) return;
+    const lookupWord = (asHiragana !== text && !lookupMeaning(text) && lookupMeaning(asHiragana)) ? asHiragana : text;
 
     // Hide any existing tooltip first
     hideTooltip();
 
-    const ok = populateWordTooltip(text, '', '');
+    // populateWordTooltip handles direct match + deinflection fallback
+    const ok = populateWordTooltip(lookupWord, '', '');
     if (!ok) return;
 
     // Position near the selection
