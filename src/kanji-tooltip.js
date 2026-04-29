@@ -125,12 +125,23 @@ function wireKnownButtons(tip) {
             if (span) span.textContent = nowKnown ? 'Known' : 'Mark Known';
             // Update title
             knownBtn.title = nowKnown ? 'Mark as not known' : 'Mark as known';
-            // Update border on standalone kanji tooltip
-            const inner = tip.querySelector('.nihongo-tooltip-inner');
-            if (inner) inner.classList.toggle('nihongo-tooltip-known', nowKnown);
             // Update kanji block in word tooltip
             const block = knownBtn.closest('.nihongo-wt-kanji-block');
             if (block) block.classList.toggle('nihongo-wt-kanji-known', nowKnown);
+            // Update the word-level known border
+            const inner = tip.querySelector('.nihongo-tooltip-inner');
+            if (inner) {
+                const isWordTooltip = inner.classList.contains('nihongo-wt-inner');
+                if (isWordTooltip) {
+                    // Word tooltip: green border only when ALL kanji in the word are known
+                    const allBlocks = tip.querySelectorAll('.nihongo-wt-kanji-block');
+                    const allKnown = allBlocks.length > 0 && [...allBlocks].every(b => b.classList.contains('nihongo-wt-kanji-known'));
+                    inner.classList.toggle('nihongo-tooltip-known', allKnown);
+                } else {
+                    // Standalone kanji tooltip: direct toggle
+                    inner.classList.toggle('nihongo-tooltip-known', nowKnown);
+                }
+            }
             // Update the kanji spans in the DOM
             document.querySelectorAll(`.nihongo-kanji[data-kanji="${ch}"]`)
                 .forEach(s => s.classList.toggle('nihongo-kanji-known', nowKnown));
@@ -312,8 +323,12 @@ function populateWordTooltip(word, reading, pos, inflection = null) {
     // Use POS from dictionary if available, fall back to kuromoji POS
     const displayPos = meaning && meaning.senses.length ? '' : (pos ? `<div class="nihongo-wt-pos">${pos}</div>` : '');
 
+    // Word is "known" only when it has kanji and ALL of them are known
+    const known = getKnownKanji();
+    const wordKnownClass = kanjiChars.length > 0 && kanjiChars.every(ch => known.has(ch)) ? ' nihongo-tooltip-known' : '';
+
     tip.innerHTML = `
-        <div class="nihongo-tooltip-inner nihongo-wt-inner">
+        <div class="nihongo-tooltip-inner nihongo-wt-inner${wordKnownClass}">
             <div class="nihongo-wt-word-section">
                 ${inflectionHtml}
                 <div class="nihongo-wt-word-top">
