@@ -47,6 +47,7 @@ A SillyTavern extension to help with learning Japanese through chat interactions
 - [ ] **Inflection Detection & De-inflection** — Recognize conjugated/inflected forms (masu, te, ta, negative, etc.) and auto-chain to dictionary form
   - Local de-inflection rules (~100 verb/adjective patterns) → try JMdict lookup on dictionary form
   - Tooltip shows "X is the Y-form of Z" note with clickable link to the base word
+  - Inflection System checking for possible inflected words to mark/highlight them right away instead of relying on selection - Needs to happen on the fly when text is rendered, during the kuromoji step
   - Jisho API fallback for words not found locally (scrape inflection analysis from Jisho HTML)
   - Persistent cache in extension settings with `_version` field for future-proof invalidation
   - Settings button to clear cached lookup data

@@ -13,6 +13,9 @@ const defaultSettings = {
     kmSort: 'freq_asc',
     kmFilter: 'all',
     meaningSpoiler: 'off',
+    hideKnownFurigana: true,
+    kanaWordTooltips: false,
+    lookupWindowSize: 5,
 };
 
 let uiInjected = false;
@@ -72,6 +75,15 @@ export const nihongoSettings = {
     },
     get meaningSpoiler() {
         return String(ensureSettings().meaningSpoiler || 'off');
+    },
+    get hideKnownFurigana() {
+        return Boolean(ensureSettings().hideKnownFurigana);
+    },
+    get kanaWordTooltips() {
+        return Boolean(ensureSettings().kanaWordTooltips);
+    },
+    get lookupWindowSize() {
+        return Number(ensureSettings().lookupWindowSize) || 5;
     },
 };
 
@@ -137,6 +149,25 @@ function applySettingsToUI() {
     const spoilerSelect = document.getElementById('nihongo_helper_meaning_spoiler');
     if (spoilerSelect instanceof HTMLSelectElement) {
         spoilerSelect.value = settings.meaningSpoiler;
+    }
+
+    const hideKnownFuriganaToggle = document.getElementById('nihongo_helper_hide_known_furigana');
+    if (hideKnownFuriganaToggle instanceof HTMLInputElement) {
+        hideKnownFuriganaToggle.checked = settings.hideKnownFurigana;
+    }
+
+    const kanaWordTooltipsToggle = document.getElementById('nihongo_helper_kana_word_tooltips');
+    if (kanaWordTooltipsToggle instanceof HTMLInputElement) {
+        kanaWordTooltipsToggle.checked = settings.kanaWordTooltips;
+    }
+
+    const lookupWindowInput = document.getElementById('nihongo_helper_lookup_window');
+    if (lookupWindowInput instanceof HTMLInputElement) {
+        lookupWindowInput.value = String(settings.lookupWindowSize);
+    }
+    const lookupWindowValue = document.getElementById('nihongo_helper_lookup_window_value');
+    if (lookupWindowValue) {
+        lookupWindowValue.textContent = String(settings.lookupWindowSize);
     }
 
     applyCSSVariables();
@@ -205,6 +236,29 @@ function registerSettingsEventListeners() {
         if (e.target instanceof HTMLSelectElement) {
             settings.meaningSpoiler = e.target.value;
             saveSettingsDebounced();
+        }
+    });
+
+    document.getElementById('nihongo_helper_hide_known_furigana')?.addEventListener('change', (e) => {
+        if (e.target instanceof HTMLInputElement) {
+            settings.hideKnownFurigana = e.target.checked;
+            saveSettingsDebounced();
+        }
+    });
+
+    document.getElementById('nihongo_helper_kana_word_tooltips')?.addEventListener('change', (e) => {
+        if (e.target instanceof HTMLInputElement) {
+            settings.kanaWordTooltips = e.target.checked;
+            saveSettingsDebounced();
+        }
+    });
+
+    document.getElementById('nihongo_helper_lookup_window')?.addEventListener('input', (e) => {
+        if (e.target instanceof HTMLInputElement) {
+            settings.lookupWindowSize = parseInt(e.target.value, 10);
+            saveSettingsDebounced();
+            const display = document.getElementById('nihongo_helper_lookup_window_value');
+            if (display) display.textContent = String(settings.lookupWindowSize);
         }
     });
 

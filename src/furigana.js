@@ -237,9 +237,9 @@ function addFuriganaToText(text) {
 
         if (reading && containsKanji(surface)) {
             const hiraganaReading = katakanaToHiragana(reading);
-            // Skip furigana if every kanji in the token is marked as known
+            // Skip furigana if every kanji in the token is marked as known (and setting is on)
             const kanjiChars = [...surface].filter(isKanji);
-            const allKnown = known.size > 0 && kanjiChars.length > 0 && kanjiChars.every(ch => known.has(ch));
+            const allKnown = nihongoSettings.hideKnownFurigana && known.size > 0 && kanjiChars.length > 0 && kanjiChars.every(ch => known.has(ch));
             const inner = allKnown
                 ? wrapKanji(surface, known)
                 : buildRuby(surface, hiraganaReading, known);
@@ -329,6 +329,24 @@ function processAllMessages(force = false) {
     for (const el of messageTexts) {
         if (el instanceof HTMLElement) {
             processMessageElement(el, force);
+        }
+    }
+}
+
+/**
+ * Re-processes messages that contain a specific kanji character.
+ * Used after toggling known state to immediately update furigana.
+ * @param {string} char The kanji character
+ */
+export function reprocessMessagesWithKanji(char) {
+    if (!tokenizer || !nihongoSettings.enabled) return;
+    const spans = document.querySelectorAll(`#chat .nihongo-kanji[data-kanji="${char}"]`);
+    const processed = new Set();
+    for (const span of spans) {
+        const mesText = span.closest('.mes_text, .mes_reasoning');
+        if (mesText instanceof HTMLElement && !processed.has(mesText)) {
+            processed.add(mesText);
+            processMessageElement(mesText, true);
         }
     }
 }

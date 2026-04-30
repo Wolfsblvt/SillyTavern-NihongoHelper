@@ -3,6 +3,7 @@ import { getKnownKanji, toggleKnown } from './kanji-manager.js';
 import { lookupMeaning, isMeaningAvailable } from './meaning-provider.js';
 import { nihongoSettings } from './settings.js';
 import { deinflect } from './deinflect.js';
+import { reprocessMessagesWithKanji } from './furigana.js';
 
 /**
  * Generic kanji tooltip module.
@@ -145,6 +146,8 @@ function wireKnownButtons(tip) {
             // Update the kanji spans in the DOM
             document.querySelectorAll(`.nihongo-kanji[data-kanji="${ch}"]`)
                 .forEach(s => s.classList.toggle('nihongo-kanji-known', nowKnown));
+            // Re-process affected messages to update furigana visibility
+            reprocessMessagesWithKanji(ch);
         });
     });
 }

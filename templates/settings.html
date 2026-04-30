@@ -53,6 +53,29 @@
                     <small class="notes">Hide word meanings behind a spoiler blur to test your knowledge first</small>
                 </div>
                 <hr style="margin: 8px 0;" />
+                <span style="font-weight: 600; font-size: 0.9em; opacity: 0.7;">Inspect Mode</span>
+                <label class="checkbox_label" for="nihongo_helper_hide_known_furigana" title="Skip furigana for words where all kanji are already marked as known.">
+                    <input type="checkbox" id="nihongo_helper_hide_known_furigana" />
+                    <div class="flex-container flexFlowColumn alignItemsFlexStart">
+                        <span>Hide furigana for known words</span>
+                        <small class="notes">Words where all kanji are known won't show readings</small>
+                    </div>
+                </label>
+                <label class="checkbox_label" for="nihongo_helper_kana_word_tooltips" title="Also make kana-only words hoverable for tooltip lookup in Inspect Mode.">
+                    <input type="checkbox" id="nihongo_helper_kana_word_tooltips" />
+                    <div class="flex-container flexFlowColumn alignItemsFlexStart">
+                        <span>Kana word tooltips</span>
+                        <small class="notes">Make kana-only words hoverable in inspect mode (more hover targets)</small>
+                    </div>
+                </label>
+                <div class="flex-container flexFlowColumn" style="margin-top: 4px;">
+                    <label for="nihongo_helper_lookup_window">
+                        <span>Lookup window size: <span id="nihongo_helper_lookup_window_value">5</span></span>
+                    </label>
+                    <input type="range" id="nihongo_helper_lookup_window" min="1" max="10" step="1" value="5" />
+                    <small class="notes">Max tokens to combine for multi-word dictionary lookup (1 = disabled)</small>
+                </div>
+                <hr style="margin: 8px 0;" />
                 <div class="flex-container">
                     <button id="nihongo_helper_open_kanji_manager" class="menu_button menu_button_icon" title="Open the Kanji Manager to browse, search, and mark kanji as known">
                         <i class="fa-solid fa-book-open"></i>
