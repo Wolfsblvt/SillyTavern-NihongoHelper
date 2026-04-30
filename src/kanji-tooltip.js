@@ -295,7 +295,14 @@ function populateWordTooltip(word, reading, pos, inflection = null, matchId = ''
     const storedMatches = matchId ? getStoredMatches(matchId) : null;
     if (storedMatches && storedMatches.length > 0) {
         const seen = new Set();
+        const kanjiRe = /[\u4e00-\u9faf\u3400-\u4dbf]/;
         for (const match of storedMatches) {
+            // Filter kana-only sub-matches when kana tooltips are disabled
+            if (!nihongoSettings.kanaWordTooltips) {
+                const displayWord = match.baseWord || match.word;
+                if (!kanjiRe.test(match.word) && !kanjiRe.test(displayWord)) continue;
+            }
+
             // Deduplicate by display word + source
             const dedup = `${match.baseWord || match.word}:${match.source}:${match.rule || ''}`;
             if (seen.has(dedup)) continue;
@@ -836,11 +843,14 @@ function restoreSelectionTooltip() {
 }
 
 /**
- * Handles mouseup inside chat in inspect mode.
+ * Handles mouseup inside chat.
  * If user selected Japanese text, looks it up in the dictionary and shows a tooltip.
+ * Works in inspect mode, or when selectionLookup setting is enabled.
  * If user clicked without selecting, dismisses the selection tooltip.
  */
 function onSelectionLookup() {
+    // Only proceed if inspect mode or selectionLookup setting is active
+    if (!inspectActive && !nihongoSettings.selectionLookup) return;
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed) {
         // Clicked without selecting — dismiss any active selection tooltip
@@ -919,15 +929,16 @@ export function enableChatInspect() {
 
     attachKanjiTooltip(chat);
 
-    // Selection lookup: mouseup on chat triggers dictionary lookup
-    selectionHandler = () => onSelectionLookup();
-    chat.addEventListener('mouseup', selectionHandler);
+    // Selection lookup: only attach if persistent handler isn't already active
+    if (!persistentSelectionHandler) {
+        selectionHandler = () => onSelectionLookup();
+        chat.addEventListener('mouseup', selectionHandler);
 
-    // Reposition selection tooltip on window resize/zoom
-    resizeHandler = () => {
-        if (selectionState) restoreSelectionTooltip();
-    };
-    window.addEventListener('resize', resizeHandler);
+        resizeHandler = () => {
+            if (selectionState) restoreSelectionTooltip();
+        };
+        window.addEventListener('resize', resizeHandler);
+    }
 
     // Hide the wand dropdown menu
     const dropdown = document.getElementById('extensionsMenu');
@@ -1020,4 +1031,27 @@ export function toggleChatInspect() {
         enableChatInspect();
     }
     return inspectActive;
+}
+
+/** @type {(() => void)|null} */
+let persistentSelectionHandler = null;
+/** @type {(() => void)|null} */
+let persistentResizeHandler = null;
+
+/**
+ * Attaches a persistent mouseup handler on #chat for selection lookup.
+ * This works independently of inspect mode — controlled by selectionLookup setting.
+ * Call once during initialization.
+ */
+export function enableSelectionLookup() {
+    const chat = document.getElementById('chat');
+    if (!chat || persistentSelectionHandler) return;
+
+    persistentSelectionHandler = () => onSelectionLookup();
+    chat.addEventListener('mouseup', persistentSelectionHandler);
+
+    persistentResizeHandler = () => {
+        if (selectionState && !inspectActive) restoreSelectionTooltip();
+    };
+    window.addEventListener('resize', persistentResizeHandler);
 }

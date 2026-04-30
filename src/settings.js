@@ -16,6 +16,7 @@ const defaultSettings = {
     hideKnownFurigana: true,
     kanaWordTooltips: false,
     lookupWindowSize: 5,
+    selectionLookup: true,
 };
 
 let uiInjected = false;
@@ -85,6 +86,9 @@ export const nihongoSettings = {
     get lookupWindowSize() {
         return Number(ensureSettings().lookupWindowSize) || 5;
     },
+    get selectionLookup() {
+        return Boolean(ensureSettings().selectionLookup);
+    },
 };
 
 /**
@@ -149,6 +153,11 @@ function applySettingsToUI() {
     const spoilerSelect = document.getElementById('nihongo_helper_meaning_spoiler');
     if (spoilerSelect instanceof HTMLSelectElement) {
         spoilerSelect.value = settings.meaningSpoiler;
+    }
+
+    const selectionLookupToggle = document.getElementById('nihongo_helper_selection_lookup');
+    if (selectionLookupToggle instanceof HTMLInputElement) {
+        selectionLookupToggle.checked = settings.selectionLookup;
     }
 
     const hideKnownFuriganaToggle = document.getElementById('nihongo_helper_hide_known_furigana');
@@ -235,6 +244,13 @@ function registerSettingsEventListeners() {
     document.getElementById('nihongo_helper_meaning_spoiler')?.addEventListener('change', (e) => {
         if (e.target instanceof HTMLSelectElement) {
             settings.meaningSpoiler = e.target.value;
+            saveSettingsDebounced();
+        }
+    });
+
+    document.getElementById('nihongo_helper_selection_lookup')?.addEventListener('change', (e) => {
+        if (e.target instanceof HTMLInputElement) {
+            settings.selectionLookup = e.target.checked;
             saveSettingsDebounced();
         }
     });

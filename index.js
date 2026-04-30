@@ -2,7 +2,7 @@ import { initSettings, injectSettingsUI } from './src/settings.js';
 import { initFurigana } from './src/furigana.js';
 import { initKanjiManager } from './src/kanji-manager.js';
 import { injectWandMenu } from './src/wand-menu.js';
-import { registerInspectShortcut } from './src/kanji-tooltip.js';
+import { registerInspectShortcut, enableSelectionLookup } from './src/kanji-tooltip.js';
 import { registerMacros } from './src/macros.js';
 import { initMeaningProvider } from './src/meaning-provider.js';
 
@@ -36,6 +36,9 @@ export async function init() {
 
     // Register keyboard shortcuts
     registerInspectShortcut();
+
+    // Enable persistent selection lookup (works without inspect mode)
+    enableSelectionLookup();
 
     // Register macros ({{knownKanji}}, {{knownKanjiCount}})
     registerMacros();

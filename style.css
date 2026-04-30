@@ -755,9 +755,7 @@
     gap: 1px;
     padding: 4px 6px 2px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    max-height: 80px;
-    overflow-y: auto;
-    overflow-x: hidden;
+    flex-shrink: 0;
 }
 
 .nihongo-wt-tab {
@@ -795,6 +793,12 @@
 /* ── Kana-only hoverable words ── */
 
 .nihongo-word-kana {
-    border-bottom: 1px dotted rgba(255, 255, 255, 0.2);
+    border-bottom: 1px dotted rgba(255, 255, 255, 0.15);
     cursor: help;
+    border-radius: 2px;
+    transition: background 0.1s;
+}
+
+.nihongo-word-kana:hover {
+    background: rgba(255, 255, 255, 0.08);
 }

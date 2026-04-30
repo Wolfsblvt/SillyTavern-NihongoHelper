@@ -197,19 +197,25 @@ function greedySpans(tokens, matchMap) {
 
 /**
  * Sort matches for tooltip display order:
- * 1. Longest surface first (multi-token > single-token)
- * 2. Direct matches before deinflected
- * 3. Deinflected matches
+ * 1. Longest surface form first (inflected word, not base)
+ * 2. Deinflected before direct at same length (inflections more likely relevant)
+ * 3. Original order preserved otherwise (stable sort)
  * @param {MatchEntry[]} matches
  * @returns {MatchEntry[]}
  */
 function sortMatches(matches) {
-    return [...matches].sort((a, b) => {
-        // Direct before deinflect
-        if (a.source !== b.source) return a.source === 'direct' ? -1 : 1;
-        // Longer word first
-        return b.word.length - a.word.length;
+    // Add original index for stable sort
+    const indexed = matches.map((m, i) => ({ m, i }));
+    indexed.sort((a, b) => {
+        // Longest surface first (use .word which is the inflected form)
+        const lenDiff = b.m.word.length - a.m.word.length;
+        if (lenDiff !== 0) return lenDiff;
+        // Deinflected before direct at same length
+        if (a.m.source !== b.m.source) return a.m.source === 'deinflect' ? -1 : 1;
+        // Preserve original order
+        return a.i - b.i;
     });
+    return indexed.map(x => x.m);
 }
 
 // ── Match storage (JS-side, keyed by span ID) ──────────────────────────────
