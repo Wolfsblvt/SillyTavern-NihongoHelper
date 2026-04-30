@@ -40,6 +40,8 @@ let pendingTarget = null;
 let mouseOverTooltip = false;
 /** @type {boolean} - true while the user is dragging a text selection */
 let isSelecting = false;
+/** @type {number} - highest top position reached during card navigation (prevents jumping back down) */
+let tooltipFloorTop = Infinity;
 /** @type {{ word: string }|null} - non-null when a selection tooltip should persist (even during peek) */
 let selectionState = null;
 /** @type {number} Current tooltip page index (0-based) */
@@ -78,9 +80,14 @@ function ensureTooltip() {
         scheduleHide();
     });
 
-    // Scroll on tooltip navigates pages
+    // Scroll on tooltip: Shift+Scroll always navigates pages.
+    // Plain scroll navigates pages ONLY when hovering the tab titles list.
+    // Otherwise let the event bubble (page scroll / meanings scroll).
     tooltipEl.addEventListener('wheel', (e) => {
         if (tooltipPages.length <= 1) return;
+        const isShift = e.shiftKey;
+        const overTabs = e.target instanceof HTMLElement && !!e.target.closest('.nihongo-wt-tabs-wrapper');
+        if (!isShift && !overTabs) return; // let it bubble
         e.preventDefault();
         e.stopPropagation();
         showTooltipPage(currentPageIndex + (e.deltaY > 0 ? 1 : -1));
@@ -572,6 +579,10 @@ function showTooltipPage(index) {
             tabContainer.scrollTop -= cRect.top - tRect.top + 4;
         }
     }
+
+    // Readjust vertical position if tooltip now overflows the viewport.
+    // Only move UP (never back down) to prevent jumpy behaviour.
+    adjustTooltipOverflow();
 }
 
 /**
@@ -652,6 +663,27 @@ function positionTooltip(target, boundingEl) {
     tip.style.visibility = '';
 }
 
+/**
+ * After showing a (possibly taller) page, nudge the tooltip upward
+ * if its bottom extends past the viewport. Tracks a floor so we
+ * never jump back down when switching to a shorter page.
+ */
+function adjustTooltipOverflow() {
+    if (!tooltipEl || tooltipEl.style.display === 'none') return;
+    const tipRect = tooltipEl.getBoundingClientRect();
+    const gap = 8;
+    const overflow = tipRect.bottom - (window.innerHeight - gap);
+    if (overflow > 0) {
+        const currentTop = parseFloat(tooltipEl.style.top) || tipRect.top;
+        const newTop = Math.max(gap, currentTop - overflow);
+        // Only move up, never back down
+        if (newTop < tooltipFloorTop) {
+            tooltipFloorTop = newTop;
+        }
+        tooltipEl.style.top = `${tooltipFloorTop}px`;
+    }
+}
+
 function cancelShow() {
     if (showTimer) { clearTimeout(showTimer); showTimer = null; }
     pendingTarget = null;
@@ -668,6 +700,7 @@ function hideTooltip() {
     const tip = ensureTooltip();
     tip.style.display = 'none';
     currentKey = null;
+    tooltipFloorTop = Infinity;
 }
 
 /**
@@ -728,6 +761,7 @@ function scheduleShow(found, boundingEl) {
         }
         if (!ok) return;
         positionTooltip(found.el, boundingEl);
+        tooltipFloorTop = Infinity; // reset floor for new target
         currentKey = found.key;
         // selectionState is intentionally NOT cleared — this is a "peek" tooltip
     }, SHOW_DELAY);
@@ -889,6 +923,7 @@ export function destroyTooltip() {
     mouseOverTooltip = false;
     pendingTarget = null;
     selectionState = null;
+    tooltipFloorTop = Infinity;
 }
 
 // ===== Selection Lookup Helpers =====

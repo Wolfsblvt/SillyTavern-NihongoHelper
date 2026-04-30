@@ -66,6 +66,12 @@ function buildMatchMap(tokens, windowSize) {
         for (let len = 1; len <= Math.min(windowSize, tokens.length - i); len++) {
             const slice = tokens.slice(i, i + len);
             const surface = slice.map(t => t.surface_form).join('');
+
+            // Skip windows whose surface contains whitespace — LLMs insert spaces
+            // between Japanese words, and joining across them creates false matches
+            // via the reading fallback in lookupWord.
+            if (/\s/.test(surface)) continue;
+
             const reading = slice.map(t => t.reading ? katakanaToHiragana(t.reading) : '').join('');
 
             const key = `${i}:${i + len}`;
