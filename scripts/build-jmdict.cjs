@@ -154,8 +154,12 @@ function processJMdict(raw) {
 
         if (!senses.length) { skipped++; continue; }
 
+        // Check if any form is marked common
+        const isCommon = (word.kanji || []).some(k => k.common) || (word.kana || []).some(k => k.common);
+
         const entry = { r: kanaTexts, s: senses };
         if (kanjiTexts.length) entry.k = kanjiTexts;
+        if (isCommon) entry.c = true;
         entries.push(entry);
     }
 

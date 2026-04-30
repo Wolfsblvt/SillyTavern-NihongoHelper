@@ -1,6 +1,6 @@
 import { getKanji, isKanjiDataLoaded } from './kanji-data.js';
 import { getKnownKanji, toggleKnown } from './kanji-manager.js';
-import { lookupMeaning, isMeaningAvailable } from './meaning-provider.js';
+import { lookupMeaning, lookupAllMeanings, isMeaningAvailable } from './meaning-provider.js';
 import { nihongoSettings } from './settings.js';
 import { deinflect } from './deinflect.js';
 import { reprocessMessagesWithKanji } from './furigana.js';
@@ -311,7 +311,6 @@ function populateWordTooltip(word, reading, pos, inflection = null, matchId = ''
             let pageWord = match.word;
             let pageReading = match.reading || reading;
             let pageInflection = null;
-            let altWriting = null;
 
             if (match.source === 'deinflect' && match.baseWord) {
                 pageInflection = { from: match.word, rule: match.rule || 'form' };
@@ -323,23 +322,25 @@ function populateWordTooltip(word, reading, pos, inflection = null, matchId = ''
                 }
             }
 
-            // Detect alternative writing (lookup word not in JMdict kanji forms)
-            const forms = match.matchedForms || [];
-            const lookupWord = match.source === 'deinflect' ? (match.baseWord || match.word) : match.word;
-            if (forms.length > 0 && !forms.includes(lookupWord)) {
-                altWriting = forms[0]; // canonical kanji form
-            }
-
-            const page = buildWordPage(pageWord, pageReading, pos, pageInflection, altWriting);
-            if (page) tooltipPages.push(page);
+            const pages = buildWordPages(pageWord, pageReading, pos, pageInflection);
+            tooltipPages.push(...pages);
         }
     }
 
-    // Fallback: build single page from direct args (selection lookup or no stored matches)
+    // Fallback: build pages from direct args (selection lookup or no stored matches)
     if (tooltipPages.length === 0) {
-        const page = buildWordPage(word, reading, pos, inflection);
-        if (page) tooltipPages.push(page);
+        const pages = buildWordPages(word, reading, pos, inflection);
+        tooltipPages.push(...pages);
     }
+
+    // Deduplicate pages by display word + label (same dict entry from different matches)
+    const seenPages = new Set();
+    tooltipPages = tooltipPages.filter(p => {
+        const key = `${p.displayWord}:${p.label}`;
+        if (seenPages.has(key)) return false;
+        seenPages.add(key);
+        return true;
+    });
 
     if (tooltipPages.length === 0) return false;
 
@@ -348,32 +349,75 @@ function populateWordTooltip(word, reading, pos, inflection = null, matchId = ''
 }
 
 /**
- * Builds a single tooltip page HTML for a word lookup.
+ * Builds tooltip page(s) for a word lookup. Returns multiple pages when
+ * JMdict has multiple entries for the same word (e.g. かんたん → 感嘆, 簡単).
  * @param {string} word Surface form
  * @param {string} reading Reading
  * @param {string} pos POS tag
  * @param {{ from: string, rule: string }|null} inflection
  * @param {string|null} altWriting Canonical kanji form when this is an alternative writing
- * @returns {{ html: string, label: string, displayWord: string }|null}
+ * @returns {Array<{ html: string, label: string, displayWord: string }>}
  */
-function buildWordPage(word, reading, pos, inflection = null, altWriting = null) {
+function buildWordPages(word, reading, pos, inflection = null, altWriting = null) {
     const originalWord = word;
 
-    // Look up meanings from dictionary
-    const meaning = lookupMeaning(word, reading);
-    let sensesHtml = renderSenses(meaning);
-    let inflectionHtml = '';
-    let altWritingHtml = '';
+    // Look up ALL meanings from dictionary
+    let meanings = lookupAllMeanings(word, reading);
 
     // If no direct match, try deinflection
-    if (!meaning && !inflection) {
+    if (meanings.length === 0 && !inflection) {
         const resolved = resolveWithDeinflection(word, reading);
         if (resolved) {
             inflection = resolved.inflection;
-            sensesHtml = renderSenses(resolved.meaning);
+            meanings = lookupAllMeanings(resolved.baseWord);
             word = resolved.baseWord;
         }
     }
+
+    // If still nothing, return a single fallback page
+    if (meanings.length === 0) {
+        const page = buildSinglePage(word, originalWord, reading, pos, inflection, altWriting, null);
+        return page ? [page] : [];
+    }
+
+    // Build a page for each dictionary entry
+    const pages = [];
+    for (const meaning of meanings) {
+        // For entries with kanji forms, use the canonical form for display
+        const displayWord = (meaning.forms && meaning.forms.length > 0) ? meaning.forms[0] : word;
+        const displayReading = meaning.readings[0] || reading;
+
+        // Detect alt writing per-entry: if the lookup word isn't one of the entry's kanji forms
+        let entryAltWriting = altWriting;
+        if (!entryAltWriting && meaning.forms && meaning.forms.length > 0) {
+            const lookupW = inflection ? word : originalWord;
+            if (!meaning.forms.includes(lookupW) && meaning.forms[0] !== lookupW) {
+                entryAltWriting = meaning.forms[0];
+            }
+        }
+
+        const page = buildSinglePage(displayWord, originalWord, displayReading, pos, inflection, entryAltWriting, meaning);
+        if (page) pages.push(page);
+    }
+
+    return pages;
+}
+
+/**
+ * Builds a single tooltip page HTML from a resolved meaning.
+ * @param {string} word Display word (may be canonical kanji form)
+ * @param {string} originalWord Original surface form for Jisho link
+ * @param {string} reading Reading
+ * @param {string} pos POS tag
+ * @param {{ from: string, rule: string }|null} inflection
+ * @param {string|null} altWriting Canonical kanji form when this is an alternative writing
+ * @param {Object|null} meaning Meaning result from lookupMeaning
+ * @returns {{ html: string, label: string, displayWord: string }|null}
+ */
+function buildSinglePage(word, originalWord, reading, pos, inflection, altWriting, meaning) {
+    let sensesHtml = renderSenses(meaning);
+    let inflectionHtml = '';
+    let altWritingHtml = '';
 
     // Render inflection note if present
     if (inflection) {
@@ -388,7 +432,7 @@ function buildWordPage(word, reading, pos, inflection = null, altWriting = null)
     // Render alternative writing note if present
     if (altWriting) {
         altWritingHtml = `
-            <div class="nihongo-wt-inflection">
+            <div class="nihongo-wt-inflection nihongo-wt-alt-writing">
                 <span class="nihongo-wt-inflection-label">alt. writing of</span>
                 <span class="nihongo-wt-inflection-base">${altWriting}</span>
             </div>`;
@@ -411,34 +455,38 @@ function buildWordPage(word, reading, pos, inflection = null, altWriting = null)
     if (!sensesHtml && kanjiChars.length === 0) return null;
 
     // Use canonical form for Jisho link when it's an alternative writing
-    const jishoWord = altWriting || originalWord;
+    const jishoWord = altWriting || word || originalWord;
     const jishoUrl = `https://jisho.org/search/${encodeURIComponent(jishoWord)}%20%23words`;
     const displayPos = meaning && meaning.senses.length ? '' : (pos ? `<div class="nihongo-wt-pos">${pos}</div>` : '');
+    const isCommon = meaning && meaning.common;
 
     const known = getKnownKanji();
     const wordKnownClass = kanjiChars.length > 0 && kanjiChars.every(ch => known.has(ch)) ? ' nihongo-tooltip-known' : '';
 
-    // Build label for tab list — always try to include first gloss
+    // Build label for tab list — no JS truncation, CSS handles overflow
     const firstGloss = meaning && meaning.senses.length > 0 ? (meaning.senses[0].glosses[0] || '') : '';
-    const truncGloss = firstGloss.length > 20 ? firstGloss.slice(0, 20) + '…' : firstGloss;
     let label = word;
-    if (inflection && truncGloss) {
-        label = `${word} (${inflection.rule}) — ${truncGloss}`;
+    if (inflection && firstGloss) {
+        label = `${word} (${inflection.rule}) — ${firstGloss}`;
     } else if (inflection) {
         label = `${word} (${inflection.rule})`;
-    } else if (truncGloss) {
-        label = `${word} — ${truncGloss}`;
+    } else if (firstGloss) {
+        label = `${word} — ${firstGloss}`;
     }
+
+    // Common word badge in tooltip header
+    const commonBadge = isCommon ? '<span class="nihongo-wt-common-badge">common</span>' : '';
 
     const html = `
         <div class="nihongo-tooltip-inner nihongo-wt-inner${wordKnownClass}">
             <div class="nihongo-wt-word-section">
-                ${inflectionHtml}
-                ${altWritingHtml}
                 <div class="nihongo-wt-word-top">
                     <span class="nihongo-wt-word">${word}</span>
                     ${reading && reading !== word ? `<span class="nihongo-wt-reading">${reading}</span>` : ''}
+                    ${commonBadge}
                 </div>
+                ${inflectionHtml}
+                ${altWritingHtml}
                 ${displayPos}
                 ${sensesHtml || '<div class="nihongo-wt-meaning-placeholder">No definition found</div>'}
                 <div class="nihongo-tooltip-actions">

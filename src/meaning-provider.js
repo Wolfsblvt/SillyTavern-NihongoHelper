@@ -11,20 +11,43 @@
  *     source: string }
  */
 
-import { loadJMdict, lookupWord, getTagDescription, isJMdictLoaded } from './jmdict.js';
+import { loadJMdict, lookupWord, lookupAllWords, getTagDescription, isJMdictLoaded } from './jmdict.js';
 
 // ── Provider registry ───────────────────────────────────────────────────────
 
-/** @type {Map<string, { load: Function, lookup: Function }>} */
+/** @type {Map<string, { load: Function, lookup: Function, lookupAll?: Function }>} */
 const providers = new Map();
 
 /**
  * Registers a meaning provider.
  * @param {string} name
- * @param {{ load: () => Promise<void>, lookup: (word: string, reading?: string) => Object|null }} provider
+ * @param {{ load: () => Promise<void>, lookup: (word: string, reading?: string) => Object|null, lookupAll?: (word: string, reading?: string) => Object[] }} provider
  */
 export function registerProvider(name, provider) {
     providers.set(name, provider);
+}
+
+/**
+ * Converts a raw JMdict entry to a result object.
+ * @param {string} word
+ * @param {Object} entry
+ * @returns {Object}
+ */
+function entryToResult(word, entry) {
+    return {
+        word,
+        readings: entry.r || [],
+        forms: entry.k || [],
+        common: Boolean(entry.c),
+        senses: (entry.s || []).map(s => ({
+            pos: (s.p || []).map(tag => getTagDescription(tag)),
+            glosses: s.g || [],
+            misc: (s.m || []).map(tag => getTagDescription(tag)),
+            info: s.i || [],
+            field: (s.f || []).map(tag => getTagDescription(tag)),
+        })),
+        source: 'jmdict',
+    };
 }
 
 // ── Built-in JMdict provider ────────────────────────────────────────────────
@@ -34,19 +57,11 @@ registerProvider('jmdict', {
     lookup(word, reading) {
         const entry = lookupWord(word, reading);
         if (!entry) return null;
-        return {
-            word,
-            readings: entry.r || [],
-            forms: entry.k || [],
-            senses: (entry.s || []).map(s => ({
-                pos: (s.p || []).map(tag => getTagDescription(tag)),
-                glosses: s.g || [],
-                misc: (s.m || []).map(tag => getTagDescription(tag)),
-                info: s.i || [],
-                field: (s.f || []).map(tag => getTagDescription(tag)),
-            })),
-            source: 'jmdict',
-        };
+        return entryToResult(word, entry);
+    },
+    lookupAll(word, reading) {
+        const entries = lookupAllWords(word, reading);
+        return entries.map(e => entryToResult(word, e));
     },
 });
 
@@ -85,6 +100,22 @@ export function lookupMeaning(word, reading) {
         if (result) return result;
     }
     return null;
+}
+
+/**
+ * Look up ALL meanings for a word (multiple dictionary entries).
+ * @param {string} word - Surface form
+ * @param {string} [reading] - Reading hint from tokenizer
+ * @returns {Array<{ word: string, readings: string[], forms: string[], common: boolean, senses: Object[], source: string }>}
+ */
+export function lookupAllMeanings(word, reading) {
+    const jmdict = providers.get('jmdict');
+    if (jmdict && jmdict.lookupAll) {
+        return jmdict.lookupAll(word, reading);
+    }
+    // Fallback: single result wrapped in array
+    const single = lookupMeaning(word, reading);
+    return single ? [single] : [];
 }
 
 /**

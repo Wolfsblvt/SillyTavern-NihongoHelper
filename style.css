@@ -274,7 +274,7 @@
     background: var(--SmartThemeBlurTintColor, #1a1a2e);
     color: var(--SmartThemeBodyColor, #ddd);
     overflow: hidden;
-    overflow-y: clip;
+    overflow-y: auto;
     animation: nihongo-tooltip-in 0.12s ease-out;
 }
 
@@ -459,6 +459,24 @@
 .nihongo-wt-inflection-base {
     font-weight: 600;
     font-family: "Noto Sans JP", "Yu Gothic", sans-serif;
+}
+
+.nihongo-wt-alt-writing {
+    background: rgba(220, 170, 60, 0.08);
+    border-color: rgba(220, 170, 60, 0.18);
+    color: rgba(255, 215, 130, 0.9);
+}
+
+.nihongo-wt-common-badge {
+    font-size: 0.55em;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: rgba(76, 175, 80, 0.12);
+    border: 1px solid rgba(76, 175, 80, 0.25);
+    color: rgba(130, 210, 130, 0.9);
+    vertical-align: middle;
+    white-space: nowrap;
+    letter-spacing: 0.03em;
 }
 
 .nihongo-wt-word-top {
