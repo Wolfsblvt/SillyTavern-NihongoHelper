@@ -40,18 +40,32 @@ A SillyTavern extension to help with learning Japanese through chat interactions
   - Compact kanji breakdown: each kanji in the word shown with meanings, readings, JLPT, frequency
   - Known kanji toggle (checkmark icon) per kanji in breakdown
   - On/kun reading labels (音/訓) in kanji blocks
+- [x] **Inflection Detection & De-inflection** — Recognize conjugated/inflected forms and chain to dictionary form
+  - ~100 verb/adjective patterns: masu, te, ta, negative, potential, passive, causative, volitional, conditional, progressive
+  - Tooltip shows "X is the Y-form of Z" note
+  - Applied automatically during text rendering (no selection needed)
+- [x] **Multi-Token Matching** — Sliding window dictionary lookup across token boundaries
+  - Configurable window size (1–10 tokens, default 5)
+  - Greedy longest-match with one-round overlap extension
+  - Catches multi-word expressions that span kuromoji token boundaries
+- [x] **Paginated Tooltips** — Multiple interpretations in one tooltip with tab navigation
+  - Tab list shows all matches (direct + deinflected + sub-matches)
+  - Navigate via: Scroll on tooltip, Shift+Scroll on word, click tab
+  - Wrap-around navigation (last → first and back)
+  - Tab block at top (movable to bottom via CSS)
+- [x] **Kana Word Tooltips** — Optional setting to make kana-only words hoverable
+  - Dotted underline visual distinction
+  - Applies deinflection and dictionary lookup to kana-only tokens
+  - Off by default (setting: "Kana word tooltips")
+- [x] **Hide Known Furigana** — Setting to hide furigana on words where all kanji are known
+  - Immediate re-render when toggling known state (no reload needed)
+  - On by default (setting: "Hide furigana for known words")
 - [x] **`{{knownKanji}}` Macro** — Comma-separated list of known kanji for use in system prompts
 - [x] **`{{knownKanjiCount}}` Macro** — Number of known kanji
 
 ### Planned
-- [ ] **Inflection Detection & De-inflection** — Recognize conjugated/inflected forms (masu, te, ta, negative, etc.) and auto-chain to dictionary form
-  - Local de-inflection rules (~100 verb/adjective patterns) → try JMdict lookup on dictionary form
-  - Tooltip shows "X is the Y-form of Z" note with clickable link to the base word
-  - Inflection System checking for possible inflected words to mark/highlight them right away instead of relying on selection - Needs to happen on the fly when text is rendered, during the kuromoji step
-  - Jisho API fallback for words not found locally (scrape inflection analysis from Jisho HTML)
-  - Persistent cache in extension settings with `_version` field for future-proof invalidation
-  - Settings button to clear cached lookup data
-- [ ] **Meaning Provider System** — Pluggable architecture for word meanings (JMdict built-in, Jisho API fallback, LLM future)
+- [ ] **Jisho API Fallback** — Scrape inflection analysis from Jisho HTML for words not found locally
+- [ ] **Meaning Provider Expansion** — Jisho API fallback, LLM-powered definitions
 - [ ] **Vocabulary Sidebar / Popup** — Click any word with furigana to see dictionary entry, meanings, example sentences
 - [ ] **Feedback/Correction Renderer** — Styled rendering for AI correction blocks (grammar, translation, notes)
 - [ ] **Word Frequency Highlights** — Color-code kanji/words by JLPT level or frequency tier
