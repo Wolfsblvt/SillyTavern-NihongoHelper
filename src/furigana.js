@@ -3,6 +3,7 @@ import { nihongoSettings } from './settings.js';
 import { getKnownKanji } from './kanji-manager.js';
 import { getKanji as getKanjiEntry } from './kanji-data.js';
 import { analyzeTokens, registerSpanMatches, clearMatchStore } from './token-matcher.js';
+import { onMessageFormatted } from '../../../../../script.js';
 
 /** @type {any} */
 let tokenizer = null;
@@ -430,34 +431,47 @@ function onMessageRendered(messageId, force = false) {
     }
 }
 
-// ── Streaming support ────────────────────────────────────────────────────────
-
-/** @type {number|null} Pending streaming process timer */
-let streamTimer = null;
-/** @type {number} Timestamp of last streaming process run */
-let streamLastRun = 0;
-
 /**
- * Schedules a streaming furigana update with trailing-edge throttle.
- * Uses a minimum 20ms delay so the DOM update from ST lands before we process.
- * Reads nihongoSettings.streamInterval dynamically.
+ * Processes an HTML string, adding furigana to its text content.
+ * Parses into a temp container, walks text nodes, adds ruby, serializes back.
+ * @param {string} html Formatted HTML string
+ * @returns {string} HTML with furigana annotations
  */
-function scheduleStreamProcess() {
-    if (!tokenizer || !nihongoSettings.enabled) return;
-    if (streamTimer) return; // already scheduled
+function addFuriganaToHTML(html) {
+    if (!tokenizer || !nihongoSettings.enabled) return html;
 
-    const interval = nihongoSettings.streamInterval;
-    const elapsed = Date.now() - streamLastRun;
-    const delay = Math.max(20, interval - elapsed);
+    const container = document.createElement('div');
+    container.innerHTML = html;
 
-    streamTimer = setTimeout(() => {
-        streamTimer = null;
-        streamLastRun = Date.now();
-        const lastMes = document.querySelector('#chat .mes:last-child .mes_text');
-        if (lastMes instanceof HTMLElement) {
-            processMessageElement(lastMes, true);
-        }
-    }, delay);
+    // Walk text nodes (same logic as processMessageElement but on a temp container)
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+            const parent = node.parentElement;
+            if (!parent) return NodeFilter.FILTER_REJECT;
+            if (parent.closest('ruby, code, pre, .nihongo-processed')) return NodeFilter.FILTER_REJECT;
+            if (!containsJapanese(node.textContent || '')) return NodeFilter.FILTER_REJECT;
+            return NodeFilter.FILTER_ACCEPT;
+        },
+    });
+
+    const textNodes = [];
+    while (walker.nextNode()) {
+        textNodes.push(walker.currentNode);
+    }
+
+    if (textNodes.length === 0) return html;
+
+    for (const textNode of textNodes) {
+        const text = textNode.textContent || '';
+        const result = addFuriganaToText(text);
+        const span = document.createElement('span');
+        span.classList.add('nihongo-processed');
+        span.setAttribute('data-original', text);
+        span.innerHTML = result;
+        textNode.parentNode?.replaceChild(span, textNode);
+    }
+
+    return container.innerHTML;
 }
 
 /**
@@ -466,20 +480,20 @@ function scheduleStreamProcess() {
 export async function initFurigana() {
     const { eventSource, eventTypes } = SillyTavern.getContext();
 
+    // Register synchronous formatting hook — processes HTML before it hits the DOM.
+    // This covers all paths: streaming tokens, initial render, swipes, edits, etc.
+    onMessageFormatted((data) => {
+        data.mesText = addFuriganaToHTML(data.mesText);
+    });
+
     // Load tokenizer (async, non-blocking for init)
     loadTokenizer().then(() => {
-        // Once loaded, process existing messages
+        // Once loaded, process existing messages already in the DOM
         processAllMessages();
     });
 
-    // === Message render events (new messages) ===
-    eventSource.on(eventTypes.CHARACTER_MESSAGE_RENDERED, (messageId) => onMessageRendered(messageId));
-    eventSource.on(eventTypes.USER_MESSAGE_RENDERED, (messageId) => onMessageRendered(messageId));
-
     // === Chat lifecycle events ===
     eventSource.on(eventTypes.CHAT_CHANGED, () => {
-        if (streamTimer) { clearTimeout(streamTimer); streamTimer = null; }
-        streamLastRun = 0;
         setTimeout(processAllMessages, 100);
     });
 
@@ -487,7 +501,6 @@ export async function initFurigana() {
     eventSource.on(eventTypes.MESSAGE_EDITED, (messageId) => onMessageRendered(messageId, true));
     eventSource.on(eventTypes.MESSAGE_UPDATED, (messageId) => onMessageRendered(messageId, true));
     eventSource.on(eventTypes.MESSAGE_SWIPED, () => {
-        // On swipe, the last message is replaced
         setTimeout(processAllMessages, 100);
     });
 
@@ -497,15 +510,6 @@ export async function initFurigana() {
     // === More messages loaded (lazy loading / scrolling up) ===
     eventSource.on(eventTypes.MORE_MESSAGES_LOADED, () => {
         setTimeout(processAllMessages, 100);
-    });
-
-    // === Streaming ===
-    eventSource.on(eventTypes.STREAM_TOKEN_RECEIVED, () => scheduleStreamProcess());
-
-    // Reset streaming state when generation starts
-    eventSource.on(eventTypes.GENERATION_STARTED, () => {
-        if (streamTimer) { clearTimeout(streamTimer); streamTimer = null; }
-        streamLastRun = 0;
     });
 
     console.debug(`[${EXTENSION_NAME}] Furigana system initialized`);

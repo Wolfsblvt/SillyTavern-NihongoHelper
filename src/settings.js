@@ -9,7 +9,6 @@ const defaultSettings = {
     highlightKnown: true,
     fontSize: 1.0,
     furiganaScale: 0.75,
-    streamInterval: 150,
     kmSort: 'freq_asc',
     kmFilter: 'all',
     meaningSpoiler: 'off',
@@ -53,9 +52,6 @@ export const nihongoSettings = {
     },
     get furiganaScale() {
         return Number(ensureSettings().furiganaScale) || 0.75;
-    },
-    get streamInterval() {
-        return Number(ensureSettings().streamInterval) || 150;
     },
     get highlightKnown() {
         return Boolean(ensureSettings().highlightKnown);
@@ -141,15 +137,6 @@ function applySettingsToUI() {
         furiganaScaleValue.textContent = `${settings.furiganaScale}x`;
     }
 
-    const streamIntervalInput = document.getElementById('nihongo_helper_stream_interval');
-    if (streamIntervalInput instanceof HTMLInputElement) {
-        streamIntervalInput.value = String(settings.streamInterval);
-    }
-    const streamIntervalValue = document.getElementById('nihongo_helper_stream_interval_value');
-    if (streamIntervalValue) {
-        streamIntervalValue.textContent = `${settings.streamInterval}ms`;
-    }
-
     const spoilerSelect = document.getElementById('nihongo_helper_meaning_spoiler');
     if (spoilerSelect instanceof HTMLSelectElement) {
         spoilerSelect.value = settings.meaningSpoiler;
@@ -229,15 +216,6 @@ function registerSettingsEventListeners() {
             const display = document.getElementById('nihongo_helper_furigana_scale_value');
             if (display) display.textContent = `${settings.furiganaScale}x`;
             applyCSSVariables();
-        }
-    });
-
-    document.getElementById('nihongo_helper_stream_interval')?.addEventListener('input', (e) => {
-        if (e.target instanceof HTMLInputElement) {
-            settings.streamInterval = parseInt(e.target.value, 10);
-            saveSettingsDebounced();
-            const display = document.getElementById('nihongo_helper_stream_interval_value');
-            if (display) display.textContent = `${settings.streamInterval}ms`;
         }
     });
 

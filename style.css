@@ -45,12 +45,6 @@
     display: none;
 }
 
-/* Reserve consistent line-height for ruby annotations (prevents flicker during streaming) */
-#chat:not(.nihongo-furigana-disabled) .mes .mes_text,
-#chat:not(.nihongo-furigana-disabled) .mes .mes_reasoning {
-    line-height: 2;
-}
-
 /* Processed span wrapper should be inline */
 #chat .mes .nihongo-processed {
     display: inline;
