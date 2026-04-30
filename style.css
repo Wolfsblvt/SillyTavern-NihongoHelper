@@ -274,7 +274,6 @@
     background: var(--SmartThemeBlurTintColor, #1a1a2e);
     color: var(--SmartThemeBodyColor, #ddd);
     overflow: hidden;
-    overflow-y: auto;
     animation: nihongo-tooltip-in 0.12s ease-out;
 }
 
@@ -774,6 +773,13 @@
     padding: 4px 6px 2px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     flex-shrink: 0;
+    max-height: calc(5 * 22px + 26px);
+    overflow-y: auto;
+    scrollbar-width: none;
+}
+
+.nihongo-wt-tabs::-webkit-scrollbar {
+    display: none;
 }
 
 .nihongo-wt-tab {

@@ -21,7 +21,6 @@ const TOOLTIP_ID = 'nihongo_kanji_tooltip';
 const SHOW_DELAY = 300;
 const HIDE_DELAY = 400;
 const TOOLTIP_WIDTH = 320;
-const TOOLTIP_MAX_HEIGHT = 350;
 
 /** @type {HTMLElement|null} */
 let tooltipEl = null;
@@ -322,14 +321,14 @@ function populateWordTooltip(word, reading, pos, inflection = null, matchId = ''
                 }
             }
 
-            const pages = buildWordPages(pageWord, pageReading, pos, pageInflection);
+            const pages = buildWordPages(pageWord, pageReading, pos, pageInflection, null, match.word.length);
             tooltipPages.push(...pages);
         }
     }
 
     // Fallback: build pages from direct args (selection lookup or no stored matches)
     if (tooltipPages.length === 0) {
-        const pages = buildWordPages(word, reading, pos, inflection);
+        const pages = buildWordPages(word, reading, pos, inflection, null, word.length);
         tooltipPages.push(...pages);
     }
 
@@ -340,6 +339,29 @@ function populateWordTooltip(word, reading, pos, inflection = null, matchId = ''
         if (seenPages.has(key)) return false;
         seenPages.add(key);
         return true;
+    });
+
+    // Sort pages: full surface match → not alt-writing → common → original order
+    const hoveredLen = word.length;
+    tooltipPages.forEach((p, i) => { p._origIdx = i; });
+    tooltipPages.sort((a, b) => {
+        // 1. Full surface match (surfaceLen == hovered text len) before sub-word
+        const aFull = (a.surfaceLen || 0) >= hoveredLen ? 0 : 1;
+        const bFull = (b.surfaceLen || 0) >= hoveredLen ? 0 : 1;
+        if (aFull !== bFull) return aFull - bFull;
+        // 2. Not alt-writing before alt-writing
+        const aAlt = a.isAltWriting ? 1 : 0;
+        const bAlt = b.isAltWriting ? 1 : 0;
+        if (aAlt !== bAlt) return aAlt - bAlt;
+        // 3. Common before non-common
+        const aCom = a.isCommon ? 0 : 1;
+        const bCom = b.isCommon ? 0 : 1;
+        if (aCom !== bCom) return aCom - bCom;
+        // 4. Longer surface before shorter
+        const lenDiff = (b.surfaceLen || 0) - (a.surfaceLen || 0);
+        if (lenDiff !== 0) return lenDiff;
+        // 5. Original order
+        return (a._origIdx || 0) - (b._origIdx || 0);
     });
 
     if (tooltipPages.length === 0) return false;
@@ -358,7 +380,7 @@ function populateWordTooltip(word, reading, pos, inflection = null, matchId = ''
  * @param {string|null} altWriting Canonical kanji form when this is an alternative writing
  * @returns {Array<{ html: string, label: string, displayWord: string }>}
  */
-function buildWordPages(word, reading, pos, inflection = null, altWriting = null) {
+function buildWordPages(word, reading, pos, inflection = null, altWriting = null, surfaceLen = 0) {
     const originalWord = word;
 
     // Look up ALL meanings from dictionary
@@ -376,7 +398,7 @@ function buildWordPages(word, reading, pos, inflection = null, altWriting = null
 
     // If still nothing, return a single fallback page
     if (meanings.length === 0) {
-        const page = buildSinglePage(word, originalWord, reading, pos, inflection, altWriting, null);
+        const page = buildSinglePage(word, originalWord, reading, pos, inflection, altWriting, null, surfaceLen);
         return page ? [page] : [];
     }
 
@@ -396,7 +418,7 @@ function buildWordPages(word, reading, pos, inflection = null, altWriting = null
             }
         }
 
-        const page = buildSinglePage(displayWord, originalWord, displayReading, pos, inflection, entryAltWriting, meaning);
+        const page = buildSinglePage(displayWord, originalWord, displayReading, pos, inflection, entryAltWriting, meaning, surfaceLen);
         if (page) pages.push(page);
     }
 
@@ -414,7 +436,7 @@ function buildWordPages(word, reading, pos, inflection = null, altWriting = null
  * @param {Object|null} meaning Meaning result from lookupMeaning
  * @returns {{ html: string, label: string, displayWord: string }|null}
  */
-function buildSinglePage(word, originalWord, reading, pos, inflection, altWriting, meaning) {
+function buildSinglePage(word, originalWord, reading, pos, inflection, altWriting, meaning, surfaceLen = 0) {
     let sensesHtml = renderSenses(meaning);
     let inflectionHtml = '';
     let altWritingHtml = '';
@@ -499,7 +521,7 @@ function buildSinglePage(word, originalWord, reading, pos, inflection, altWritin
         </div>
     `;
 
-    return { html, label, displayWord: word };
+    return { html, label, displayWord: word, surfaceLen, isAltWriting: Boolean(altWriting), isCommon: Boolean(isCommon) };
 }
 
 /**
@@ -534,6 +556,22 @@ function showTooltipPage(index) {
     tip.innerHTML = renderTabList(tooltipPages, index) + page.html;
     wireKnownButtons(tip);
     wireTabClicks(tip);
+
+    // Auto-scroll tab list to keep active tab visible
+    const tabContainer = tip.querySelector('.nihongo-wt-tabs');
+    const activeTab = tip.querySelector('.nihongo-wt-tab-active');
+    if (tabContainer && activeTab) {
+        const cRect = tabContainer.getBoundingClientRect();
+        const tRect = activeTab.getBoundingClientRect();
+        // If tab is below visible area
+        if (tRect.bottom > cRect.bottom) {
+            tabContainer.scrollTop += tRect.bottom - cRect.bottom + 4;
+        }
+        // If tab is above visible area
+        if (tRect.top < cRect.top) {
+            tabContainer.scrollTop -= cRect.top - tRect.top + 4;
+        }
+    }
 }
 
 /**
@@ -562,7 +600,8 @@ function positionTooltip(target, boundingEl) {
     tip.style.visibility = 'hidden';
     tip.style.position = 'fixed';
     tip.style.width = `${TOOLTIP_WIDTH}px`;
-    tip.style.maxHeight = `${TOOLTIP_MAX_HEIGHT}px`;
+    const maxH = Math.min(window.innerHeight * 0.7, 500);
+    tip.style.maxHeight = `${maxH}px`;
 
     // Force layout so we can measure
     const tipRect = tip.getBoundingClientRect();
@@ -592,7 +631,7 @@ function positionTooltip(target, boundingEl) {
     }
 
     // Vertical constraint
-    const tipHeight = tipRect.height || TOOLTIP_MAX_HEIGHT;
+    const tipHeight = tipRect.height || maxH;
     if (top + tipHeight > bounds.bottom) {
         top = bounds.bottom - tipHeight - gap;
     }
@@ -873,7 +912,8 @@ function positionTooltipAtRect(rect) {
     tip.style.visibility = 'hidden';
     tip.style.position = 'fixed';
     tip.style.width = `${TOOLTIP_WIDTH}px`;
-    tip.style.maxHeight = `${TOOLTIP_MAX_HEIGHT}px`;
+    const maxH = Math.min(window.innerHeight * 0.7, 500);
+    tip.style.maxHeight = `${maxH}px`;
 
     const tipRect = tip.getBoundingClientRect();
     const gap = 8;
@@ -881,9 +921,13 @@ function positionTooltipAtRect(rect) {
     let top = rect.bottom + gap;
 
     // If below goes off-screen, show above
-    const tipHeight = tipRect.height || TOOLTIP_MAX_HEIGHT;
+    const tipHeight = tipRect.height || maxH;
     if (top + tipHeight > window.innerHeight) {
         top = rect.top - tipHeight - gap;
+    }
+    // Clamp to viewport
+    if (top + tipHeight > window.innerHeight) {
+        top = window.innerHeight - tipHeight - gap;
     }
     if (top < 0) top = gap;
 
