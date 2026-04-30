@@ -4,6 +4,7 @@ import { lookupMeaning, isMeaningAvailable } from './meaning-provider.js';
 import { nihongoSettings } from './settings.js';
 import { deinflect } from './deinflect.js';
 import { reprocessMessagesWithKanji } from './furigana.js';
+import { getStoredMatches } from './token-matcher.js';
 
 /**
  * Generic kanji tooltip module.
@@ -42,7 +43,11 @@ let mouseOverTooltip = false;
 let isSelecting = false;
 /** @type {{ word: string }|null} - non-null when a selection tooltip should persist (even during peek) */
 let selectionState = null;
-/** @type {WeakMap<HTMLElement, { onMove: Function, onLeave: Function, onScroll: Function, onMouseDown?: Function, onMouseUp?: Function }>} */
+/** @type {number} Current tooltip page index (0-based) */
+let currentPageIndex = 0;
+/** @type {Array<{ html: string, label: string, displayWord: string }>} All pages for the current tooltip */
+let tooltipPages = [];
+/** @type {WeakMap<HTMLElement, { onMove: Function, onLeave: Function, onScroll: Function, onMouseDown?: Function, onMouseUp?: Function, onWheel?: Function }>} */
 const attachedContainers = new WeakMap();
 
 /**
@@ -73,6 +78,14 @@ function ensureTooltip() {
         mouseOverTooltip = false;
         scheduleHide();
     });
+
+    // Scroll on tooltip navigates pages
+    tooltipEl.addEventListener('wheel', (e) => {
+        if (tooltipPages.length <= 1) return;
+        e.preventDefault();
+        e.stopPropagation();
+        showTooltipPage(currentPageIndex + (e.deltaY > 0 ? 1 : -1));
+    }, { passive: false });
 
     return tooltipEl;
 }
@@ -273,8 +286,61 @@ function resolveWithDeinflection(word, reading) {
  * @param {string} pos
  * @param {{ from: string, rule: string }|null} [inflection]
  */
-function populateWordTooltip(word, reading, pos, inflection = null) {
+function populateWordTooltip(word, reading, pos, inflection = null, matchId = '') {
     const tip = ensureTooltip();
+    tooltipPages = [];
+    currentPageIndex = 0;
+
+    // Build pages from stored matches if available
+    const storedMatches = matchId ? getStoredMatches(matchId) : null;
+    if (storedMatches && storedMatches.length > 0) {
+        const seen = new Set();
+        for (const match of storedMatches) {
+            // Deduplicate by display word + source
+            const dedup = `${match.baseWord || match.word}:${match.source}:${match.rule || ''}`;
+            if (seen.has(dedup)) continue;
+            seen.add(dedup);
+
+            let pageWord = match.word;
+            let pageReading = match.reading || reading;
+            let pageInflection = null;
+
+            if (match.source === 'deinflect' && match.baseWord) {
+                pageInflection = { from: match.word, rule: match.rule || 'form' };
+                pageWord = match.baseWord;
+                // Look up reading for the base word
+                const baseMeaning = lookupMeaning(match.baseWord);
+                if (baseMeaning && baseMeaning.readings.length > 0) {
+                    pageReading = baseMeaning.readings[0];
+                }
+            }
+
+            const page = buildWordPage(pageWord, pageReading, pos, pageInflection);
+            if (page) tooltipPages.push(page);
+        }
+    }
+
+    // Fallback: build single page from direct args (selection lookup or no stored matches)
+    if (tooltipPages.length === 0) {
+        const page = buildWordPage(word, reading, pos, inflection);
+        if (page) tooltipPages.push(page);
+    }
+
+    if (tooltipPages.length === 0) return false;
+
+    showTooltipPage(0);
+    return true;
+}
+
+/**
+ * Builds a single tooltip page HTML for a word lookup.
+ * @param {string} word Surface form
+ * @param {string} reading Reading
+ * @param {string} pos POS tag
+ * @param {{ from: string, rule: string }|null} inflection
+ * @returns {{ html: string, label: string, displayWord: string }|null}
+ */
+function buildWordPage(word, reading, pos, inflection = null) {
     const originalWord = word;
 
     // Look up meanings from dictionary
@@ -288,7 +354,6 @@ function populateWordTooltip(word, reading, pos, inflection = null) {
         if (resolved) {
             inflection = resolved.inflection;
             sensesHtml = renderSenses(resolved.meaning);
-            // Use base word for kanji breakdown
             word = resolved.baseWord;
         }
     }
@@ -303,12 +368,10 @@ function populateWordTooltip(word, reading, pos, inflection = null) {
             </div>`;
     }
 
-    // Extract kanji characters in order of appearance
+    // Extract kanji characters
     const kanjiChars = [];
     for (const ch of word) {
-        if (getKanji(ch) && !kanjiChars.includes(ch)) {
-            kanjiChars.push(ch);
-        }
+        if (getKanji(ch) && !kanjiChars.includes(ch)) kanjiChars.push(ch);
     }
 
     const kanjiBlocksHtml = kanjiChars.length > 0 && isKanjiDataLoaded()
@@ -318,19 +381,23 @@ function populateWordTooltip(word, reading, pos, inflection = null) {
            </div>`
         : '';
 
-    // Nothing useful to show — bail
-    if (!sensesHtml && kanjiChars.length === 0) return false;
+    if (!sensesHtml && kanjiChars.length === 0) return null;
 
     const jishoUrl = `https://jisho.org/search/${encodeURIComponent(originalWord)}%20%23words`;
-
-    // Use POS from dictionary if available, fall back to kuromoji POS
     const displayPos = meaning && meaning.senses.length ? '' : (pos ? `<div class="nihongo-wt-pos">${pos}</div>` : '');
 
-    // Word is "known" only when it has kanji and ALL of them are known
     const known = getKnownKanji();
     const wordKnownClass = kanjiChars.length > 0 && kanjiChars.every(ch => known.has(ch)) ? ' nihongo-tooltip-known' : '';
 
-    tip.innerHTML = `
+    // Build label for tab list
+    let label = word;
+    if (inflection) label = `${word} (${inflection.rule})`;
+    else if (meaning && meaning.senses.length > 0) {
+        const firstGloss = meaning.senses[0].glosses[0] || '';
+        if (firstGloss) label = `${word} — ${firstGloss.length > 20 ? firstGloss.slice(0, 20) + '…' : firstGloss}`;
+    }
+
+    const html = `
         <div class="nihongo-tooltip-inner nihongo-wt-inner${wordKnownClass}">
             <div class="nihongo-wt-word-section">
                 ${inflectionHtml}
@@ -350,8 +417,55 @@ function populateWordTooltip(word, reading, pos, inflection = null) {
         </div>
     `;
 
+    return { html, label, displayWord: word };
+}
+
+/**
+ * Renders the tab list HTML for paginated tooltips.
+ * @param {Array<{ label: string }>} pages
+ * @param {number} activeIndex
+ * @returns {string}
+ */
+function renderTabList(pages, activeIndex) {
+    if (pages.length <= 1) return '';
+    const tabs = pages.map((p, i) => {
+        const activeClass = i === activeIndex ? ' nihongo-wt-tab-active' : '';
+        return `<div class="nihongo-wt-tab${activeClass}" data-tab-index="${i}">${p.label}</div>`;
+    }).join('');
+    return `<div class="nihongo-wt-tabs">${tabs}<div class="nihongo-wt-tab-counter">${activeIndex + 1}/${pages.length}</div></div>`;
+}
+
+/**
+ * Shows a specific page of the current paginated tooltip.
+ * @param {number} index
+ */
+function showTooltipPage(index) {
+    if (tooltipPages.length === 0) return;
+    // Wrap around
+    if (index < 0) index = tooltipPages.length - 1;
+    if (index >= tooltipPages.length) index = 0;
+    currentPageIndex = index;
+
+    const tip = ensureTooltip();
+    const page = tooltipPages[index];
+
+    tip.innerHTML = renderTabList(tooltipPages, index) + page.html;
     wireKnownButtons(tip);
-    return true;
+    wireTabClicks(tip);
+}
+
+/**
+ * Wires click handlers on tab items.
+ * @param {HTMLElement} tip
+ */
+function wireTabClicks(tip) {
+    tip.querySelectorAll('.nihongo-wt-tab').forEach(tab => {
+        tab.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const idx = parseInt(tab.getAttribute('data-tab-index') || '0', 10);
+            showTooltipPage(idx);
+        });
+    });
 }
 
 /**
@@ -487,7 +601,7 @@ function scheduleShow(found, boundingEl) {
         }
         let ok = false;
         if (found.type === 'word') {
-            ok = populateWordTooltip(found.word, found.reading || '', found.pos || '');
+            ok = populateWordTooltip(found.word, found.reading || '', found.pos || '', null, found.matchId || '');
         } else {
             ok = populateKanjiTooltip(found.word);
         }
@@ -505,7 +619,7 @@ function scheduleShow(found, boundingEl) {
  *   2. .nihongo-word[data-word]     → word tooltip (in-message, contains kanji blocks)
  *   3. .nihongo-kanji[data-kanji]   → kanji tooltip fallback (in-message without word wrapper)
  * @param {EventTarget|null} target
- * @returns {{ type: 'word'|'kanji', key: string, el: HTMLElement, word?: string, reading?: string, pos?: string }|null}
+ * @returns {{ type: 'word'|'kanji', key: string, el: HTMLElement, word?: string, reading?: string, pos?: string, matchId?: string }|null}
  */
 function findTooltipTarget(target) {
     if (!(target instanceof HTMLElement)) return null;
@@ -517,11 +631,13 @@ function findTooltipTarget(target) {
     if (wordSpan) {
         const word = wordSpan.dataset.word;
         const hasKanji = /[\u4e00-\u9faf\u3400-\u4dbf]/.test(word);
-        // Only show hover tooltip for words containing kanji
-        if (hasKanji) {
+        const matchId = wordSpan.dataset.matchId || '';
+        const hasMatches = Boolean(matchId && getStoredMatches(matchId));
+        // Show tooltip for kanji words, or kana words with matches when setting enabled
+        if (hasKanji || (nihongoSettings.kanaWordTooltips && hasMatches)) {
             const reading = wordSpan.dataset.reading || '';
             const pos = wordSpan.dataset.pos || '';
-            return { type: 'word', key: `w:${word}`, el: wordSpan, word, reading, pos };
+            return { type: 'word', key: `w:${word}:${matchId}`, el: wordSpan, word, reading, pos, matchId };
         }
     }
     // Fallback: bare kanji span (without word wrapper)
@@ -600,13 +716,24 @@ export function attachKanjiTooltip(container, options = {}) {
         isSelecting = false;
     };
 
+    const onWheel = (e) => {
+        // Shift+Scroll on word span navigates tooltip pages
+        if (!e.shiftKey || tooltipPages.length <= 1) return;
+        const wordSpan = e.target instanceof HTMLElement && e.target.closest('.nihongo-word');
+        if (!wordSpan || !currentKey) return;
+        e.preventDefault();
+        e.stopPropagation();
+        showTooltipPage(currentPageIndex + (e.deltaY > 0 ? 1 : -1));
+    };
+
     container.addEventListener('mousemove', onMove);
     container.addEventListener('mouseleave', onLeave);
     container.addEventListener('scroll', onScroll, true);
     container.addEventListener('mousedown', onMouseDown);
     container.addEventListener('mouseup', onMouseUp);
+    container.addEventListener('wheel', onWheel, { passive: false });
 
-    attachedContainers.set(container, { onMove, onLeave, onScroll, onMouseDown, onMouseUp });
+    attachedContainers.set(container, { onMove, onLeave, onScroll, onMouseDown, onMouseUp, onWheel });
 }
 
 /**
@@ -618,6 +745,7 @@ export function detachKanjiTooltip(container) {
     if (!handlers) return;
     if (handlers.onMouseDown) container.removeEventListener('mousedown', handlers.onMouseDown);
     if (handlers.onMouseUp) container.removeEventListener('mouseup', handlers.onMouseUp);
+    if (handlers.onWheel) container.removeEventListener('wheel', handlers.onWheel);
 
     container.removeEventListener('mousemove', handlers.onMove);
     container.removeEventListener('mouseleave', handlers.onLeave);
