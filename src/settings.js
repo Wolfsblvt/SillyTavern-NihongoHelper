@@ -266,6 +266,7 @@ function registerSettingsEventListeners() {
         if (e.target instanceof HTMLInputElement) {
             settings.kanaWordTooltips = e.target.checked;
             saveSettingsDebounced();
+            document.getElementById('chat')?.classList.toggle('nihongo-kana-tooltips', settings.kanaWordTooltips);
         }
     });
 
@@ -318,6 +319,7 @@ export async function injectSettingsUI() {
         chatEl.classList.toggle('nihongo-furigana-disabled', !nihongoSettings.enabled);
         chatEl.classList.toggle('nihongo-furigana-hover', nihongoSettings.hoverOnly);
         chatEl.classList.toggle('nihongo-highlight-known', nihongoSettings.highlightKnown);
+        chatEl.classList.toggle('nihongo-kana-tooltips', nihongoSettings.kanaWordTooltips);
     }
 
     uiInjected = true;

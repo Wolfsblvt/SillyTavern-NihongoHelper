@@ -790,15 +790,15 @@
     margin-top: 1px;
 }
 
-/* ── Kana-only hoverable words ── */
+/* ── Kana-only hoverable words (only styled when inspect mode + kana tooltips are both active) ── */
 
-.nihongo-word-kana {
+.nihongo-inspect-mode.nihongo-kana-tooltips .nihongo-word-kana {
     border-bottom: 1px dotted rgba(255, 255, 255, 0.15);
     cursor: help;
     border-radius: 2px;
     transition: background 0.1s;
 }
 
-.nihongo-word-kana:hover {
+.nihongo-inspect-mode.nihongo-kana-tooltips .nihongo-word-kana:hover {
     background: rgba(255, 255, 255, 0.08);
 }

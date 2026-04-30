@@ -311,6 +311,7 @@ function populateWordTooltip(word, reading, pos, inflection = null, matchId = ''
             let pageWord = match.word;
             let pageReading = match.reading || reading;
             let pageInflection = null;
+            let altWriting = null;
 
             if (match.source === 'deinflect' && match.baseWord) {
                 pageInflection = { from: match.word, rule: match.rule || 'form' };
@@ -322,7 +323,14 @@ function populateWordTooltip(word, reading, pos, inflection = null, matchId = ''
                 }
             }
 
-            const page = buildWordPage(pageWord, pageReading, pos, pageInflection);
+            // Detect alternative writing (lookup word not in JMdict kanji forms)
+            const forms = match.matchedForms || [];
+            const lookupWord = match.source === 'deinflect' ? (match.baseWord || match.word) : match.word;
+            if (forms.length > 0 && !forms.includes(lookupWord)) {
+                altWriting = forms[0]; // canonical kanji form
+            }
+
+            const page = buildWordPage(pageWord, pageReading, pos, pageInflection, altWriting);
             if (page) tooltipPages.push(page);
         }
     }
@@ -345,15 +353,17 @@ function populateWordTooltip(word, reading, pos, inflection = null, matchId = ''
  * @param {string} reading Reading
  * @param {string} pos POS tag
  * @param {{ from: string, rule: string }|null} inflection
+ * @param {string|null} altWriting Canonical kanji form when this is an alternative writing
  * @returns {{ html: string, label: string, displayWord: string }|null}
  */
-function buildWordPage(word, reading, pos, inflection = null) {
+function buildWordPage(word, reading, pos, inflection = null, altWriting = null) {
     const originalWord = word;
 
     // Look up meanings from dictionary
     const meaning = lookupMeaning(word, reading);
     let sensesHtml = renderSenses(meaning);
     let inflectionHtml = '';
+    let altWritingHtml = '';
 
     // If no direct match, try deinflection
     if (!meaning && !inflection) {
@@ -375,9 +385,19 @@ function buildWordPage(word, reading, pos, inflection = null) {
             </div>`;
     }
 
-    // Extract kanji characters
+    // Render alternative writing note if present
+    if (altWriting) {
+        altWritingHtml = `
+            <div class="nihongo-wt-inflection">
+                <span class="nihongo-wt-inflection-label">alt. writing of</span>
+                <span class="nihongo-wt-inflection-base">${altWriting}</span>
+            </div>`;
+    }
+
+    // Extract kanji characters (from canonical form if available, else lookup word)
+    const kanjiSource = altWriting || word;
     const kanjiChars = [];
-    for (const ch of word) {
+    for (const ch of kanjiSource) {
         if (getKanji(ch) && !kanjiChars.includes(ch)) kanjiChars.push(ch);
     }
 
@@ -390,24 +410,31 @@ function buildWordPage(word, reading, pos, inflection = null) {
 
     if (!sensesHtml && kanjiChars.length === 0) return null;
 
-    const jishoUrl = `https://jisho.org/search/${encodeURIComponent(originalWord)}%20%23words`;
+    // Use canonical form for Jisho link when it's an alternative writing
+    const jishoWord = altWriting || originalWord;
+    const jishoUrl = `https://jisho.org/search/${encodeURIComponent(jishoWord)}%20%23words`;
     const displayPos = meaning && meaning.senses.length ? '' : (pos ? `<div class="nihongo-wt-pos">${pos}</div>` : '');
 
     const known = getKnownKanji();
     const wordKnownClass = kanjiChars.length > 0 && kanjiChars.every(ch => known.has(ch)) ? ' nihongo-tooltip-known' : '';
 
-    // Build label for tab list
+    // Build label for tab list — always try to include first gloss
+    const firstGloss = meaning && meaning.senses.length > 0 ? (meaning.senses[0].glosses[0] || '') : '';
+    const truncGloss = firstGloss.length > 20 ? firstGloss.slice(0, 20) + '…' : firstGloss;
     let label = word;
-    if (inflection) label = `${word} (${inflection.rule})`;
-    else if (meaning && meaning.senses.length > 0) {
-        const firstGloss = meaning.senses[0].glosses[0] || '';
-        if (firstGloss) label = `${word} — ${firstGloss.length > 20 ? firstGloss.slice(0, 20) + '…' : firstGloss}`;
+    if (inflection && truncGloss) {
+        label = `${word} (${inflection.rule}) — ${truncGloss}`;
+    } else if (inflection) {
+        label = `${word} (${inflection.rule})`;
+    } else if (truncGloss) {
+        label = `${word} — ${truncGloss}`;
     }
 
     const html = `
         <div class="nihongo-tooltip-inner nihongo-wt-inner${wordKnownClass}">
             <div class="nihongo-wt-word-section">
                 ${inflectionHtml}
+                ${altWritingHtml}
                 <div class="nihongo-wt-word-top">
                     <span class="nihongo-wt-word">${word}</span>
                     ${reading && reading !== word ? `<span class="nihongo-wt-reading">${reading}</span>` : ''}

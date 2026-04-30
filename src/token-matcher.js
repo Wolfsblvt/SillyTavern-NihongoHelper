@@ -9,7 +9,7 @@
  * to produce non-overlapping spans for DOM rendering, attaching all
  * relevant interpretations (tooltip pages) to each span.
  *
- * @typedef {{ word: string, reading: string, source: 'direct'|'deinflect', rule?: string, baseWord?: string }} MatchEntry
+ * @typedef {{ word: string, reading: string, source: 'direct'|'deinflect', rule?: string, baseWord?: string, matchedForms?: string[] }} MatchEntry
  * @typedef {{ start: number, end: number, surface: string, reading: string, matches: MatchEntry[] }} SpanInfo
  */
 
@@ -74,7 +74,7 @@ function buildMatchMap(tokens, windowSize) {
             // Direct lookup
             const meaning = lookupMeaning(surface, reading);
             if (meaning) {
-                entries.push({ word: surface, reading, source: 'direct' });
+                entries.push({ word: surface, reading, source: 'direct', matchedForms: meaning.forms || [] });
             }
 
             // Also try katakana→hiragana variant
@@ -82,7 +82,7 @@ function buildMatchMap(tokens, windowSize) {
             if (!meaning && asHiragana !== surface) {
                 const hMeaning = lookupMeaning(asHiragana);
                 if (hMeaning) {
-                    entries.push({ word: asHiragana, reading, source: 'direct' });
+                    entries.push({ word: asHiragana, reading, source: 'direct', matchedForms: hMeaning.forms || [] });
                 }
             }
 
@@ -97,6 +97,7 @@ function buildMatchMap(tokens, windowSize) {
                         source: 'deinflect',
                         rule: candidate.rule,
                         baseWord: candidate.word,
+                        matchedForms: dMeaning.forms || [],
                     });
                     break; // take first deinflection hit
                 }
@@ -196,18 +197,36 @@ function greedySpans(tokens, matchMap) {
 }
 
 /**
+ * Checks whether a match is an "exact writing" — the looked-up word appears
+ * as one of the JMdict kanji forms, OR the entry has no kanji forms (kana-only).
+ * Alternative writings (matched only via reading) rank lower.
+ * @param {MatchEntry} m
+ * @returns {boolean}
+ */
+function isExactWriting(m) {
+    const forms = m.matchedForms;
+    if (!forms || forms.length === 0) return true; // kana-only entry = always exact
+    const lookupWord = m.source === 'deinflect' ? (m.baseWord || m.word) : m.word;
+    return forms.includes(lookupWord);
+}
+
+/**
  * Sort matches for tooltip display order:
- * 1. Longest surface form first (inflected word, not base)
- * 2. Deinflected before direct at same length (inflections more likely relevant)
- * 3. Original order preserved otherwise (stable sort)
+ * 1. Exact writing matches first (lookup word is a kanji form in JMdict)
+ * 2. Longest surface form (inflected word, not base)
+ * 3. Deinflected before direct at same length
+ * 4. Original order preserved otherwise (stable sort)
  * @param {MatchEntry[]} matches
  * @returns {MatchEntry[]}
  */
 function sortMatches(matches) {
-    // Add original index for stable sort
     const indexed = matches.map((m, i) => ({ m, i }));
     indexed.sort((a, b) => {
-        // Longest surface first (use .word which is the inflected form)
+        // Exact writing before alternative writing
+        const aExact = isExactWriting(a.m) ? 0 : 1;
+        const bExact = isExactWriting(b.m) ? 0 : 1;
+        if (aExact !== bExact) return aExact - bExact;
+        // Longest surface first
         const lenDiff = b.m.word.length - a.m.word.length;
         if (lenDiff !== 0) return lenDiff;
         // Deinflected before direct at same length

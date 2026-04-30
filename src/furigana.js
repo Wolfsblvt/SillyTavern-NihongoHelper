@@ -277,9 +277,10 @@ function addFuriganaToText(text) {
             if (matchId) attrs.push(`data-match-id="${matchId}"`);
         }
 
-        // CSS class: hoverable kana-only words get additional class for styling
+        // CSS class: kana-only words with matches get class for potential styling
+        // (actual visual styling is controlled by CSS scoping on parent classes)
         const classes = ['nihongo-word'];
-        if (!hasKanjiChar && isHoverable) classes.push('nihongo-word-kana');
+        if (!hasKanjiChar && hasMatches) classes.push('nihongo-word-kana');
 
         result += `<span class="${classes.join(' ')}" ${attrs.join(' ')}>${inner}</span>`;
     }
