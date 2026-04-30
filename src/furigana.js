@@ -2,7 +2,7 @@ import { EXTENSION_NAME } from '../index.js';
 import { nihongoSettings } from './settings.js';
 import { getKnownKanji } from './kanji-manager.js';
 import { getKanji as getKanjiEntry } from './kanji-data.js';
-import { analyzeTokens, registerSpanMatches, clearMatchStore } from './token-matcher.js';
+import { analyzeTokens, registerSpanMatches } from './token-matcher.js';
 import { onMessageFormatted } from '../../../../../script.js';
 
 /** @type {any} */
@@ -147,15 +147,17 @@ function buildRuby(surface, reading, known) {
         }
     }
 
-    // Strip matching kana from reading to isolate the kanji reading
+    // Strip matching kana from reading to isolate the kanji reading.
+    // Clean non-kana chars (zero-width spaces, punctuation from markdown) so they don't
+    // break the startsWith / endsWith alignment.
     let remainingReading = reading;
 
     // Strip from front
     for (const part of parts) {
         if (part.type === 'kana') {
-            const kana = katakanaToHiragana(part.text);
-            if (remainingReading.startsWith(kana)) {
-                remainingReading = remainingReading.slice(kana.length);
+            const kanaClean = katakanaToHiragana(part.text).replace(/[^\u3040-\u309F]/g, '');
+            if (kanaClean.length > 0 && remainingReading.startsWith(kanaClean)) {
+                remainingReading = remainingReading.slice(kanaClean.length);
             }
         } else {
             break;
@@ -165,9 +167,9 @@ function buildRuby(surface, reading, known) {
     // Strip from back
     for (let j = parts.length - 1; j >= 0; j--) {
         if (parts[j].type === 'kana') {
-            const kana = katakanaToHiragana(parts[j].text);
-            if (remainingReading.endsWith(kana)) {
-                remainingReading = remainingReading.slice(0, -kana.length);
+            const kanaClean = katakanaToHiragana(parts[j].text).replace(/[^\u3040-\u309F]/g, '');
+            if (kanaClean.length > 0 && remainingReading.endsWith(kanaClean)) {
+                remainingReading = remainingReading.slice(0, -kanaClean.length);
             }
         } else {
             break;
@@ -336,7 +338,6 @@ function processMessageElement(element, force = false) {
  */
 function processAllMessages(force = false) {
     if (!tokenizer || !nihongoSettings.enabled) return;
-    clearMatchStore();
 
     const messageTexts = document.querySelectorAll('#chat .mes .mes_text, #chat .mes .mes_reasoning');
     for (const el of messageTexts) {
