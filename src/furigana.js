@@ -2,6 +2,7 @@ import { EXTENSION_NAME } from '../index.js';
 import { nihongoSettings } from './settings.js';
 import { getKnownKanji } from './kanji-manager.js';
 import { getKanji as getKanjiEntry } from './kanji-data.js';
+import { analyzeTokens, registerSpanMatches, clearMatchStore } from './token-matcher.js';
 
 /** @type {any} */
 let tokenizer = null;
@@ -217,43 +218,70 @@ function buildRuby(surface, reading, known) {
 
 /**
  * Processes a text string and returns HTML with furigana annotations.
+ * Uses the multi-token matching engine for greedy span grouping.
  * @param {string} text Raw text content
  * @returns {string} HTML with ruby annotations
  */
 function addFuriganaToText(text) {
-    if (!tokenizer || !containsKanji(text)) {
+    if (!tokenizer || !containsJapanese(text)) {
         return text;
     }
 
     const tokens = tokenizer.tokenize(text);
+    const spans = analyzeTokens(tokens);
+    const known = getKnownKanji();
     let result = '';
 
-    const known = getKnownKanji();
+    for (const span of spans) {
+        const { surface, reading, matches } = span;
+        const hasKanjiChar = containsKanji(surface);
+        const isJp = containsJapanese(surface);
 
-    for (const token of tokens) {
-        const surface = token.surface_form;
-        const reading = token.reading;
-        const pos = token.pos || '';
+        if (!isJp) {
+            // Non-Japanese text (punctuation, latin, etc.)
+            result += surface;
+            continue;
+        }
 
-        if (reading && containsKanji(surface)) {
-            const hiraganaReading = katakanaToHiragana(reading);
-            // Skip furigana if every kanji in the token is marked as known (and setting is on)
+        // Determine if this span is hoverable
+        const hasMatches = matches.length > 0;
+        const isHoverable = hasKanjiChar || (nihongoSettings.kanaWordTooltips && hasMatches);
+
+        // Build inner HTML
+        let inner = '';
+        if (hasKanjiChar) {
+            // Check if furigana should be hidden (all kanji known)
             const kanjiChars = [...surface].filter(isKanji);
             const allKnown = nihongoSettings.hideKnownFurigana && known.size > 0 && kanjiChars.length > 0 && kanjiChars.every(ch => known.has(ch));
-            const inner = allKnown
-                ? wrapKanji(surface, known)
-                : buildRuby(surface, hiraganaReading, known);
-            result += `<span class="nihongo-word" data-word="${escapeAttr(surface)}" data-reading="${escapeAttr(hiraganaReading)}" data-pos="${escapeAttr(pos)}">${inner}</span>`;
-        } else if (containsKanji(surface)) {
-            // Kanji without reading (rare) — still wrap for data attributes
-            result += `<span class="nihongo-word" data-word="${escapeAttr(surface)}" data-pos="${escapeAttr(pos)}">${wrapKanji(surface, known)}</span>`;
-        } else if (containsJapanese(surface)) {
-            // Pure kana token — wrap so tooltip can find word boundaries
-            const hiraganaReading = reading ? katakanaToHiragana(reading) : '';
-            result += `<span class="nihongo-word" data-word="${escapeAttr(surface)}" data-reading="${escapeAttr(hiraganaReading)}" data-pos="${escapeAttr(pos)}">${surface}</span>`;
+
+            if (allKnown || !reading) {
+                inner = wrapKanji(surface, known);
+            } else {
+                inner = buildRuby(surface, reading, known);
+            }
         } else {
-            result += surface;
+            inner = surface;
         }
+
+        // Build data attributes
+        const attrs = [`data-word="${escapeAttr(surface)}"`];
+        if (reading) attrs.push(`data-reading="${escapeAttr(reading)}"`);
+
+        // Get POS from first token in span
+        const firstToken = tokens[span.start];
+        if (firstToken && firstToken.pos) attrs.push(`data-pos="${escapeAttr(firstToken.pos)}"`);
+
+        // Register matches and add match-id attribute
+        if (hasMatches) {
+            const matchId = registerSpanMatches(matches);
+            if (matchId) attrs.push(`data-match-id="${matchId}"`);
+        }
+
+        // CSS class: hoverable kana-only words get additional class for styling
+        const classes = ['nihongo-word'];
+        if (!hasKanjiChar && isHoverable) classes.push('nihongo-word-kana');
+
+        result += `<span class="${classes.join(' ')}" ${attrs.join(' ')}>${inner}</span>`;
     }
 
     return result;
@@ -309,8 +337,7 @@ function processMessageElement(element, force = false) {
 
     for (const textNode of textNodes) {
         const text = textNode.textContent || '';
-        // For text with kanji, add furigana; for pure kana, just wrap for font-size
-        const html = containsKanji(text) ? addFuriganaToText(text) : text;
+        const html = addFuriganaToText(text);
         const span = document.createElement('span');
         span.classList.add('nihongo-processed');
         span.innerHTML = html;
@@ -324,6 +351,7 @@ function processMessageElement(element, force = false) {
  */
 function processAllMessages(force = false) {
     if (!tokenizer || !nihongoSettings.enabled) return;
+    clearMatchStore();
 
     const messageTexts = document.querySelectorAll('#chat .mes .mes_text, #chat .mes .mes_reasoning');
     for (const el of messageTexts) {
