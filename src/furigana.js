@@ -8,32 +8,6 @@ import { analyzeTokens, registerSpanMatches, clearMatchStore } from './token-mat
 let tokenizer = null;
 let tokenizerLoading = false;
 
-/**
- * Creates a throttled function that fires at most once per interval,
- * with a trailing call to catch the last invocation.
- * @param {Function} fn
- * @param {number} interval
- * @returns {Function}
- */
-function throttle(fn, interval) {
-    let lastCall = 0;
-    let timer = null;
-    return (...args) => {
-        const now = Date.now();
-        const remaining = interval - (now - lastCall);
-        if (remaining <= 0) {
-            if (timer) { clearTimeout(timer); timer = null; }
-            lastCall = now;
-            fn(...args);
-        } else if (!timer) {
-            timer = setTimeout(() => {
-                lastCall = Date.now();
-                timer = null;
-                fn(...args);
-            }, remaining);
-        }
-    };
-}
 
 /**
  * Checks if a character is a kanji.
@@ -290,14 +264,22 @@ function addFuriganaToText(text) {
 
 /**
  * Strips previously injected furigana from an element, restoring original text nodes.
+ * Uses data-original attribute to avoid including ruby annotation text.
  * @param {HTMLElement} element
  */
 function stripFurigana(element) {
     element.querySelectorAll('.nihongo-processed').forEach(el => {
         const parent = el.parentNode;
         if (!parent) return;
-        // Replace the processed span with its original text content
-        const textNode = document.createTextNode(el.textContent || '');
+        // Prefer stored original text (avoids including <rt> content)
+        let originalText = el.getAttribute('data-original');
+        if (originalText == null) {
+            // Fallback: clone and remove rt elements to get clean text
+            const clone = /** @type {Element} */ (el.cloneNode(true));
+            clone.querySelectorAll('rt').forEach(rt => rt.remove());
+            originalText = clone.textContent || '';
+        }
+        const textNode = document.createTextNode(originalText);
         parent.replaceChild(textNode, el);
         // Normalize to merge adjacent text nodes
         parent.normalize();
@@ -341,6 +323,7 @@ function processMessageElement(element, force = false) {
         const html = addFuriganaToText(text);
         const span = document.createElement('span');
         span.classList.add('nihongo-processed');
+        span.setAttribute('data-original', text);
         span.innerHTML = html;
         textNode.parentNode?.replaceChild(span, textNode);
     }
@@ -447,72 +430,34 @@ function onMessageRendered(messageId, force = false) {
     }
 }
 
-/**
- * Manages cached furigana HTML for streaming messages.
- * Caches the tokenized result for a known prefix so that when ST replaces innerHTML
- * on each streaming frame, we can instantly re-apply furigana for the already-processed
- * portion and only run the expensive tokenizer on new text.
- */
-class StreamingFuriganaCache {
-    constructor() {
-        /** Last raw text we fully tokenized */
-        this.processedText = '';
-        /** Cached token results as array of {surface, html} */
-        this.cachedTokens = [];
-        /** Full HTML output for the processed text */
-        this.cachedHTML = '';
-    }
+// ── Streaming support ────────────────────────────────────────────────────────
 
-    /**
-     * Resets the cache (e.g., when a new message starts streaming).
-     */
-    reset() {
-        this.processedText = '';
-        this.cachedTokens = [];
-        this.cachedHTML = '';
-    }
-
-    /**
-     * Processes text, reusing cached results for any matching prefix.
-     * @param {string} fullText The full text of the streaming message
-     * @returns {string} HTML with furigana for the full text
-     */
-    process(fullText) {
-        if (!tokenizer || !containsKanji(fullText)) {
-            return fullText;
-        }
-
-        // If the new text starts with our cached text, only tokenize the new part
-        if (fullText.startsWith(this.processedText) && this.processedText.length > 0) {
-            const newPart = fullText.slice(this.processedText.length);
-            if (!newPart || !containsKanji(newPart)) {
-                // No new kanji, just append the new text
-                return this.cachedHTML + newPart;
-            }
-        }
-
-        // Full re-tokenize (cache miss or text changed)
-        const result = addFuriganaToText(fullText);
-        this.processedText = fullText;
-        this.cachedHTML = result;
-        return result;
-    }
-}
-
-/** Streaming cache instance */
-const streamingCache = new StreamingFuriganaCache();
+/** @type {number|null} Pending streaming process timer */
+let streamTimer = null;
+/** @type {number} Timestamp of last streaming process run */
+let streamLastRun = 0;
 
 /**
- * Processes the currently streaming message using cached results.
- * @param {HTMLElement} element The .mes_text element being streamed
+ * Schedules a streaming furigana update with trailing-edge throttle.
+ * Uses a minimum 20ms delay so the DOM update from ST lands before we process.
+ * Reads nihongoSettings.streamInterval dynamically.
  */
-function processStreamingElement(element) {
+function scheduleStreamProcess() {
     if (!tokenizer || !nihongoSettings.enabled) return;
+    if (streamTimer) return; // already scheduled
 
-    // Extract plain text from the element (ST has already formatted markdown)
-    // We walk text nodes and process them individually, same as static messages
-    // but using the cache for the overall text to avoid re-tokenizing everything
-    processMessageElement(element, true);
+    const interval = nihongoSettings.streamInterval;
+    const elapsed = Date.now() - streamLastRun;
+    const delay = Math.max(20, interval - elapsed);
+
+    streamTimer = setTimeout(() => {
+        streamTimer = null;
+        streamLastRun = Date.now();
+        const lastMes = document.querySelector('#chat .mes:last-child .mes_text');
+        if (lastMes instanceof HTMLElement) {
+            processMessageElement(lastMes, true);
+        }
+    }, delay);
 }
 
 /**
@@ -533,7 +478,8 @@ export async function initFurigana() {
 
     // === Chat lifecycle events ===
     eventSource.on(eventTypes.CHAT_CHANGED, () => {
-        streamingCache.reset();
+        if (streamTimer) { clearTimeout(streamTimer); streamTimer = null; }
+        streamLastRun = 0;
         setTimeout(processAllMessages, 100);
     });
 
@@ -554,20 +500,12 @@ export async function initFurigana() {
     });
 
     // === Streaming ===
-    // Throttled tokenizer run - fires at most once per interval, not just at the end
-    let throttledStreamProcess = throttle(() => {
-        if (!tokenizer || !nihongoSettings.enabled) return;
-        const lastMes = document.querySelector('#chat .mes:last-child .mes_text');
-        if (lastMes instanceof HTMLElement) {
-            processStreamingElement(lastMes);
-        }
-    }, nihongoSettings.streamInterval);
+    eventSource.on(eventTypes.STREAM_TOKEN_RECEIVED, () => scheduleStreamProcess());
 
-    eventSource.on(eventTypes.STREAM_TOKEN_RECEIVED, (...args) => throttledStreamProcess(...args));
-
-    // Reset streaming cache when generation starts
+    // Reset streaming state when generation starts
     eventSource.on(eventTypes.GENERATION_STARTED, () => {
-        streamingCache.reset();
+        if (streamTimer) { clearTimeout(streamTimer); streamTimer = null; }
+        streamLastRun = 0;
     });
 
     console.debug(`[${EXTENSION_NAME}] Furigana system initialized`);

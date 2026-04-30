@@ -45,6 +45,12 @@
     display: none;
 }
 
+/* Reserve consistent line-height for ruby annotations (prevents flicker during streaming) */
+#chat:not(.nihongo-furigana-disabled) .mes .mes_text,
+#chat:not(.nihongo-furigana-disabled) .mes .mes_reasoning {
+    line-height: 2;
+}
+
 /* Processed span wrapper should be inline */
 #chat .mes .nihongo-processed {
     display: inline;
@@ -766,14 +772,17 @@
 
 /* ── Paginated tooltip tabs ── */
 
+.nihongo-wt-tabs-wrapper {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    flex-shrink: 0;
+    padding: 4px 6px 2px;
+}
+
 .nihongo-wt-tabs {
     display: flex;
     flex-direction: column;
     gap: 1px;
-    padding: 4px 6px 2px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    flex-shrink: 0;
-    max-height: calc(5 * 22px + 26px);
+    max-height: 95px;
     overflow-y: auto;
     scrollbar-width: none;
 }
@@ -793,6 +802,7 @@
     text-overflow: ellipsis;
     transition: opacity 0.12s, background 0.12s;
     font-family: "Noto Sans JP", "Yu Gothic", sans-serif;
+    flex-shrink: 0;
 }
 
 .nihongo-wt-tab:hover {
@@ -812,6 +822,7 @@
     text-align: right;
     padding: 0 2px;
     margin-top: 1px;
+    flex-shrink: 0;
 }
 
 /* ── Kana-only hoverable words (only styled when inspect mode + kana tooltips are both active) ── */

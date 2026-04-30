@@ -536,7 +536,7 @@ function renderTabList(pages, activeIndex) {
         const activeClass = i === activeIndex ? ' nihongo-wt-tab-active' : '';
         return `<div class="nihongo-wt-tab${activeClass}" data-tab-index="${i}">${p.label}</div>`;
     }).join('');
-    return `<div class="nihongo-wt-tabs">${tabs}<div class="nihongo-wt-tab-counter">${activeIndex + 1}/${pages.length}</div></div>`;
+    return `<div class="nihongo-wt-tabs-wrapper"><div class="nihongo-wt-tabs">${tabs}</div><div class="nihongo-wt-tab-counter">${activeIndex + 1}/${pages.length}</div></div>`;
 }
 
 /**
