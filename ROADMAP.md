@@ -45,7 +45,7 @@ Colored pills in tooltip: Top 1K (bright) → 1K-5K (medium) → 5K-15K (subtle)
 ### Phases
 | Phase | Status | Scope | Depends On |
 |-------|--------|-------|-----------|
-| 1a | 🔲 | Frequency data pipeline (build script, N-list format, composite score function) | Nothing |
+| 1a | ✅ | Frequency data pipeline (build script, N-list format, composite score function) | Nothing |
 | 1b | 🔲 | Import first list (JPDB or Innocent Corpus) | 1a |
 | 1c | 🔲 | Display frequency badges in word tooltip | 1b |
 | 1d | 🔲 | Add Netflix/Anime as second list | 1a |
@@ -171,7 +171,7 @@ We already have 22K+ entries in memory. Local search is instant, offline, no rat
 ### Phases
 | Phase | Status | Scope | Depends On |
 |-------|--------|-------|------------|
-| 4a | 🔲 | Search index over local JMdict (Fuse.js, English + kana + kanji) | Nothing |
+| 4a | ✅ | Search index over local JMdict (Fuse.js, English + kana + kanji) | Nothing |
 | 4b | 🔲 | Search UI (input box + result list) — modal or panel | 4a |
 | 4c | 🔲 | Result actions: copy, insert into input, open tooltip | 4b |
 | 4d | 🔲 | Jisho API fallback for extended results / example sentences | 4b |
@@ -333,7 +333,7 @@ See [Storage Strategy](#9-storage-strategy). Thousands of words over time. Compa
 ### Phases
 | Phase | Status | Scope | Depends On |
 |-------|--------|-------|-----------|
-| 7a | 🔲 | Data model + storage infrastructure | Storage (#9) |
+| 7a | ✅ | Data model + storage infrastructure | Storage (#9) |
 | 7b | 🔲 | Auto-track seenCount for primary matches | 7a |
 | 7c | 🔲 | Tooltip nudge buttons (Easy/Got it/Meh/Hard/Anki) | 7a |
 | 7d | 🔲 | Track user-written words (tokenize input on send) | 7a |
@@ -349,9 +349,9 @@ Features interleaved by phase for maximum early value:
 
 | Sprint | Phase | Scope | Status |
 |--------|-------|-------|--------|
-| **1: Foundations** | 7a | Word tracking data model + storage infra | 🔲 |
-| | 1a | Frequency pipeline (build script, N-list format, composite score) | 🔲 |
-| | 4a | Search index over local JMdict (Fuse.js) | 🔲 |
+| **1: Foundations** | 7a | Word tracking data model + storage infra | ✅ |
+| | 1a | Frequency pipeline (build script, N-list format, composite score) | ✅ |
+| | 4a | Search index over local JMdict (Fuse.js) | ✅ |
 | **2: First Visible** | 1b | Import first frequency list | 🔲 |
 | | 1c | Frequency badges in tooltip | 🔲 |
 | | 4b | Search UI (modal with input + results) | 🔲 |
