@@ -7,6 +7,8 @@ import { registerMacros } from './src/macros.js';
 import { initMeaningProvider } from './src/meaning-provider.js';
 import { loadTracking } from './src/tracking.js';
 import { loadFrequencyData } from './src/frequency.js';
+import { initDictSearchUI } from './src/dict-search-ui.js';
+import { registerSearchShortcut } from './src/side-panel.js';
 
 export const EXTENSION_KEY = 'nihongo_helper';
 export const EXTENSION_NAME = 'SillyTavern-NihongoHelper';
@@ -33,11 +35,15 @@ export async function init() {
     // Initialize kanji manager
     initKanjiManager();
 
+    // Register side panel tabs (must come before wand menu)
+    initDictSearchUI();
+
     // Add wand menu items
     injectWandMenu();
 
     // Register keyboard shortcuts
     registerInspectShortcut();
+    registerSearchShortcut();
 
     // Enable persistent selection lookup (works without inspect mode)
     enableSelectionLookup();

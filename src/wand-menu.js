@@ -1,6 +1,7 @@
 import { EXTENSION_NAME } from '../index.js';
 import { openKanjiManager } from './kanji-manager.js';
 import { toggleChatInspect, isChatInspectActive } from './kanji-tooltip.js';
+import { toggleSidePanel } from './side-panel.js';
 
 /**
  * Injects the Nihongo Helper sub-menu into the wand/extensions menu.
@@ -67,6 +68,20 @@ export function injectWandMenu() {
         }
     });
 
+    // Dictionary Search button
+    const searchBtn = document.createElement('div');
+    searchBtn.id = 'nihongo_wand_dict_search';
+    searchBtn.classList.add('list-group-item', 'flex-container', 'flexGap5', 'interactable');
+    searchBtn.innerHTML = `
+        <div class="fa-solid fa-book extensionsMenuExtensionButton"></div>
+        <span>Dictionary Search</span>
+    `;
+    searchBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleSidePanel('search');
+    });
+
+    subMenu.appendChild(searchBtn);
     subMenu.appendChild(kanjiManagerBtn);
     subMenu.appendChild(inspectBtn);
     container.appendChild(menuToggle);

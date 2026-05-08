@@ -831,3 +831,322 @@
 .nihongo-inspect-mode.nihongo-kana-tooltips .nihongo-word-kana:hover {
     background: rgba(255, 255, 255, 0.08);
 }
+
+/* ===== Nihongo Helper - Side Panel ===== */
+
+.nihongo-side-panel {
+    position: fixed;
+    top: var(--topBarBlockSize, 0px);
+    right: 0;
+    width: calc((100dvw - var(--sheldWidth, 800px)) / 2);
+    min-width: 340px;
+    max-width: 500px;
+    height: calc(100dvh - var(--topBarBlockSize, 0px));
+    z-index: 3500;
+
+    display: flex;
+    flex-direction: column;
+
+    background-color: var(--SmartThemeBlurTintColor);
+    color: var(--SmartThemeBodyColor);
+    border-left: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 10px 0 0 10px;
+    backdrop-filter: blur(calc(var(--SmartThemeBlurStrength)));
+    -webkit-backdrop-filter: blur(calc(var(--SmartThemeBlurStrength)));
+    box-shadow: -2px 0 12px var(--black30a);
+
+    transform: translateX(100%);
+    transition: transform 0.25s ease-in-out;
+    pointer-events: none;
+}
+
+.nihongo-side-panel.open {
+    transform: translateX(0);
+    pointer-events: auto;
+}
+
+/* ── Header bar: tabs + close ── */
+
+.nihongo-sp-header {
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid var(--SmartThemeBorderColor);
+    padding: 0 4px;
+    flex-shrink: 0;
+    min-height: 36px;
+}
+
+.nihongo-sp-tabs {
+    display: flex;
+    gap: 2px;
+    flex: 1;
+    overflow-x: auto;
+}
+
+.nihongo-sp-tab {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 7px 12px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--SmartThemeBodyColor);
+    opacity: 0.45;
+    cursor: pointer;
+    font-size: calc(var(--mainFontSize) * 0.85);
+    transition: opacity 0.15s, border-color 0.15s;
+    white-space: nowrap;
+}
+
+.nihongo-sp-tab:hover {
+    opacity: 0.75;
+}
+
+.nihongo-sp-tab.active {
+    opacity: 1;
+    border-bottom-color: var(--SmartThemeQuoteColor);
+}
+
+.nihongo-sp-tab i {
+    font-size: 0.9em;
+}
+
+.nihongo-sp-close {
+    background: transparent;
+    border: none;
+    color: var(--SmartThemeBodyColor);
+    opacity: 0.4;
+    cursor: pointer;
+    padding: 6px 8px;
+    font-size: calc(var(--mainFontSize) * 0.95);
+    transition: opacity 0.15s;
+    flex-shrink: 0;
+}
+
+.nihongo-sp-close:hover {
+    opacity: 1;
+}
+
+/* ── Content area: fills remaining height ── */
+
+.nihongo-sp-content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── Tab views ── */
+
+.nihongo-sp-view {
+    display: none;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+
+.nihongo-sp-view.active {
+    display: flex;
+}
+
+/* ===== Dictionary Search View ===== */
+
+.nihongo-search-bar {
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+    gap: 6px;
+    border-bottom: 1px solid var(--SmartThemeBorderColor);
+    flex-shrink: 0;
+}
+
+.nihongo-search-input-wrap {
+    position: relative;
+    flex: 1;
+}
+
+.nihongo-search-input {
+    width: 100%;
+    padding: 6px 28px 6px 10px;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 6px;
+    background: var(--black20a);
+    color: var(--SmartThemeBodyColor);
+    font-size: calc(var(--mainFontSize) * 0.95);
+    outline: none;
+    transition: border-color 0.15s;
+}
+
+.nihongo-search-input:focus {
+    border-color: var(--SmartThemeQuoteColor);
+}
+
+.nihongo-search-input::placeholder {
+    color: var(--SmartThemeBodyColor);
+    opacity: 0.35;
+}
+
+.nihongo-search-clear {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--SmartThemeBodyColor);
+    opacity: 0;
+    cursor: pointer;
+    font-size: 0.8em;
+    padding: 2px 4px;
+    pointer-events: none;
+    transition: opacity 0.15s;
+}
+
+.nihongo-search-clear.visible {
+    opacity: 0.5;
+    pointer-events: auto;
+}
+
+.nihongo-search-clear:hover {
+    opacity: 1;
+}
+
+/* ── Results list ── */
+
+.nihongo-search-results {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 0;
+}
+
+.nihongo-search-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    opacity: 0.35;
+    text-align: center;
+    font-size: calc(var(--mainFontSize) * 0.9);
+    gap: 8px;
+}
+
+.nihongo-search-empty i {
+    font-size: 2em;
+    margin-bottom: 4px;
+}
+
+/* ── Result card ── */
+
+.nihongo-search-card {
+    display: flex;
+    flex-direction: column;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--SmartThemeBorderColor);
+    cursor: pointer;
+    transition: background 0.1s;
+    gap: 3px;
+}
+
+.nihongo-search-card:hover {
+    background: var(--black10a);
+}
+
+.nihongo-search-card:last-child {
+    border-bottom: none;
+}
+
+.nihongo-search-card-top {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.nihongo-search-word {
+    font-size: calc(var(--mainFontSize) * 1.2);
+    font-weight: 600;
+}
+
+.nihongo-search-reading {
+    font-size: calc(var(--mainFontSize) * 0.85);
+    opacity: 0.6;
+}
+
+.nihongo-search-tags {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.nihongo-search-tag {
+    font-size: 0.65em;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: var(--black20a);
+    opacity: 0.7;
+    white-space: nowrap;
+}
+
+.nihongo-search-tag-common {
+    background: rgba(76, 175, 80, 0.2);
+    color: #81c784;
+}
+
+.nihongo-search-tag-tracked {
+    background: rgba(33, 150, 243, 0.2);
+    color: #64b5f6;
+}
+
+.nihongo-search-glosses {
+    font-size: calc(var(--mainFontSize) * 0.85);
+    opacity: 0.8;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.nihongo-search-card-actions {
+    display: flex;
+    gap: 4px;
+    margin-top: 2px;
+    align-self: flex-end;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.nihongo-search-card:hover .nihongo-search-card-actions {
+    opacity: 1;
+}
+
+.nihongo-search-action-btn {
+    background: var(--black20a);
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 4px;
+    color: var(--SmartThemeBodyColor);
+    cursor: pointer;
+    padding: 3px 8px;
+    font-size: 0.75em;
+    opacity: 0.6;
+    transition: opacity 0.1s;
+}
+
+.nihongo-search-action-btn:hover {
+    opacity: 1;
+}
+
+/* ── Status bar (result count) ── */
+
+.nihongo-search-status {
+    font-size: calc(var(--mainFontSize) * 0.75);
+    opacity: 0.4;
+    padding: 4px 12px;
+    border-top: 1px solid var(--SmartThemeBorderColor);
+    flex-shrink: 0;
+    text-align: right;
+}
