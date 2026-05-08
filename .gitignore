@@ -5,3 +5,5 @@ lib/
 data/kanji-raw.json
 data/jmdict-raw.json
 data/frequency-sources/
+data/downloads/
+data/frequency.json
