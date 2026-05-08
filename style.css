@@ -861,6 +861,48 @@
     opacity: 0.8;
 }
 
+/* ── Frequency badge ── */
+
+.nihongo-wt-freq-badge {
+    font-size: 0.55em;
+    padding: 1px 5px;
+    border-radius: 4px;
+    vertical-align: middle;
+    white-space: nowrap;
+    letter-spacing: 0.03em;
+    font-weight: 500;
+}
+
+.nihongo-wt-freq-top1k {
+    background: rgba(255, 215, 0, 0.15);
+    border: 1px solid rgba(255, 215, 0, 0.3);
+    color: rgba(255, 223, 100, 0.9);
+}
+
+.nihongo-wt-freq-top5k {
+    background: rgba(66, 165, 245, 0.12);
+    border: 1px solid rgba(66, 165, 245, 0.25);
+    color: rgba(100, 181, 246, 0.9);
+}
+
+.nihongo-wt-freq-top15k {
+    background: rgba(171, 71, 188, 0.12);
+    border: 1px solid rgba(171, 71, 188, 0.25);
+    color: rgba(206, 147, 216, 0.9);
+}
+
+.nihongo-wt-freq-common {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.nihongo-wt-freq-rare {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.3);
+}
+
 /* ── Nudge bar — distinct strip below tooltip ── */
 
 .nihongo-wt-nudge-bar {

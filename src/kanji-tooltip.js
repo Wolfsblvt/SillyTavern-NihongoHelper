@@ -7,6 +7,7 @@ import { reprocessMessagesWithKanji } from './furigana.js';
 import { getStoredMatches } from './token-matcher.js';
 import { nudgeConfidence, toggleFlag, getDerivedLevel, getConfidence } from './tracking.js';
 import { openDictSearch } from './dict-search-ui.js';
+import { isFrequencyAvailable, getFrequencyTier, getCompositeFrequency } from './frequency.js';
 
 /**
  * Generic kanji tooltip module.
@@ -508,13 +509,26 @@ function buildSinglePage(word, originalWord, reading, pos, inflection, altWritin
     // Common word badge in tooltip header
     const commonBadge = isCommon ? '<span class="nihongo-wt-common-badge">common</span>' : '';
 
+    // Frequency badge
+    let freqBadge = '';
+    if (isFrequencyAvailable()) {
+        const tier = getFrequencyTier(word);
+        if (tier) {
+            const rank = getCompositeFrequency(word);
+            const tierLabels = { top1k: 'top 1K', top5k: 'top 5K', top15k: 'top 15K', common: 'common', rare: 'rare' };
+            const tierLabel = tierLabels[tier] || tier;
+            const tierClass = `nihongo-wt-freq-${tier}`;
+            freqBadge = `<span class="nihongo-wt-freq-badge ${tierClass}" title="Frequency rank: ~${rank || '?'}">${tierLabel}</span>`;
+        }
+    }
+
     const html = `
         <div class="nihongo-tooltip-inner nihongo-wt-inner${wordKnownClass}">
             <div class="nihongo-wt-word-section">
                 <div class="nihongo-wt-word-top">
                     <span class="nihongo-wt-word">${word}</span>
                     ${reading && reading !== word ? `<span class="nihongo-wt-reading">${reading}</span>` : ''}
-                    ${commonBadge}
+                    ${commonBadge}${freqBadge}
                     <span class="nihongo-wt-header-actions">
                         <button class="nihongo-wt-header-btn nihongo-wt-btn-search" title="Search in dictionary" data-word="${word}"><i class="fa-solid fa-magnifying-glass"></i></button>
                         <button class="nihongo-wt-header-btn nihongo-wt-btn-copy" title="Copy word" data-word="${word}"><i class="fa-solid fa-copy"></i></button>
