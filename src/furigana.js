@@ -3,6 +3,7 @@ import { nihongoSettings } from './settings.js';
 import { getKnownKanji } from './kanji-manager.js';
 import { getKanji as getKanjiEntry } from './kanji-data.js';
 import { analyzeTokens, registerSpanMatches } from './token-matcher.js';
+import { recordSeen } from './tracking.js';
 import { onMessageFormatted } from '../../../../../script.js';
 
 /** @type {any} */
@@ -290,6 +291,22 @@ function stripFurigana(element) {
 }
 
 /**
+ * Scans a processed element for matched words and records them as seen
+ * in the tracking system. Only call on first-time processing.
+ * @param {HTMLElement} element
+ */
+function trackSeenWords(element) {
+    const seen = new Set();
+    element.querySelectorAll('.nihongo-word[data-word]').forEach(el => {
+        const word = el.getAttribute('data-word');
+        if (word && !seen.has(word)) {
+            seen.add(word);
+            recordSeen(word);
+        }
+    });
+}
+
+/**
  * Processes a message element, adding furigana to its text content.
  * Walks text nodes inside the element and wraps kanji with ruby annotations.
  * @param {HTMLElement} element The message element to process
@@ -298,8 +315,11 @@ function stripFurigana(element) {
 function processMessageElement(element, force = false) {
     if (!tokenizer || !nihongoSettings.enabled) return;
 
+    // Track whether this is a first-time process (for word tracking)
+    const isFirstPass = !element.querySelector('.nihongo-processed');
+
     // If already processed, strip first if forcing, otherwise skip
-    if (element.querySelector('.nihongo-processed')) {
+    if (!isFirstPass) {
         if (!force) return;
         stripFurigana(element);
     }
@@ -329,6 +349,11 @@ function processMessageElement(element, force = false) {
         span.setAttribute('data-original', text);
         span.innerHTML = html;
         textNode.parentNode?.replaceChild(span, textNode);
+    }
+
+    // Auto-track seen words on first-time processing only
+    if (isFirstPass) {
+        trackSeenWords(element);
     }
 }
 
