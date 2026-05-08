@@ -1,5 +1,6 @@
 import { Fuse } from '../../../../../lib.js';
 import { getJMdictWords, getJMdictTags, isJMdictLoaded } from './jmdict.js';
+import { isFrequencyAvailable, getCompositeFrequency } from './frequency.js';
 import { EXTENSION_NAME } from '../index.js';
 
 /**
@@ -79,7 +80,7 @@ export function buildSearchIndex() {
  * @param {string} query Search term (English, kana, or kanji)
  * @param {object} [options]
  * @param {number} [options.limit=20] Maximum results
- * @param {boolean} [options.commonFirst=true] Sort common entries first
+ * @param {boolean} [options.commonFirst=true] (deprecated, composite ranking used instead)
  * @returns {SearchResult[]}
  */
 export function searchDictionary(query, options = {}) {
@@ -102,30 +103,47 @@ export function searchDictionary(query, options = {}) {
         results = fuseIndex.search(trimmed, { limit: limit * 2 });
     }
 
-    // Map to result format
-    let mapped = results.map(r => ({
-        word: r.item.word,
-        reading: r.item._entry.r[0],
-        kanji: r.item._entry.k || [],
-        readings: r.item._entry.r,
-        senses: r.item._entry.s,
-        common: r.item.common,
-        score: r.score || 0,
-        entry: r.item._entry,
-    }));
+    // Map to result format with composite ranking
+    const hasFreq = isFrequencyAvailable();
+    let mapped = results.map(r => {
+        const word = r.item.word;
+        const kanji = r.item._entry.k || [];
+        const readings = r.item._entry.r;
+        const fuseScore = r.score || 0;
 
-    // Sort: common entries first (when scores are similar)
-    if (commonFirst) {
-        mapped.sort((a, b) => {
-            // If scores are very close, prefer common entries
-            const scoreDiff = Math.abs(a.score - b.score);
-            if (scoreDiff < 0.1) {
-                if (a.common && !b.common) return -1;
-                if (!a.common && b.common) return 1;
-            }
-            return a.score - b.score;
-        });
-    }
+        // Exact match: any kanji form or reading matches query exactly
+        const isExact = kanji.includes(trimmed) || readings.includes(trimmed);
+
+        // Frequency rank (lower = more common, null = unknown)
+        const freqRank = hasFreq ? getCompositeFrequency(word) : null;
+        // Normalize frequency to 0–1 (0 = top rank, 1 = rare/unknown)
+        const freqNorm = freqRank ? Math.min(freqRank / 50000, 1) : 1;
+
+        // Composite ranking score (lower = better):
+        //   Base: fuse score (0–1)
+        //   Exact match: override to 0
+        //   Common: -0.15 bonus
+        //   Frequency: blend in 20% of normalized freq
+        let rank = isExact ? 0 : fuseScore;
+        if (r.item.common) rank -= 0.15;
+        rank += freqNorm * 0.2;
+        rank = Math.max(0, rank);
+
+        return {
+            word,
+            reading: readings[0],
+            kanji,
+            readings,
+            senses: r.item._entry.s,
+            common: r.item.common,
+            score: fuseScore,
+            rank,
+            entry: r.item._entry,
+        };
+    });
+
+    // Sort by composite rank
+    mapped.sort((a, b) => a.rank - b.rank);
 
     return mapped.slice(0, limit);
 }
@@ -139,6 +157,7 @@ export function searchDictionary(query, options = {}) {
  * @property {Object[]} senses Sense entries with { p, g, m?, i?, f? }
  * @property {boolean} common Whether entry is marked common
  * @property {number} score Fuse match score (0 = perfect, 1 = worst)
+ * @property {number} rank Composite ranking score (lower = better)
  * @property {Object} entry Raw JMdict entry
  */
 
