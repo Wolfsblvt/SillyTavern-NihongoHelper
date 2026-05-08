@@ -64,18 +64,22 @@ A SillyTavern extension to help with learning Japanese through chat interactions
 - [x] **`{{knownKanjiCount}}` Macro** — Number of known kanji
 
 ### Planned
-- [ ] **Jisho API Fallback** — Scrape inflection analysis from Jisho HTML for words not found locally
-- [ ] **Meaning Provider Expansion** — Jisho API fallback, LLM-powered definitions
-- [ ] **Vocabulary Sidebar / Popup** — Click any word with furigana to see dictionary entry, meanings, example sentences
-- [ ] **Feedback/Correction Renderer** — Styled rendering for AI correction blocks (grammar, translation, notes)
-- [ ] **Word Frequency Highlights** — Color-code kanji/words by JLPT level or frequency tier
-- [ ] **Session Vocabulary Log** — Collect new words from conversations into a reviewable list; export to Anki CSV
 
-### Maybe / Future Ideas
+> See [`ROADMAP.md`](ROADMAP.md) for full design context, rationale, and phased implementation plans.
+
+- [ ] **Word Frequency Data** — Import word-level frequency lists (JPDB, Netflix/Anime, Innocent Corpus) for numerical rank badges in tooltips. Supports multiple lists with configurable weights and a composite score for downstream features.
+- [ ] **Language Assistant Side Chat** — Slide-out panel with a dedicated language helper LLM. Triggered from tooltip buttons (Explain, Translate, Alternatives). Full context injection (sentence, known kanji, level). Follow-up conversations, persistent history.
+- [ ] **Writing Feedback / Grammar Check** — Pre-send "Check Japanese" button. Separate LLM call analyzes user's input for grammar, word choice, politeness, and naturalness errors. Structured feedback with categories and "Apply fix" actions.
+- [ ] **Dictionary Search UI** — Built-in search box querying local JMdict (English, kana, kanji). Instant offline results. Click to copy or insert into chat input. Jisho API as fallback for rare words and example sentences.
+- [ ] **Anki Integration & Export** — Mark words for export from tooltips. Export queue with CSV and AnkiConnect (direct one-click add). LLM-enhanced cards with mnemonics and example sentences. Auto-suggested cards from tracking data.
+- [ ] **Adaptive Furigana Visibility** — Deterministic algorithm replaces binary hide/show. Uses word frequency + tracking level + known kanji to graduate: always show → hover-only → hide. User-configurable threshold slider.
+- [ ] **Granular Word & Kanji Tracking** — Multi-level familiarity (Unknown→Seen→Recognized→Known→Mastered). Auto-tracks encounters in LLM output and user messages. Tooltip quick-mark buttons. Foundation for adaptive difficulty, Anki suggestions, and LLM feedback loop.
+
+### Future Ideas
 - [ ] **Grammar Pattern Detection** — Highlight grammar patterns (て-form, conditional, passive, etc.) with hover tooltips
 - [ ] **Reading Practice Mode** — Hide all kanji and show only furigana, forcing hiragana reading
-- [ ] **Adaptive Difficulty System** — Track exposure to words/grammar; feed into system prompt for gradual complexity increase
 - [ ] **Conversation Review Mode** — Post-session structured review: new vocab, grammar points, common mistakes
+- [ ] **Multi-step Deinflection** — Recursive de-inflection chains for compound forms (causative-passive, etc.)
 
 ## Installation
 

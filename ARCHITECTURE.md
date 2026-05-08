@@ -207,21 +207,25 @@ Modify `buildSinglePage()` (word) or `populateKanjiTooltip()` (kanji) in kanji-t
 
 ---
 
-## 9. Roadmap Context
+## 9. Roadmap & Planned Architecture
 
-### Near-Term
-- **Jisho API fallback** — scrape inflection analysis for words not in local JMdict
-- **Vocabulary session log** — track new words per session, exportable to Anki CSV
-- **Multi-step deinflection** — recursive chains for causative-passive etc.
+> See [`ROADMAP.md`](ROADMAP.md) for full feature designs, rationale, and phased plans.
 
-### Medium-Term
-- **Word frequency highlights** — color-code by JLPT/frequency tier
-- **Grammar pattern detection** — identify て-form usage, conditionals, etc.
-- **Conversation review mode** — post-session structured review
+### Planned Architectural Expansions
 
-### Long-Term Vision
-- **Adaptive difficulty** — track exposure, feed into system prompt for gradual complexity
-- **Reading practice mode** — hide kanji, show only kana (force reading)
-- **SRS integration** — spaced repetition for encountered vocabulary
+**Word Frequency Layer** — New `data/frequency.json` with N-list support (JPDB, Netflix/Anime, etc.). Composite score function with configurable weights. Feeds into tooltip badges, furigana visibility, and difficulty assessment.
 
-Each feature builds on the existing architecture: the tokenizer provides the linguistic analysis, the tooltip system provides the UI surface, the settings system provides user control, and the macro system provides the LLM feedback loop.
+**Word Tracking Database** — Separate storage file (via ST files endpoint) for word-level encounter/familiarity data. Tiered: compact auto-tracked entries + full entries for explicitly-marked words. Decoupled from extension_settings to avoid bloating settings saves.
+
+**Side Panel UI** — New slide-out panel component for language assistant LLM interactions. Shares infrastructure between dictionary explanations, grammar check, and persistent conversations. Uses ST's parallel LLM call capabilities.
+
+**Local Dictionary Search** — Search index over JMdict (English glosses + readings + kanji forms) for in-app word lookup without external dependencies.
+
+### Storage Tiers (Planned)
+
+| Tier | Store | Content | Save Frequency |
+|------|-------|---------|---------------|
+| 1 | extension_settings | User prefs, known kanji, explicitly-marked words | On change (debounced) |
+| 2 | Files endpoint JSON | Full tracking DB, side-chat history, Anki queue | Every 30s / on unload |
+
+Each planned feature builds on existing architecture: tokenizer → linguistic analysis, tooltip → UI surface, settings → user control, macros → LLM feedback loop.
