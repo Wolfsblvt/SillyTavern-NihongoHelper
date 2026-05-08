@@ -21,6 +21,7 @@ let words = {};
 
 let loaded = false;
 let loading = false;
+let totalWords = 0;
 
 // ===== Public API =====
 
@@ -48,7 +49,8 @@ export async function loadFrequencyData() {
         if (data && data.v === 1) {
             lists = data.lists || {};
             words = data.words || {};
-            console.debug(`[${EXTENSION_NAME}] Loaded frequency data: ${Object.keys(words).length} words, lists: ${Object.keys(lists).join(', ')}`);
+            totalWords = Object.keys(words).length;
+            console.debug(`[${EXTENSION_NAME}] Loaded frequency data: ${totalWords} words, lists: ${Object.keys(lists).join(', ')}`);
         }
     } catch (err) {
         console.warn(`[${EXTENSION_NAME}] Frequency data load error:`, err);
@@ -152,4 +154,20 @@ export function getFrequencyTier(word, reading) {
     if (score <= 15000) return 'top15k';
     if (score <= 30000) return 'common';
     return 'rare';
+}
+
+/**
+ * Converts a frequency rank to a human-readable 0–100% commonness score.
+ * Uses a logarithmic scale (Zipf's law).
+ * 100% = rank 1, 0% = rarest known word.
+ *
+ * @param {string} word Dictionary form
+ * @param {string} [reading] Kana reading fallback
+ * @returns {number|null} Percentage (0–100) or null if not found
+ */
+export function getFrequencyPercent(word, reading) {
+    const rank = getCompositeFrequency(word, reading);
+    if (rank === null || totalWords === 0) return null;
+    const maxLog = Math.log(totalWords);
+    return Math.max(0, Math.round(100 * (1 - Math.log(rank) / maxLog)));
 }

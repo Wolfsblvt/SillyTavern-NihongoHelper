@@ -7,7 +7,7 @@ import { reprocessMessagesWithKanji } from './furigana.js';
 import { getStoredMatches } from './token-matcher.js';
 import { nudgeConfidence, toggleFlag, getDerivedLevel, getConfidence, resetConfidence } from './tracking.js';
 import { openDictSearch } from './dict-search-ui.js';
-import { isFrequencyAvailable, getFrequencyTier, getCompositeFrequency } from './frequency.js';
+import { isFrequencyAvailable, getFrequencyTier, getCompositeFrequency, getFrequencyPercent } from './frequency.js';
 
 /**
  * Generic kanji tooltip module.
@@ -509,19 +509,24 @@ function buildSinglePage(word, originalWord, reading, pos, inflection, altWritin
         label = `${word} — ${firstGloss}`;
     }
 
-    // Common word badge in tooltip header
-    const commonBadge = isCommon ? '<span class="nihongo-wt-common-badge">common</span>' : '';
+    // Common word badge (icon-only when frequency is also shown)
+    let commonBadge = '';
+    if (isCommon) {
+        const hasFreq = isFrequencyAvailable() && getFrequencyPercent(word, reading) !== null;
+        commonBadge = hasFreq
+            ? '<span class="nihongo-wt-common-badge" title="Common word"><i class="fa-solid fa-star"></i></span>'
+            : '<span class="nihongo-wt-common-badge">common</span>';
+    }
 
-    // Frequency badge
+    // Frequency badge — percentage (log-scaled) with rank on hover
     let freqBadge = '';
     if (isFrequencyAvailable()) {
-        const tier = getFrequencyTier(word, reading);
-        if (tier) {
+        const pct = getFrequencyPercent(word, reading);
+        if (pct !== null) {
             const rank = getCompositeFrequency(word, reading);
-            const tierLabels = { top1k: 'top 1K', top5k: 'top 5K', top15k: 'top 15K', common: 'common', rare: 'rare' };
-            const tierLabel = tierLabels[tier] || tier;
-            const tierClass = `nihongo-wt-freq-${tier}`;
-            freqBadge = `<span class="nihongo-wt-freq-badge ${tierClass}" title="Frequency rank: ~${rank || '?'}">${tierLabel}</span>`;
+            const tier = getFrequencyTier(word, reading);
+            const tierClass = tier ? `nihongo-wt-freq-${tier}` : '';
+            freqBadge = `<span class="nihongo-wt-freq-badge ${tierClass}" title="Frequency rank #${rank || '?'}">${pct}%</span>`;
         }
     }
 

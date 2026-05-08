@@ -2,7 +2,7 @@ import { registerTab, insertIntoChatInput, openSidePanel } from './side-panel.js
 import { searchDictionary, buildSearchIndex } from './dict-search.js';
 import { getJMdictTags } from './jmdict.js';
 import { getDerivedLevel, getConfidence } from './tracking.js';
-import { getFrequencyTier, getCompositeFrequency, isFrequencyAvailable } from './frequency.js';
+import { getFrequencyTier, getCompositeFrequency, getFrequencyPercent, isFrequencyAvailable } from './frequency.js';
 import { EXTENSION_NAME } from '../index.js';
 
 /**
@@ -211,18 +211,28 @@ function buildResultCard(result, tags) {
     const tagsEl = document.createElement('div');
     tagsEl.className = 'nihongo-search-tags';
 
+    // Common badge — icon-only when frequency is also available
     if (result.common) {
-        const tag = createTag('common', 'nihongo-search-tag-common');
-        tagsEl.appendChild(tag);
+        const pct = isFrequencyAvailable() ? getFrequencyPercent(result.word, result.reading) : null;
+        if (pct !== null) {
+            const tag = createTag('★', 'nihongo-search-tag-common');
+            tag.title = 'Common word';
+            tagsEl.appendChild(tag);
+        } else {
+            const tag = createTag('common', 'nihongo-search-tag-common');
+            tagsEl.appendChild(tag);
+        }
     }
 
-    // Frequency tier
+    // Frequency — percentage with rank on hover
     if (isFrequencyAvailable()) {
-        const tier = getFrequencyTier(result.word, result.reading);
-        if (tier) {
-            const freq = getCompositeFrequency(result.word, result.reading);
-            const tag = createTag(tier === 'top1k' ? 'top 1K' : tier === 'top5k' ? 'top 5K' : tier === 'top15k' ? 'top 15K' : tier, '');
-            if (freq) tag.title = `Frequency rank: ~${freq}`;
+        const pct = getFrequencyPercent(result.word, result.reading);
+        if (pct !== null) {
+            const rank = getCompositeFrequency(result.word, result.reading);
+            const tier = getFrequencyTier(result.word, result.reading);
+            const tierClass = tier ? `nihongo-search-tag-freq-${tier}` : '';
+            const tag = createTag(`${pct}%`, tierClass);
+            tag.title = `Frequency rank #${rank || '?'}`;
             tagsEl.appendChild(tag);
         }
     }

@@ -128,7 +128,15 @@ function addFrequencyList(name, sourcePath) {
             if (typeof value === 'number') {
                 rank = value;
             } else if (value && typeof value === 'object') {
-                rank = value.frequency || value.value || value.displayValue;
+                // Yomitan has two formats:
+                //   Simple: { value: N, displayValue: "..." }
+                //   With reading: { reading: "...", frequency: { value: N, displayValue: "..." } }
+                const freq = value.frequency;
+                if (freq && typeof freq === 'object') {
+                    rank = freq.value || freq.frequency || freq.displayValue;
+                } else {
+                    rank = freq || value.value || value.displayValue;
+                }
                 if (typeof rank === 'string') rank = parseInt(rank, 10);
             }
 

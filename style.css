@@ -1275,6 +1275,31 @@
     color: #81c784;
 }
 
+.nihongo-search-tag-freq-top1k {
+    background: rgba(255, 215, 0, 0.15);
+    color: rgba(255, 223, 100, 0.9);
+}
+
+.nihongo-search-tag-freq-top5k {
+    background: rgba(66, 165, 245, 0.12);
+    color: rgba(100, 181, 246, 0.9);
+}
+
+.nihongo-search-tag-freq-top15k {
+    background: rgba(171, 71, 188, 0.12);
+    color: rgba(206, 147, 216, 0.9);
+}
+
+.nihongo-search-tag-freq-common {
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.nihongo-search-tag-freq-rare {
+    background: rgba(255, 255, 255, 0.03);
+    color: rgba(255, 255, 255, 0.3);
+}
+
 .nihongo-search-tag-tracked {
     background: rgba(33, 150, 243, 0.2);
     color: #64b5f6;

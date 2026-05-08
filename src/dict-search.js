@@ -209,8 +209,12 @@ function isKanji(str) {
  * Computes best prefix overlap between a query and a list of word forms.
  * Returns 0–1 (1 = one form is a perfect prefix of the other).
  *
- * Handles inflected forms: 入れます shares prefix "入れ" with 入れる.
- * Penalizes when the matching form is much longer than the query (compound words).
+ * Uses min(query, form) as denominator so inflected lookups score well:
+ *   入れます vs 入れる: share 入れ → 2/min(4,3) = 0.67
+ *   入れます vs 仕入れる: share nothing → 0
+ *
+ * Applies a length-ratio penalty so compound words (仕入れる, 4 chars)
+ * don't outscore shorter dictionary forms (入れる, 3 chars).
  *
  * @param {string} query
  * @param {string[]} forms All kanji + reading forms of the entry
@@ -228,9 +232,14 @@ function bestPrefixOverlap(query, forms) {
         }
         if (match === 0) continue;
 
-        // Ratio: shared prefix / longer string
-        // This naturally favours exact or near-exact matches and penalizes compounds
-        const score = match / Math.max(query.length, form.length);
+        // Base ratio: shared prefix / shorter string
+        const baseScore = match / Math.min(query.length, form.length);
+
+        // Length penalty: prefer forms close in length to the query
+        // ratio = 1.0 when equal length, lower when form is much longer
+        const lenRatio = Math.min(query.length, form.length) / Math.max(query.length, form.length);
+        const score = baseScore * (0.7 + 0.3 * lenRatio);
+
         if (score > best) best = score;
     }
     return best;
