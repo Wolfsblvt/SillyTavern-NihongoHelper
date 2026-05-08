@@ -1,4 +1,5 @@
 import { EXTENSION_NAME } from '../index.js';
+import { nihongoSettings, onPanelSideChange } from './settings.js';
 
 /**
  * Shared side panel — VSCode-style tabbed container on the right side.
@@ -118,6 +119,10 @@ function ensurePanel() {
     panelEl = document.createElement('div');
     panelEl.id = 'nihongo-side-panel';
     panelEl.className = 'nihongo-side-panel';
+    applySideClass();
+
+    // React to setting changes
+    onPanelSideChange(() => applySideClass());
 
     // Header: tabs + close
     const header = document.createElement('div');
@@ -168,6 +173,14 @@ function ensurePanel() {
     });
 
     console.debug(`[${EXTENSION_NAME}] Side panel created with ${tabs.size} tab(s)`);
+}
+
+/** Applies the correct left/right CSS class based on settings. */
+function applySideClass() {
+    if (!panelEl) return;
+    const side = nihongoSettings.panelSide;
+    panelEl.classList.toggle('nihongo-sp-left', side === 'left');
+    panelEl.classList.toggle('nihongo-sp-right', side !== 'left');
 }
 
 /** Activates a tab, building its view if needed. */

@@ -49,6 +49,9 @@ let tooltipFloorTop = Infinity;
 let selectionState = null;
 /** @type {number} Current tooltip page index (0-based) */
 let currentPageIndex = 0;
+
+/** @type {Map<string, string>} word → last selected nudge action (session-only) */
+const nudgeSelections = new Map();
 /** @type {Array<{ html: string, label: string, displayWord: string }>} All pages for the current tooltip */
 let tooltipPages = [];
 /** @type {WeakMap<HTMLElement, { onMove: Function, onLeave: Function, onScroll: Function, onMouseDown?: Function, onMouseUp?: Function, onWheel?: Function }>} */
@@ -580,7 +583,7 @@ function showTooltipPage(index) {
     const tip = ensureTooltip();
     const page = tooltipPages[index];
 
-    tip.innerHTML = renderTabList(tooltipPages, index) + page.html + renderNudgeBar(page.displayWord);
+    tip.innerHTML = `<div class="nihongo-tooltip-body">${renderTabList(tooltipPages, index)}${page.html}</div>${renderNudgeBar(page.displayWord)}`;
     wireKnownButtons(tip);
     wireTabClicks(tip);
     wireHeaderActions(tip);
@@ -622,7 +625,7 @@ function wireTabClicks(tip) {
 }
 
 /**
- * Renders the nudge action bar HTML — a strip of icon buttons below the tooltip content.
+ * Renders the nudge action bar HTML — a visually separate strip below the tooltip.
  * @param {string} word The display word for tracking
  * @returns {string}
  */
@@ -631,27 +634,50 @@ function renderNudgeBar(word) {
     const conf = getConfidence(word);
     const confPct = (conf * 100).toFixed(0);
     const levelLabel = level !== 'unknown' ? level : '';
+    const selected = nudgeSelections.get(word) || '';
+    const confColor = confidenceColor(conf);
+
+    const actions = [
+        { key: 'EASY',   cls: 'nihongo-wt-nudge-easy',  icon: 'fa-regular fa-face-smile', tip: 'Easy — I know this well (+20%)' },
+        { key: 'GOT_IT', cls: 'nihongo-wt-nudge-gotit', icon: 'fa-solid fa-check',        tip: 'Got it — I understand this (+10%)' },
+        { key: 'MEH',    cls: 'nihongo-wt-nudge-meh',   icon: 'fa-regular fa-face-meh',   tip: 'Meh — not sure about this (-5%)' },
+        { key: 'HARD',   cls: 'nihongo-wt-nudge-hard',  icon: 'fa-regular fa-face-frown', tip: 'Hard — I don\'t know this (-15%)' },
+    ];
+
+    const buttons = actions.map(a =>
+        `<button class="nihongo-wt-nudge-btn ${a.cls}${a.key === selected ? ' selected' : ''}" data-action="${a.key}" title="${a.tip}"><i class="${a.icon}"></i></button>`
+    ).join('');
 
     return `
         <div class="nihongo-wt-nudge-bar" data-word="${word}">
-            <button class="nihongo-wt-nudge-btn nihongo-wt-nudge-easy" data-action="EASY" title="Easy — I know this well (+20%)">
-                <i class="fa-regular fa-face-smile"></i>
-            </button>
-            <button class="nihongo-wt-nudge-btn nihongo-wt-nudge-gotit" data-action="GOT_IT" title="Got it — I understand this (+10%)">
-                <i class="fa-solid fa-check"></i>
-            </button>
-            <button class="nihongo-wt-nudge-btn nihongo-wt-nudge-meh" data-action="MEH" title="Meh — not sure about this (-5%)">
-                <i class="fa-regular fa-face-meh"></i>
-            </button>
-            <button class="nihongo-wt-nudge-btn nihongo-wt-nudge-hard" data-action="HARD" title="Hard — I don't know this (-15%)">
-                <i class="fa-regular fa-face-frown"></i>
-            </button>
-            <button class="nihongo-wt-nudge-btn nihongo-wt-nudge-anki" data-action="ANKI" title="Queue for Anki export">
-                <i class="fa-solid fa-bookmark"></i>
-            </button>
-            <span class="nihongo-wt-nudge-level" title="Confidence: ${confPct}%">${levelLabel}</span>
+            <div class="nihongo-wt-nudge-buttons">
+                ${buttons}
+                <button class="nihongo-wt-nudge-btn nihongo-wt-nudge-anki" data-action="ANKI" title="Queue for Anki export">
+                    <i class="fa-solid fa-bookmark"></i>
+                </button>
+            </div>
+            <div class="nihongo-wt-conf-row">
+                <div class="nihongo-wt-conf-bar">
+                    <div class="nihongo-wt-conf-fill" style="width:${confPct}%;background:${confColor}"></div>
+                </div>
+                <span class="nihongo-wt-nudge-level" title="Confidence: ${confPct}%">${levelLabel} ${confPct}%</span>
+            </div>
         </div>
     `;
+}
+
+/**
+ * Returns a CSS color for a confidence value (0–1).
+ * Red → Orange → Yellow → Green gradient.
+ * @param {number} conf 0.0–1.0
+ * @returns {string}
+ */
+function confidenceColor(conf) {
+    if (conf <= 0)   return '#ef5350';
+    if (conf < 0.3)  return '#ef5350';
+    if (conf < 0.6)  return '#ffa726';
+    if (conf < 0.85) return '#66bb6a';
+    return '#4caf50';
 }
 
 /**
@@ -687,11 +713,16 @@ function wireHeaderActions(tip) {
 
 /**
  * Wires click handlers on the nudge bar buttons.
+ * Confidence buttons are mutually exclusive — clicking one deselects the previous.
+ * Selection is remembered per word for the session.
  * @param {HTMLElement} tip
  * @param {string} word
  */
 function wireNudgeBar(tip, word) {
-    tip.querySelectorAll('.nihongo-wt-nudge-btn').forEach(btn => {
+    const bar = tip.querySelector('.nihongo-wt-nudge-bar');
+    if (!bar) return;
+
+    bar.querySelectorAll('.nihongo-wt-nudge-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
             const action = btn.getAttribute('data-action');
@@ -699,34 +730,50 @@ function wireNudgeBar(tip, word) {
 
             if (action === 'ANKI') {
                 toggleFlag(word, 'anki-queued');
-                // Visual feedback
                 btn.classList.toggle('active');
             } else {
-                nudgeConfidence(word, action);
-                // Flash feedback on the pressed button
-                btn.classList.add('nudged');
-                setTimeout(() => btn.classList.remove('nudged'), 400);
+                // Deselect all confidence buttons first
+                bar.querySelectorAll('.nihongo-wt-nudge-btn:not([data-action="ANKI"])').forEach(b => {
+                    b.classList.remove('selected');
+                });
+
+                // If clicking the already-selected action, just deselect
+                if (nudgeSelections.get(word) === action) {
+                    nudgeSelections.delete(word);
+                } else {
+                    nudgeConfidence(word, action);
+                    btn.classList.add('selected');
+                    nudgeSelections.set(word, action);
+                }
             }
 
-            // Update level display
             updateNudgeBarState(tip, word);
         });
     });
 }
 
 /**
- * Updates the nudge bar's level/confidence display after a nudge action.
+ * Updates the nudge bar's level/confidence display and bar after a nudge action.
  * @param {HTMLElement} tip
  * @param {string} word
  */
 function updateNudgeBarState(tip, word) {
+    const level = getDerivedLevel(word);
+    const conf = getConfidence(word);
+    const confPct = (conf * 100).toFixed(0);
+    const confColor = confidenceColor(conf);
+    const levelLabel = level !== 'unknown' ? level : '';
+
     const levelEl = tip.querySelector('.nihongo-wt-nudge-level');
     if (levelEl) {
-        const level = getDerivedLevel(word);
-        const conf = getConfidence(word);
-        const confPct = (conf * 100).toFixed(0);
-        levelEl.textContent = level !== 'unknown' ? level : '';
+        levelEl.textContent = `${levelLabel} ${confPct}%`;
         levelEl.title = `Confidence: ${confPct}%`;
+    }
+
+    const fillEl = tip.querySelector('.nihongo-wt-conf-fill');
+    if (fillEl) {
+        fillEl.style.width = `${confPct}%`;
+        fillEl.style.background = confColor;
     }
 }
 

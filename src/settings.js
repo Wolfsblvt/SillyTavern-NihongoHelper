@@ -16,6 +16,7 @@ const defaultSettings = {
     kanaWordTooltips: false,
     lookupWindowSize: 5,
     selectionLookup: true,
+    panelSide: 'right',
 };
 
 let uiInjected = false;
@@ -84,6 +85,13 @@ export const nihongoSettings = {
     },
     get selectionLookup() {
         return Boolean(ensureSettings().selectionLookup);
+    },
+    get panelSide() {
+        return String(ensureSettings().panelSide || 'right');
+    },
+    set panelSide(val) {
+        ensureSettings().panelSide = val;
+        saveSettingsDebounced();
     },
 };
 
@@ -164,6 +172,11 @@ function applySettingsToUI() {
     const lookupWindowValue = document.getElementById('nihongo_helper_lookup_window_value');
     if (lookupWindowValue) {
         lookupWindowValue.textContent = String(settings.lookupWindowSize);
+    }
+
+    const panelSideSelect = document.getElementById('nihongo_helper_panel_side');
+    if (panelSideSelect instanceof HTMLSelectElement) {
+        panelSideSelect.value = settings.panelSide;
     }
 
     applyCSSVariables();
@@ -257,6 +270,14 @@ function registerSettingsEventListeners() {
         }
     });
 
+    document.getElementById('nihongo_helper_panel_side')?.addEventListener('change', (e) => {
+        if (e.target instanceof HTMLSelectElement) {
+            settings.panelSide = e.target.value;
+            saveSettingsDebounced();
+            if (_onPanelSideChange) _onPanelSideChange(e.target.value);
+        }
+    });
+
 }
 
 /**
@@ -269,6 +290,17 @@ export function initSettings() {
 /**
  * Injects the extension settings UI into the settings panel.
  */
+/** @type {((side: string) => void)|null} */
+let _onPanelSideChange = null;
+
+/**
+ * Registers a callback for when the panel side setting changes.
+ * @param {(side: string) => void} fn
+ */
+export function onPanelSideChange(fn) {
+    _onPanelSideChange = fn;
+}
+
 export async function injectSettingsUI() {
     if (uiInjected || document.getElementById('extension_settings_nihongo_helper')) {
         return;
