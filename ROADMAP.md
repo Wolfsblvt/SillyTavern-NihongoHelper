@@ -43,14 +43,14 @@ Frequency lists available in Yomitan format (JSON: `[word, reading, rank]`). Bui
 Colored pills in tooltip: Top 1K (bright) → 1K-5K (medium) → 5K-15K (subtle) → 15K+ (faded/none).
 
 ### Phases
-| Phase | Scope | Depends On |
-|-------|-------|-----------|
-| 1a | Frequency data pipeline (build script, N-list format, composite score function) | Nothing |
-| 1b | Import first list (JPDB or Innocent Corpus) | 1a |
-| 1c | Display frequency badges in word tooltip | 1b |
-| 1d | Add Netflix/Anime as second list | 1a |
-| 1e | Settings: which lists to display, composite weights | 1c, 1d |
-| 1f | Color-code words in chat by frequency tier | 1c |
+| Phase | Status | Scope | Depends On |
+|-------|--------|-------|-----------|
+| 1a | 🔲 | Frequency data pipeline (build script, N-list format, composite score function) | Nothing |
+| 1b | 🔲 | Import first list (JPDB or Innocent Corpus) | 1a |
+| 1c | 🔲 | Display frequency badges in word tooltip | 1b |
+| 1d | 🔲 | Add Netflix/Anime as second list | 1a |
+| 1e | 🔲 | User settings: which lists to display, weights for composite score | 1c, 1d |
+| 1f | 🔲 | Color-coding words in chat by frequency tier | 1c |
 
 ---
 
@@ -77,7 +77,7 @@ Tooltips = passive (dictionary answer). Side chat = active (understanding, nuanc
 **Panel:** Slide-out right side, persists while user reads, supports follow-up messages (mini-chat), dismissible/collapsible.
 
 ### ST Integration
-Uses `generateQuietPrompt` or direct generate API for parallel LLM calls. Optionally configurable separate model/connection preset (cheap fast model for explanations, premium for RP).
+Uses `ConnectionManagerRequestService` and connection profiles for parallel LLM calls. Optionally configurable separate model/connection preset (cheap fast model for explanations, premium for RP).
 
 ### Prompt Architecture
 Per-action specialized system prompts. Vague prompts → mediocre results. Each action type gets a carefully crafted template with context slots.
@@ -89,15 +89,15 @@ Per-action specialized system prompts. Vague prompts → mediocre results. Each 
 4. Cross-reference (past insights inform future queries)
 
 ### Phases
-| Phase | Scope | Depends On |
-|-------|-------|-----------|
-| 2a | Side panel UI (slide-out, collapsible) + LLM call wrapper | Nothing |
-| 2b | Tooltip buttons → fire call → show result in panel | 2a |
-| 2c | Structured prompts with full context injection | 2b |
-| 2d | Follow-up messages within panel session | 2c |
-| 2e | Configurable model/connection for side-chat | 2a |
-| 2f | Persistent conversations (saved per-message) | 2d, Storage |
-| 2g | Re-access past side conversations | 2f |
+| Phase | Status | Scope | Depends On |
+|-------|--------|-------|-----------|
+| 2a | 🔲 | Infrastructure: side panel UI (slide-out, collapsible), LLM call wrapper | Nothing |
+| 2b | 🔲 | Tooltip buttons: "Explain", "Translate" → fire call → show in panel | 2a |
+| 2c | 🔲 | Structured prompts with full context injection | 2b |
+| 2d | 🔲 | Follow-up messages within same panel session | 2c |
+| 2e | 🔲 | Configurable model/connection for side-chat | 2a |
+| 2f | 🔲 | Persistent conversations saved per-message | 2d, Storage (#9) |
+| 2g | 🔲 | Re-access past side conversations | 2f |
 
 ---
 
@@ -135,13 +135,13 @@ Same side panel, same LLM call wrapper. "Check Japanese" is a specialized action
 "Apply fix" buttons that auto-replace incorrect segments in the input field. Turns it from informational into Grammarly-like editor.
 
 ### Phases
-| Phase | Scope | Depends On |
-|-------|-------|-----------|
-| 3a | "Check Japanese" button, fires LLM call with input text | #2a (panel) |
-| 3b | Structured output parsing + display | 3a |
-| 3c | Context injection (recent messages for register awareness) | 3b |
-| 3d | "Apply fix" buttons for interactive correction | 3b |
-| 3e | Level-aware prompting | #7 (tracking) |
+| Phase | Status | Scope | Depends On |
+|-------|--------|-------|------------|
+| 3a | 🔲 | "Check Japanese" button next to Send, fires LLM call with input text | #2a (panel infra) |
+| 3b | 🔲 | Structured output parsing and display | 3a |
+| 3c | 🔲 | Context injection (recent messages for register awareness) | 3b |
+| 3d | 🔲 | "Apply fix" buttons for interactive correction | 3b |
+| 3e | 🔲 | Level-aware prompting (adjust explanations to user's knowledge) | #7 (tracking) |
 
 ---
 
@@ -169,13 +169,13 @@ We already have 22K+ entries in memory. Local search is instant, offline, no rat
 - 🔗 "Open on Jisho" for more detail / example sentences
 
 ### Phases
-| Phase | Scope | Depends On |
-|-------|-------|-----------|
-| 4a | Search index over local JMdict (English + kana + kanji) | Nothing |
-| 4b | Search UI (input + result list) — modal or panel | 4a |
-| 4c | Result actions: copy, insert, open tooltip | 4b |
-| 4d | Jisho API fallback for extended results | 4b |
-| 4e | "Search Jisho" button in tooltips opens results in-app | 4d |
+| Phase | Status | Scope | Depends On |
+|-------|--------|-------|------------|
+| 4a | 🔲 | Search index over local JMdict (Fuse.js, English + kana + kanji) | Nothing |
+| 4b | 🔲 | Search UI (input box + result list) — modal or panel | 4a |
+| 4c | 🔲 | Result actions: copy, insert into input, open tooltip | 4b |
+| 4d | 🔲 | Jisho API fallback for extended results / example sentences | 4b |
+| 4e | 🔲 | Integration into tooltip: "Search Jisho" button opens results in-app | 4d |
 
 ---
 
@@ -200,14 +200,14 @@ Multiple export paths: manual mark → batch export, auto-suggested cards from t
 - Support both. CSV as baseline, AnkiConnect as optional when detected.
 
 ### Phases
-| Phase | Scope | Depends On |
-|-------|-------|-----------|
-| 5a | "Save for Anki" button on tooltip, stores to queue | Nothing |
-| 5b | Export queue UI (review, remove) | 5a |
-| 5c | CSV export (Anki-compatible) | 5b |
-| 5d | AnkiConnect detection + one-click add | 5a |
-| 5e | LLM-enhanced card fields | 5b, #2a |
-| 5f | Auto-suggested cards from tracking | #7 |
+| Phase | Status | Scope | Depends On |
+|-------|--------|-------|------------|
+| 5a | 🔲 | "Save for Anki" button on word tooltip, stores word + context to queue | Nothing |
+| 5b | 🔲 | Export queue UI (review saved words, remove unwanted) | 5a |
+| 5c | 🔲 | CSV export (Anki-compatible format) | 5b |
+| 5d | 🔲 | AnkiConnect detection + one-click add | 5a |
+| 5e | 🔲 | LLM-enhanced card fields (mnemonic, example sentence) | 5b, #2a (LLM infra) |
+| 5f | 🔲 | Auto-suggested cards based on tracking data | #7 (tracking) |
 
 ---
 
@@ -229,11 +229,11 @@ else → always show
 Single slider: "Furigana visibility" (show more ↔ show less). Shifts frequency thresholds intuitively.
 
 ### Phases
-| Phase | Scope | Depends On |
-|-------|-------|-----------|
-| 6a | Replace binary check with graduated algorithm | #1, #7 |
-| 6b | Visibility threshold slider setting | 6a |
-| 6c | Per-word override (force show/hide on specific words) | 6a, #7 |
+| Phase | Status | Scope | Depends On |
+|-------|--------|-------|------------|
+| 6a | 🔲 | Replace binary check with graduated algorithm | #1, #7 |
+| 6b | 🔲 | Visibility threshold slider setting | 6a |
+| 6c | 🔲 | Per-word override (force show/hide on specific words) | 6a, #7 |
 
 ---
 
@@ -243,24 +243,68 @@ Single slider: "Furigana visibility" (show more ↔ show less). Shifts frequency
 Only kanji tracked (binary known/unknown). No word-level tracking. Can't determine if user knows a word, how often they've seen it, whether they use it.
 
 ### Idea
-Comprehensive word-level tracking: familiarity levels, encounter history, timestamps, user-initiated marks. This is the **foundation** for #5, #6, adaptive difficulty, and LLM feedback loop.
+Comprehensive word-level tracking: sliding confidence score, encounter history, timestamps, intuitive nudge buttons. This is the **foundation** for #5, #6, adaptive difficulty, and LLM feedback loop.
+
+### Design Philosophy: Sliding Confidence, Not Rigid Levels
+
+The user should NOT make conscious decisions like "is this word Recognized or Known?" That puts cognitive load on the learner and breaks reading flow. Instead, interactions are **intuitive nudges** — quick gut-reaction clicks that shift a confidence score:
+
+- "I know this, easy" → strong positive nudge
+- "Got it, recognized" → medium positive nudge
+- "Meh, should've known" → small negative nudge
+- "Hard, never heard of it" → strong negative nudge
+
+The confidence score is a number that accumulates nudges over time. Five "never heard" clicks won't be overridden by one "got it" — the history matters. Crucially, a single positive click does not rocket a word to "mastered" status. Confidence builds gradually through repeated positive signals.
+
+The system derives decision levels (for furigana visibility, difficulty assessment, etc.) from the score via thresholds, but the user never sees or sets levels directly.
 
 ### Data Model
 ```javascript
-// Full entry (user has interacted)
+// Full entry (user has interacted OR auto-tracked)
 {
-  level: 3,           // 0=unknown, 1=seen, 2=recognized, 3=known, 4=mastered
-  seenCount: 12,      // in LLM output
-  usedCount: 3,       // user wrote it
-  firstSeen: "...", lastSeen: "...", lastUsed: "...",
-  levelChanged: "...",
-  flags: ["hard"]     // "hard", "leech", "never-show", "anki-queued"
+  confidence: 0.65,     // 0.0 = completely unknown, 1.0 = mastered. Nudged by interactions.
+  seenCount: 12,        // times appeared in LLM output
+  usedCount: 3,         // times user wrote it (strong familiarity signal)
+  firstSeen: "2024-03-15T10:30:00Z",
+  lastSeen: "2024-04-01T14:22:00Z",
+  lastUsed: "2024-03-28T09:15:00Z",
+  lastInteraction: "2024-04-01T14:22:00Z",  // last time user clicked a button
+  flags: ["anki-queued"]  // user-set flags: "anki-queued", "never-show"
 }
-// Compact entry (auto-tracked only, no interaction yet)
-{ s: 5, l: "2024-04-01" }  // seenCount, lastSeen
+
+// Compact entry (auto-tracked only, no user interaction yet)
+{ s: 5, l: "2024-04-01" }  // s=seenCount, l=lastSeen (date only for compact)
 ```
 
-**Levels:** 0=Unknown → 1=Seen → 2=Recognized → 3=Known → 4=Mastered
+### Confidence Score System
+
+**Score range:** 0.0 (unknown) to 1.0 (mastered)
+
+**Nudge values (approximate, tunable):**
+| Action | Nudge | Rationale |
+|--------|-------|-----------|
+| Auto: first encounter | → set 0.05 | Bare minimum — "you've seen it" |
+| Auto: seen again | +0.01 (diminishing) | Passive exposure builds slowly |
+| Auto: used by user | +0.05 | Writing it is a strong signal |
+| Button: "Easy, I know this" | +0.20 | Strong positive confirmation |
+| Button: "Got it" | +0.10 | Medium positive |
+| Button: "Should've known" | -0.05 | Small negative — doesn't destroy progress |
+| Button: "Never heard of it" | -0.15 | Strong negative |
+
+**Diminishing returns on passive exposure:** Each subsequent `seenCount` increment contributes less. Formula: `nudge = 0.01 * (1 / (1 + seenCount/20))`. A word seen 100 times passively might reach ~0.3 confidence — enough to be "seen/familiar" but not "known" without active confirmation.
+
+**Clamping:** Score always stays in [0, 1]. Nudges are additive but clamped.
+
+**Derived levels (for decision-making, not shown to user):**
+| Score Range | Derived Level | Used For |
+|-------------|---------------|----------|
+| 0.0 – 0.1 | Unknown | Always show furigana, suggest for learning |
+| 0.1 – 0.3 | Seen | Still show furigana, track encounters |
+| 0.3 – 0.6 | Familiar | Hover-only furigana, don't suggest as "new" |
+| 0.6 – 0.85 | Known | Hide furigana, count as vocabulary |
+| 0.85 – 1.0 | Mastered | Fully hidden, can be used in LLM difficulty prompts |
+
+These thresholds are configurable and feed into #6 (adaptive furigana).
 
 ### The Strictness Problem
 Tooltips show all interpretations (generous). Tracking must be strict about WHAT counts.
@@ -270,28 +314,32 @@ Tooltips show all interpretations (generous). Tracking must be strict about WHAT
 **Rule:** Track only the primary match from the token matcher — the longest greedy span's best dictionary form. Not sub-matches, not alternatives.
 
 ### Auto vs Explicit Tracking
-- **Auto (silent):** seenCount increment, firstSeen/lastSeen, level 0→1 on first encounter, level 1→2 on tooltip hover
-- **Explicit (user action):** All transitions above level 2, flags, level decreases
+- **Auto (silent):** seenCount increment, firstSeen/lastSeen, initial confidence seed, usedCount on user messages
+- **Explicit (user clicks button):** Confidence nudges (+/-), flags, lastInteraction timestamp
 
 ### Tooltip Quick-Actions
-- ✓ Know it (→ level 3)
-- ↑ Getting there (increment level)
-- ↓ Hard (add flag, optionally decrease)
-- 📎 Save for Anki (add flag)
+Buttons shown on word tooltip (gut-reaction, minimal cognitive load):
+- ✓ **Easy** — "I know this well" → strong positive nudge (+0.20)
+- 👍 **Got it** — "Recognized, understood" → medium positive nudge (+0.10)
+- 😕 **Meh** — "Should've known, didn't quite" → small negative nudge (-0.05)
+- ❌ **Hard** — "Never heard of it" → strong negative nudge (-0.15)
+- 📎 **Anki** — Queue for export (adds flag, doesn't affect confidence)
+
+The button set is inspired by Anki's answer buttons but without the SRS scheduling complexity. The user just clicks their gut feeling and moves on.
 
 ### Scale & Storage
-See [Storage Strategy](#9-storage-strategy). Thousands of words over time. Compact format for auto-tracked, full format only when user interacts.
+See [Storage Strategy](#9-storage-strategy). Thousands of words over time. Compact format for auto-tracked (no interaction), full format once user engages or score reaches threshold.
 
 ### Phases
-| Phase | Scope | Depends On |
-|-------|-------|-----------|
-| 7a | Data model + storage infrastructure | Storage (#9) |
-| 7b | Auto-track seenCount for primary matches | 7a |
-| 7c | Tooltip buttons: Know/Hard/Anki-queue | 7a |
-| 7d | Track user-written words (tokenize input on send) | 7a |
-| 7e | Level progression logic | 7b, 7c |
-| 7f | Migrate kanji known state to new format | 7a |
-| 7g | Expose tracking data to LLM prompts (macro/context) | 7e |
+| Phase | Status | Scope | Depends On |
+|-------|--------|-------|-----------|
+| 7a | 🔲 | Data model + storage infrastructure | Storage (#9) |
+| 7b | 🔲 | Auto-track seenCount for primary matches | 7a |
+| 7c | 🔲 | Tooltip nudge buttons (Easy/Got it/Meh/Hard/Anki) | 7a |
+| 7d | 🔲 | Track user-written words (tokenize input on send) | 7a |
+| 7e | 🔲 | Confidence nudge logic + derived levels | 7b, 7c |
+| 7f | 🔲 | Migrate kanji known state to new format | 7a |
+| 7g | 🔲 | Expose tracking data to LLM prompts (macro/context) | 7e |
 
 ---
 
@@ -299,38 +347,29 @@ See [Storage Strategy](#9-storage-strategy). Thousands of words over time. Compa
 
 Features interleaved by phase for maximum early value:
 
-```
-Sprint 1: Foundations
-  7a  - Word tracking data model + storage infra
-  1a  - Frequency pipeline (build script, N-list format)
-  4a  - Search index over local JMdict
-
-Sprint 2: First Visible Features
-  1b  - Import first frequency list
-  1c  - Frequency badges in tooltip
-  4b  - Search UI (modal with input + results)
-  7b  - Auto-track seenCount during processing
-  7c  - Tooltip mark buttons (Know/Hard)
-
-Sprint 3: Side Chat MVP
-  2a  - Side panel UI + LLM call wrapper
-  2b  - Tooltip buttons → explain/translate → panel
-  4c  - Search result actions (copy, insert)
-  5a  - "Save for Anki" button on tooltip
-
-Sprint 4: Integration
-  1d  - Second frequency list (Netflix/Anime)
-  2c  - Structured prompts with full context
-  3a  - "Check Japanese" pre-send button
-  6a  - Graduated furigana visibility algorithm
-
-Sprint 5: Polish & Export
-  5b,5c - Anki export queue + CSV
-  3b  - Structured feedback display
-  1e  - Frequency list settings/weights
-  6b  - Visibility threshold slider
-  7d  - Track user-written words
-```
+| Sprint | Phase | Scope | Status |
+|--------|-------|-------|--------|
+| **1: Foundations** | 7a | Word tracking data model + storage infra | 🔲 |
+| | 1a | Frequency pipeline (build script, N-list format, composite score) | 🔲 |
+| | 4a | Search index over local JMdict (Fuse.js) | 🔲 |
+| **2: First Visible** | 1b | Import first frequency list | 🔲 |
+| | 1c | Frequency badges in tooltip | 🔲 |
+| | 4b | Search UI (modal with input + results) | 🔲 |
+| | 7b | Auto-track seenCount during processing | 🔲 |
+| | 7c | Tooltip nudge buttons (Easy/Got it/Meh/Hard/Anki) | 🔲 |
+| **3: Side Chat MVP** | 2a | Side panel UI + LLM call wrapper | 🔲 |
+| | 2b | Tooltip buttons → explain/translate → panel | 🔲 |
+| | 4c | Search result actions (copy, insert) | 🔲 |
+| | 5a | "Save for Anki" button on tooltip | 🔲 |
+| **4: Integration** | 1d | Second frequency list (Netflix/Anime) | 🔲 |
+| | 2c | Structured prompts with full context | 🔲 |
+| | 3a | "Check Japanese" pre-send button | 🔲 |
+| | 6a | Graduated furigana visibility algorithm | 🔲 |
+| **5: Polish & Export** | 5b,5c | Anki export queue + CSV | 🔲 |
+| | 3b | Structured feedback display | 🔲 |
+| | 1e | Frequency list settings/weights | 🔲 |
+| | 6b | Visibility threshold slider | 🔲 |
+| | 7d | Track user-written words | 🔲 |
 
 This order ensures: foundational data layers first → visible features quickly → LLM features once panel exists → integration features that combine everything.
 
@@ -346,14 +385,13 @@ Word tracking data will grow large (thousands of entries over months). SillyTave
 **Tier 1: extension_settings (small, critical data)**
 - User preferences/settings (current approach, unchanged)
 - Known kanji map (existing, small — ~3000 entries max)
-- A few hundred explicitly-marked words (level ≥ 3)
 
 **Tier 2: Separate file via ST files endpoint (large, non-critical data)**
 - Full word tracking database (all auto-tracked entries)
 - Side chat history (persistent conversations)
 - Anki export queue
 
-ST's files endpoint (`/api/files/upload`, `/api/files/get`) allows uploading/downloading arbitrary files to the user's data directory. It's designed for file attachments but works for any file. The extension:
+ST's files endpoint (`/api/files/upload`) allows uploading arbitrary files to the user's data directory. They can be downloaded directly via fetch. It's designed for file attachments but works for any file. The extension:
 1. Maintains an in-memory tracking database
 2. Debounced saves to a JSON file via the files endpoint (separate from settings save cycle)
 3. Loads the file on extension init
