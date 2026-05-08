@@ -5,6 +5,7 @@ import { injectWandMenu } from './src/wand-menu.js';
 import { registerInspectShortcut, enableSelectionLookup } from './src/kanji-tooltip.js';
 import { registerMacros } from './src/macros.js';
 import { initMeaningProvider } from './src/meaning-provider.js';
+import { loadTracking } from './src/tracking.js';
 
 export const EXTENSION_KEY = 'nihongo_helper';
 export const EXTENSION_NAME = 'SillyTavern-NihongoHelper';
@@ -45,6 +46,9 @@ export async function init() {
 
     // Load meaning providers (JMdict) in background
     initMeaningProvider();
+
+    // Load word tracking data in background
+    loadTracking();
 
     console.debug(`[${EXTENSION_NAME}] Extension activated`);
 
