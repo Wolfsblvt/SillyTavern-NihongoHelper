@@ -480,8 +480,9 @@
 
 .nihongo-wt-word-top {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 8px;
+    flex-wrap: wrap;
 }
 
 .nihongo-wt-word {
@@ -830,6 +831,90 @@
 
 .nihongo-inspect-mode.nihongo-kana-tooltips .nihongo-word-kana:hover {
     background: rgba(255, 255, 255, 0.08);
+}
+
+/* ===== Nihongo Helper - Tooltip Actions & Nudge Bar ===== */
+
+/* ── Header action buttons (search, copy) ── */
+
+.nihongo-wt-header-actions {
+    display: inline-flex;
+    gap: 3px;
+    margin-left: auto;
+    flex-shrink: 0;
+    vertical-align: middle;
+}
+
+.nihongo-wt-header-btn {
+    background: transparent;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    padding: 2px 4px;
+    font-size: 0.7em;
+    opacity: 0.3;
+    transition: opacity 0.15s;
+    line-height: 1;
+}
+
+.nihongo-wt-header-btn:hover {
+    opacity: 0.8;
+}
+
+/* ── Nudge bar — distinct strip below tooltip ── */
+
+.nihongo-wt-nudge-bar {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 4px 8px;
+    margin-top: 4px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 0 0 8px 8px;
+}
+
+.nihongo-wt-nudge-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: var(--SmartThemeBodyColor, #ccc);
+    cursor: pointer;
+    padding: 3px 6px;
+    font-size: 0.85em;
+    opacity: 0.5;
+    transition: opacity 0.15s, background 0.15s, transform 0.1s;
+    line-height: 1;
+}
+
+.nihongo-wt-nudge-btn:hover {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.nihongo-wt-nudge-btn.nudged {
+    transform: scale(1.3);
+    opacity: 1;
+}
+
+.nihongo-wt-nudge-btn.active {
+    opacity: 1;
+}
+
+/* Nudge button colors on hover */
+.nihongo-wt-nudge-easy:hover { color: #66bb6a; }
+.nihongo-wt-nudge-gotit:hover { color: #81c784; }
+.nihongo-wt-nudge-meh:hover { color: #ffa726; }
+.nihongo-wt-nudge-hard:hover { color: #ef5350; }
+.nihongo-wt-nudge-anki:hover { color: #42a5f5; }
+.nihongo-wt-nudge-anki.active { color: #42a5f5; opacity: 1; }
+
+.nihongo-wt-nudge-level {
+    margin-left: auto;
+    font-size: 0.65em;
+    opacity: 0.4;
+    text-transform: capitalize;
+    cursor: default;
 }
 
 /* ===== Nihongo Helper - Side Panel ===== */

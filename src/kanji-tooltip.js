@@ -5,6 +5,8 @@ import { nihongoSettings } from './settings.js';
 import { deinflect } from './deinflect.js';
 import { reprocessMessagesWithKanji } from './furigana.js';
 import { getStoredMatches } from './token-matcher.js';
+import { nudgeConfidence, toggleFlag, getDerivedLevel, getConfidence } from './tracking.js';
+import { openDictSearch } from './dict-search-ui.js';
 
 /**
  * Generic kanji tooltip module.
@@ -513,6 +515,10 @@ function buildSinglePage(word, originalWord, reading, pos, inflection, altWritin
                     <span class="nihongo-wt-word">${word}</span>
                     ${reading && reading !== word ? `<span class="nihongo-wt-reading">${reading}</span>` : ''}
                     ${commonBadge}
+                    <span class="nihongo-wt-header-actions">
+                        <button class="nihongo-wt-header-btn nihongo-wt-btn-search" title="Search in dictionary" data-word="${word}"><i class="fa-solid fa-magnifying-glass"></i></button>
+                        <button class="nihongo-wt-header-btn nihongo-wt-btn-copy" title="Copy word" data-word="${word}"><i class="fa-solid fa-copy"></i></button>
+                    </span>
                 </div>
                 ${inflectionHtml}
                 ${altWritingHtml}
@@ -560,9 +566,11 @@ function showTooltipPage(index) {
     const tip = ensureTooltip();
     const page = tooltipPages[index];
 
-    tip.innerHTML = renderTabList(tooltipPages, index) + page.html;
+    tip.innerHTML = renderTabList(tooltipPages, index) + page.html + renderNudgeBar(page.displayWord);
     wireKnownButtons(tip);
     wireTabClicks(tip);
+    wireHeaderActions(tip);
+    wireNudgeBar(tip, page.displayWord);
 
     // Auto-scroll tab list to keep active tab visible
     const tabContainer = tip.querySelector('.nihongo-wt-tabs');
@@ -597,6 +605,115 @@ function wireTabClicks(tip) {
             showTooltipPage(idx);
         });
     });
+}
+
+/**
+ * Renders the nudge action bar HTML — a strip of icon buttons below the tooltip content.
+ * @param {string} word The display word for tracking
+ * @returns {string}
+ */
+function renderNudgeBar(word) {
+    const level = getDerivedLevel(word);
+    const conf = getConfidence(word);
+    const confPct = (conf * 100).toFixed(0);
+    const levelLabel = level !== 'unknown' ? level : '';
+
+    return `
+        <div class="nihongo-wt-nudge-bar" data-word="${word}">
+            <button class="nihongo-wt-nudge-btn nihongo-wt-nudge-easy" data-action="EASY" title="Easy — I know this well (+20%)">
+                <i class="fa-regular fa-face-smile"></i>
+            </button>
+            <button class="nihongo-wt-nudge-btn nihongo-wt-nudge-gotit" data-action="GOT_IT" title="Got it — I understand this (+10%)">
+                <i class="fa-solid fa-check"></i>
+            </button>
+            <button class="nihongo-wt-nudge-btn nihongo-wt-nudge-meh" data-action="MEH" title="Meh — not sure about this (-5%)">
+                <i class="fa-regular fa-face-meh"></i>
+            </button>
+            <button class="nihongo-wt-nudge-btn nihongo-wt-nudge-hard" data-action="HARD" title="Hard — I don't know this (-15%)">
+                <i class="fa-regular fa-face-frown"></i>
+            </button>
+            <button class="nihongo-wt-nudge-btn nihongo-wt-nudge-anki" data-action="ANKI" title="Queue for Anki export">
+                <i class="fa-solid fa-bookmark"></i>
+            </button>
+            <span class="nihongo-wt-nudge-level" title="Confidence: ${confPct}%">${levelLabel}</span>
+        </div>
+    `;
+}
+
+/**
+ * Wires click handlers on the header action buttons (search, copy).
+ * @param {HTMLElement} tip
+ */
+function wireHeaderActions(tip) {
+    // Search button → open side panel with word
+    tip.querySelectorAll('.nihongo-wt-btn-search').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const word = btn.getAttribute('data-word');
+            if (word) openDictSearch(word);
+        });
+    });
+
+    // Copy button → copy word to clipboard
+    tip.querySelectorAll('.nihongo-wt-btn-copy').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const word = btn.getAttribute('data-word');
+            if (word) {
+                navigator.clipboard.writeText(word).catch(() => {});
+                const icon = btn.querySelector('i');
+                if (icon) {
+                    icon.className = 'fa-solid fa-check';
+                    setTimeout(() => { icon.className = 'fa-solid fa-copy'; }, 1200);
+                }
+            }
+        });
+    });
+}
+
+/**
+ * Wires click handlers on the nudge bar buttons.
+ * @param {HTMLElement} tip
+ * @param {string} word
+ */
+function wireNudgeBar(tip, word) {
+    tip.querySelectorAll('.nihongo-wt-nudge-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const action = btn.getAttribute('data-action');
+            if (!action) return;
+
+            if (action === 'ANKI') {
+                toggleFlag(word, 'anki-queued');
+                // Visual feedback
+                btn.classList.toggle('active');
+            } else {
+                nudgeConfidence(word, action);
+                // Flash feedback on the pressed button
+                btn.classList.add('nudged');
+                setTimeout(() => btn.classList.remove('nudged'), 400);
+            }
+
+            // Update level display
+            updateNudgeBarState(tip, word);
+        });
+    });
+}
+
+/**
+ * Updates the nudge bar's level/confidence display after a nudge action.
+ * @param {HTMLElement} tip
+ * @param {string} word
+ */
+function updateNudgeBarState(tip, word) {
+    const levelEl = tip.querySelector('.nihongo-wt-nudge-level');
+    if (levelEl) {
+        const level = getDerivedLevel(word);
+        const conf = getConfidence(word);
+        const confPct = (conf * 100).toFixed(0);
+        levelEl.textContent = level !== 'unknown' ? level : '';
+        levelEl.title = `Confidence: ${confPct}%`;
+    }
 }
 
 /**
