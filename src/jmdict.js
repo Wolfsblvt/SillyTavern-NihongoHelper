@@ -112,3 +112,19 @@ export function getTagDescription(tag) {
 export function isJMdictLoaded() {
     return loaded;
 }
+
+/**
+ * Returns the raw words array for use by search/indexing modules.
+ * @returns {Object[]|null}
+ */
+export function getJMdictWords() {
+    return jmdata ? jmdata.words : null;
+}
+
+/**
+ * Returns the tags dictionary for resolving tag codes.
+ * @returns {Object|null}
+ */
+export function getJMdictTags() {
+    return jmdata ? jmdata.tags : null;
+}
