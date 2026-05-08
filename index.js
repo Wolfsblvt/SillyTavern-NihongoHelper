@@ -6,6 +6,7 @@ import { registerInspectShortcut, enableSelectionLookup } from './src/kanji-tool
 import { registerMacros } from './src/macros.js';
 import { initMeaningProvider } from './src/meaning-provider.js';
 import { loadTracking } from './src/tracking.js';
+import { loadFrequencyData } from './src/frequency.js';
 
 export const EXTENSION_KEY = 'nihongo_helper';
 export const EXTENSION_NAME = 'SillyTavern-NihongoHelper';
@@ -49,6 +50,9 @@ export async function init() {
 
     // Load word tracking data in background
     loadTracking();
+
+    // Load frequency data in background (optional — only if built)
+    loadFrequencyData();
 
     console.debug(`[${EXTENSION_NAME}] Extension activated`);
 
