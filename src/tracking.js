@@ -81,22 +81,37 @@ export async function loadTracking() {
     loading = true;
 
     try {
-        // Try to fetch existing file
-        const path = `user/files/${STORAGE_FILENAME}`;
-        const response = await fetch(`/${path}`, { cache: 'no-store' });
+        const filePath = `user/files/${STORAGE_FILENAME}`;
 
+        // Check existence first via verify endpoint (avoids browser 404 console noise)
+        const verifyRes = await fetch('/api/files/verify', {
+            method: 'POST',
+            headers: getRequestHeaders(),
+            body: JSON.stringify({ urls: [filePath] }),
+        });
+
+        if (!verifyRes.ok) {
+            console.warn(`[${EXTENSION_NAME}] Tracking verify check failed`);
+            return;
+        }
+
+        const verified = await verifyRes.json();
+        if (!verified[filePath]) {
+            console.debug(`[${EXTENSION_NAME}] No tracking file found, starting fresh`);
+            return;
+        }
+
+        // File exists — fetch it
+        const response = await fetch(`/${filePath}`, { cache: 'no-store' });
         if (response.ok) {
             const data = await response.json();
             if (data && data.v === STORAGE_VERSION && data.words) {
                 for (const [word, entry] of Object.entries(data.words)) {
                     store.set(word, entry);
                 }
-                storagePath = path;
+                storagePath = filePath;
                 console.debug(`[${EXTENSION_NAME}] Loaded tracking: ${store.size} words`);
             }
-        } else if (response.status === 404) {
-            // First run — no file yet, that's fine
-            console.debug(`[${EXTENSION_NAME}] No tracking file found, starting fresh`);
         } else {
             console.warn(`[${EXTENSION_NAME}] Tracking load failed: HTTP ${response.status}`);
         }
