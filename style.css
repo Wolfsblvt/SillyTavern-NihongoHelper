@@ -963,6 +963,8 @@
 .nihongo-wt-nudge-hard:hover  { color: #ef5350; }
 .nihongo-wt-nudge-anki:hover  { color: #42a5f5; }
 .nihongo-wt-nudge-anki.active { color: #42a5f5; opacity: 1; border-color: rgba(66, 165, 245, 0.4); background: rgba(66, 165, 245, 0.1); }
+.nihongo-wt-nudge-reset       { margin-left: auto; }
+.nihongo-wt-nudge-reset:hover { color: #ab47bc; }
 
 /* Confidence row: bar + level label */
 .nihongo-wt-conf-row {

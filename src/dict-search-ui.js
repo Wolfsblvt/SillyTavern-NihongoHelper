@@ -218,9 +218,9 @@ function buildResultCard(result, tags) {
 
     // Frequency tier
     if (isFrequencyAvailable()) {
-        const tier = getFrequencyTier(result.word);
+        const tier = getFrequencyTier(result.word, result.reading);
         if (tier) {
-            const freq = getCompositeFrequency(result.word);
+            const freq = getCompositeFrequency(result.word, result.reading);
             const tag = createTag(tier === 'top1k' ? 'top 1K' : tier === 'top5k' ? 'top 5K' : tier === 'top15k' ? 'top 15K' : tier, '');
             if (freq) tag.title = `Frequency rank: ~${freq}`;
             tagsEl.appendChild(tag);

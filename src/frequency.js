@@ -88,10 +88,11 @@ export function getFrequencyRanks(word) {
  * Gets the frequency rank for a word in a specific list.
  * @param {string} word Dictionary form
  * @param {string} listKey List key (e.g., "jpdb", "netflix")
+ * @param {string} [reading] Kana reading fallback
  * @returns {number | null} Rank (lower = more common) or null
  */
-export function getFrequencyRank(word, listKey) {
-    const entry = words[word];
+export function getFrequencyRank(word, listKey, reading) {
+    const entry = words[word] || (reading && words[reading]);
     if (!entry) return null;
     return entry[listKey] || null;
 }
@@ -104,11 +105,20 @@ export function getFrequencyRank(word, listKey) {
  * Lower score = more common word.
  *
  * @param {string} word Dictionary form
- * @param {Object<string, number>} [weights] Optional per-list weights (default: equal)
+ * @param {Object<string, number>|string} [weightsOrReading] Optional per-list weights object, or kana reading string
+ * @param {string} [reading] Kana reading fallback (used when JPDB stores kana-only)
  * @returns {number | null} Composite rank or null if not found in any list
  */
-export function getCompositeFrequency(word, weights) {
-    const entry = words[word];
+export function getCompositeFrequency(word, weightsOrReading, reading) {
+    // Flexible signature: second arg can be weights object or reading string
+    let weights = null;
+    if (typeof weightsOrReading === 'string') {
+        reading = weightsOrReading;
+    } else if (weightsOrReading && typeof weightsOrReading === 'object') {
+        weights = weightsOrReading;
+    }
+
+    const entry = words[word] || (reading && words[reading]);
     if (!entry) return null;
 
     const listKeys = Object.keys(entry);
@@ -131,10 +141,11 @@ export function getCompositeFrequency(word, weights) {
 /**
  * Gets the frequency tier for display purposes.
  * @param {string} word Dictionary form
+ * @param {string} [reading] Kana reading fallback
  * @returns {'top1k'|'top5k'|'top15k'|'common'|'rare'|null}
  */
-export function getFrequencyTier(word) {
-    const score = getCompositeFrequency(word);
+export function getFrequencyTier(word, reading) {
+    const score = getCompositeFrequency(word, reading);
     if (score === null) return null;
     if (score <= 1000) return 'top1k';
     if (score <= 5000) return 'top5k';

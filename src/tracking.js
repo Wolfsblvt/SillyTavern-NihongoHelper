@@ -254,6 +254,26 @@ export function toggleFlag(word, flag, state) {
 }
 
 /**
+ * Resets a word's confidence to 0 and clears all flags.
+ * @param {string} word Dictionary form
+ */
+export function resetConfidence(word) {
+    const entry = store.get(word);
+    if (!entry) return;
+
+    if ('confidence' in entry) {
+        entry.confidence = 0;
+        entry.lastInteraction = new Date().toISOString();
+        entry.flags = [];
+    } else {
+        // Compact entry — just delete it entirely
+        store.delete(word);
+    }
+
+    markDirty();
+}
+
+/**
  * Returns all tracked words above a given confidence threshold.
  * @param {number} minConfidence Minimum confidence score
  * @returns {Map<string, number>} word → confidence

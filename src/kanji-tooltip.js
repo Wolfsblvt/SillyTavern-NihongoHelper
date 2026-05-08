@@ -5,7 +5,7 @@ import { nihongoSettings } from './settings.js';
 import { deinflect } from './deinflect.js';
 import { reprocessMessagesWithKanji } from './furigana.js';
 import { getStoredMatches } from './token-matcher.js';
-import { nudgeConfidence, toggleFlag, getDerivedLevel, getConfidence } from './tracking.js';
+import { nudgeConfidence, toggleFlag, getDerivedLevel, getConfidence, resetConfidence } from './tracking.js';
 import { openDictSearch } from './dict-search-ui.js';
 import { isFrequencyAvailable, getFrequencyTier, getCompositeFrequency } from './frequency.js';
 
@@ -515,9 +515,9 @@ function buildSinglePage(word, originalWord, reading, pos, inflection, altWritin
     // Frequency badge
     let freqBadge = '';
     if (isFrequencyAvailable()) {
-        const tier = getFrequencyTier(word);
+        const tier = getFrequencyTier(word, reading);
         if (tier) {
-            const rank = getCompositeFrequency(word);
+            const rank = getCompositeFrequency(word, reading);
             const tierLabels = { top1k: 'top 1K', top5k: 'top 5K', top15k: 'top 15K', common: 'common', rare: 'rare' };
             const tierLabel = tierLabels[tier] || tier;
             const tierClass = `nihongo-wt-freq-${tier}`;
@@ -655,6 +655,9 @@ function renderNudgeBar(word) {
                 <button class="nihongo-wt-nudge-btn nihongo-wt-nudge-anki" data-action="ANKI" title="Queue for Anki export">
                     <i class="fa-solid fa-bookmark"></i>
                 </button>
+                <button class="nihongo-wt-nudge-btn nihongo-wt-nudge-reset" data-action="RESET" title="Reset confidence to 0">
+                    <i class="fa-solid fa-rotate-left"></i>
+                </button>
             </div>
             <div class="nihongo-wt-conf-row">
                 <div class="nihongo-wt-conf-bar">
@@ -728,7 +731,14 @@ function wireNudgeBar(tip, word) {
             const action = btn.getAttribute('data-action');
             if (!action) return;
 
-            if (action === 'ANKI') {
+            if (action === 'RESET') {
+                resetConfidence(word);
+                nudgeSelections.delete(word);
+                // Deselect all buttons
+                bar.querySelectorAll('.nihongo-wt-nudge-btn').forEach(b => {
+                    b.classList.remove('selected', 'active');
+                });
+            } else if (action === 'ANKI') {
                 toggleFlag(word, 'anki-queued');
                 btn.classList.toggle('active');
             } else {
@@ -741,7 +751,7 @@ function wireNudgeBar(tip, word) {
                 if (nudgeSelections.get(word) === action) {
                     nudgeSelections.delete(word);
                 } else {
-                    nudgeConfidence(word, action);
+                    nudgeConfidence(word, action.toLowerCase());
                     btn.classList.add('selected');
                     nudgeSelections.set(word, action);
                 }

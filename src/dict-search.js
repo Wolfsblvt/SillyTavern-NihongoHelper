@@ -110,23 +110,38 @@ export function searchDictionary(query, options = {}) {
         const kanji = r.item._entry.k || [];
         const readings = r.item._entry.r;
         const fuseScore = r.score || 0;
+        const allForms = [...kanji, ...readings];
 
         // Exact match: any kanji form or reading matches query exactly
-        const isExact = kanji.includes(trimmed) || readings.includes(trimmed);
+        const isExact = allForms.includes(trimmed);
+
+        // Prefix overlap: how much of the query matches a form's prefix (or vice versa)
+        // Returns 0–1, higher = better. Handles inflected forms (入れます shares prefix 入れ with 入れる).
+        const prefixScore = bestPrefixOverlap(trimmed, allForms);
 
         // Frequency rank (lower = more common, null = unknown)
-        const freqRank = hasFreq ? getCompositeFrequency(word) : null;
+        const freqRank = hasFreq ? getCompositeFrequency(word, readings[0]) : null;
         // Normalize frequency to 0–1 (0 = top rank, 1 = rare/unknown)
         const freqNorm = freqRank ? Math.min(freqRank / 50000, 1) : 1;
 
         // Composite ranking score (lower = better):
-        //   Base: fuse score (0–1)
-        //   Exact match: override to 0
-        //   Common: -0.15 bonus
-        //   Frequency: blend in 20% of normalized freq
-        let rank = isExact ? 0 : fuseScore;
-        if (r.item.common) rank -= 0.15;
-        rank += freqNorm * 0.2;
+        //   Exact match: 0
+        //   Strong prefix: small value (up to 0.1)
+        //   Fuse score: 0–1 baseline
+        //   Common: -0.1 bonus
+        //   Frequency: 15% blend
+        let rank;
+        if (isExact) {
+            rank = 0;
+        } else if (prefixScore >= 0.5) {
+            // Strong prefix overlap — scale between 0.01 (perfect) and 0.2 (50% overlap)
+            rank = 0.01 + (1 - prefixScore) * 0.38;
+        } else {
+            rank = fuseScore;
+        }
+
+        if (r.item.common) rank -= 0.1;
+        rank += freqNorm * 0.15;
         rank = Math.max(0, rank);
 
         return {
@@ -188,4 +203,35 @@ function isKana(str) {
 /** Check if string contains kanji */
 function isKanji(str) {
     return /[\u4E00-\u9FFF\u3400-\u4DBF]/.test(str);
+}
+
+/**
+ * Computes best prefix overlap between a query and a list of word forms.
+ * Returns 0–1 (1 = one form is a perfect prefix of the other).
+ *
+ * Handles inflected forms: 入れます shares prefix "入れ" with 入れる.
+ * Penalizes when the matching form is much longer than the query (compound words).
+ *
+ * @param {string} query
+ * @param {string[]} forms All kanji + reading forms of the entry
+ * @returns {number}
+ */
+function bestPrefixOverlap(query, forms) {
+    let best = 0;
+    for (const form of forms) {
+        // Count shared prefix characters
+        let match = 0;
+        const maxLen = Math.min(query.length, form.length);
+        for (let i = 0; i < maxLen; i++) {
+            if (query[i] === form[i]) match++;
+            else break;
+        }
+        if (match === 0) continue;
+
+        // Ratio: shared prefix / longer string
+        // This naturally favours exact or near-exact matches and penalizes compounds
+        const score = match / Math.max(query.length, form.length);
+        if (score > best) best = score;
+    }
+    return best;
 }
