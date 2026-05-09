@@ -1327,33 +1327,42 @@
 .nihongo-search-glosses {
     font-size: calc(var(--mainFontSize) * 0.85);
     opacity: 0.8;
-    line-height: 1.4;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0 6px;
-    max-height: 2.8em;
+    line-height: 1.5;
+    position: relative;
+    max-height: 4.5em;
     overflow: hidden;
 }
 
 .nihongo-search-def {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
+    display: inline;
+}
+
+.nihongo-search-def + .nihongo-search-def::before {
+    content: '';
+    display: inline-block;
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.25);
+    margin: 0 6px;
+    vertical-align: middle;
 }
 
 .nihongo-search-def-has-pos {
     cursor: help;
-    border-bottom: 1px dotted rgba(255, 255, 255, 0.2);
+    border-bottom: 1px dotted rgba(255, 255, 255, 0.15);
 }
 
 .nihongo-search-card-actions {
+    float: right;
     display: flex;
     gap: 4px;
-    margin-top: 2px;
-    align-self: flex-end;
+    margin-left: 8px;
+    margin-top: 1px;
     opacity: 0;
     transition: opacity 0.15s;
+    background: linear-gradient(to right, transparent, var(--SmartThemeBlurTintColor, rgba(20, 20, 20, 0.95)) 30%);
+    padding-left: 12px;
 }
 
 .nihongo-search-card:hover .nihongo-search-card-actions {

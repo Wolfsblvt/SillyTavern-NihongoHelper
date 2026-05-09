@@ -263,13 +263,16 @@ function buildResultCard(result, tags) {
         card.appendChild(inflNote);
     }
 
-    // Glosses — first 3 senses, each as its own inline block with POS tooltip
+    // Glosses — condensed inline flow with all senses
+    // First 3 senses: up to 3 meanings each. Rest: up to 2.
     const glosses = document.createElement('div');
     glosses.className = 'nihongo-search-glosses';
-    result.senses.slice(0, 3).forEach((s, i) => {
+
+    result.senses.forEach((s, i) => {
+        const maxMeanings = i < 3 ? 3 : 2;
+        const meanings = s.g.slice(0, maxMeanings).join('; ');
         const defEl = document.createElement('span');
         defEl.className = 'nihongo-search-def';
-        const meanings = s.g.join('; ');
         defEl.textContent = `${i + 1}. ${meanings}`;
         // POS as tooltip (not inline brackets)
         if (s.p && s.p.length > 0) {
@@ -279,9 +282,8 @@ function buildResultCard(result, tags) {
         }
         glosses.appendChild(defEl);
     });
-    card.appendChild(glosses);
 
-    // Action buttons (visible on hover)
+    // Action buttons — inline, positioned bottom-right
     const actions = document.createElement('div');
     actions.className = 'nihongo-search-card-actions';
 
@@ -299,7 +301,8 @@ function buildResultCard(result, tags) {
 
     actions.appendChild(insertBtn);
     actions.appendChild(copyBtn);
-    card.appendChild(actions);
+    glosses.appendChild(actions);
+    card.appendChild(glosses);
 
     // Click card → insert word
     card.addEventListener('click', (e) => {
