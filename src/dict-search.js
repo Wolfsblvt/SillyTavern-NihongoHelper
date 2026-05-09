@@ -2,6 +2,7 @@ import { Fuse } from '../../../../../lib.js';
 import { getJMdictWords, getJMdictTags, isJMdictLoaded, lookupAllWords } from './jmdict.js';
 import { isFrequencyAvailable, getCompositeFrequency } from './frequency.js';
 import { deinflect } from './deinflect.js';
+import { romajiToHiragana, isRomaji } from './romaji.js';
 import { EXTENSION_NAME } from '../index.js';
 
 /**
@@ -99,21 +100,30 @@ export function searchDictionary(query, options = {}) {
     }
 
     const trimmed = query.trim();
-    const isJapanese = isKana(trimmed) || isKanji(trimmed);
     const hasFreq = isFrequencyAvailable();
+
+    // Romaji detection & conversion: "ireru" → "いれる", enables Japanese lookup phases
+    let kanaQuery = null;
+    if (isRomaji(trimmed)) {
+        kanaQuery = romajiToHiragana(trimmed);
+    }
+
+    const isJapanese = isKana(trimmed) || isKanji(trimmed);
+    // Effective Japanese query: either the original (if already Japanese) or romaji-converted kana
+    const jpQuery = isJapanese ? trimmed : kanaQuery;
 
     /** @type {Map<object, SearchResult>} entry ref → result (dedup) */
     const resultMap = new Map();
 
     // --- Phase 1: Direct index lookup (exact matches) ---
-    if (isJapanese) {
-        const directEntries = lookupAllWords(trimmed);
+    if (jpQuery) {
+        const directEntries = lookupAllWords(jpQuery);
         for (const entry of directEntries) {
             if (resultMap.has(entry)) continue;
             const word = (entry.k && entry.k[0]) || entry.r[0];
             const readings = entry.r;
             // Rank: 0 for exact word match, tiny penalty for entries where query matches a secondary form
-            const isPrimaryForm = word === trimmed || readings[0] === trimmed;
+            const isPrimaryForm = word === jpQuery || readings[0] === jpQuery;
             const rank = isPrimaryForm ? 0 : 0.001;
             resultMap.set(entry, {
                 word,
@@ -130,8 +140,8 @@ export function searchDictionary(query, options = {}) {
     }
 
     // --- Phase 2: Deinflection (inflected Japanese input → dictionary forms) ---
-    if (isJapanese) {
-        const candidates = deinflect(trimmed);
+    if (jpQuery) {
+        const candidates = deinflect(jpQuery);
         for (const candidate of candidates) {
             const entries = lookupAllWords(candidate.word);
             for (const entry of entries) {
@@ -149,60 +159,66 @@ export function searchDictionary(query, options = {}) {
                     rank: 0.02,
                     entry,
                     inflection: candidate.rule,
-                    inflectedForm: trimmed,
+                    inflectedForm: jpQuery,
                 });
             }
         }
     }
 
     // --- Phase 3: Fuse fuzzy search ---
-    const fuseResults = fuseIndex.search(trimmed, { limit: limit * 3 });
+    // Search with both original query and kana conversion (if different)
+    const fuseQueries = [trimmed];
+    if (kanaQuery && kanaQuery !== trimmed) fuseQueries.push(kanaQuery);
 
-    for (const r of fuseResults) {
-        const entry = r.item._entry;
-        if (resultMap.has(entry)) continue; // Already added via direct/deinflect
+    for (const fq of fuseQueries) {
+        const fuseResults = fuseIndex.search(fq, { limit: limit * 3 });
 
-        const word = r.item.word;
-        const kanji = entry.k || [];
-        const readings = entry.r;
-        const fuseScore = r.score || 0;
-        const allForms = [...kanji, ...readings];
+        for (const r of fuseResults) {
+            const entry = r.item._entry;
+            if (resultMap.has(entry)) continue; // Already added via direct/deinflect
 
-        // Exact match check (safety: should have been caught in Phase 1)
-        const isExact = allForms.includes(trimmed);
+            const word = r.item.word;
+            const kanji = entry.k || [];
+            const readings = entry.r;
+            const fuseScore = r.score || 0;
+            const allForms = [...kanji, ...readings];
 
-        // Prefix overlap for partial matches
-        const prefixScore = bestPrefixOverlap(trimmed, allForms);
+            // Exact match check (safety: should have been caught in Phase 1)
+            const isExact = allForms.includes(trimmed) || (kanaQuery && allForms.includes(kanaQuery));
 
-        // Frequency normalization
-        const freqRank = hasFreq ? getCompositeFrequency(word, readings[0]) : null;
-        const freqNorm = freqRank ? Math.min(freqRank / 50000, 1) : 1;
+            // Prefix overlap for partial matches
+            const prefixScore = bestPrefixOverlap(jpQuery || trimmed, allForms);
 
-        // Composite ranking (lower = better)
-        let rank;
-        if (isExact) {
-            rank = 0;
-        } else if (prefixScore >= 0.5) {
-            rank = 0.05 + (1 - prefixScore) * 0.35;
-        } else {
-            rank = 0.4 + fuseScore * 0.6;
+            // Frequency normalization
+            const freqRank = hasFreq ? getCompositeFrequency(word, readings[0]) : null;
+            const freqNorm = freqRank ? Math.min(freqRank / 50000, 1) : 1;
+
+            // Composite ranking (lower = better)
+            let rank;
+            if (isExact) {
+                rank = 0;
+            } else if (prefixScore >= 0.5) {
+                rank = 0.05 + (1 - prefixScore) * 0.35;
+            } else {
+                rank = 0.4 + fuseScore * 0.6;
+            }
+
+            if (r.item.common) rank -= 0.05;
+            rank += freqNorm * 0.1;
+            rank = Math.max(0, rank);
+
+            resultMap.set(entry, {
+                word,
+                reading: readings[0],
+                kanji,
+                readings,
+                senses: entry.s,
+                common: r.item.common,
+                score: fuseScore,
+                rank,
+                entry,
+            });
         }
-
-        if (r.item.common) rank -= 0.05;
-        rank += freqNorm * 0.1;
-        rank = Math.max(0, rank);
-
-        resultMap.set(entry, {
-            word,
-            reading: readings[0],
-            kanji,
-            readings,
-            senses: entry.s,
-            common: r.item.common,
-            score: fuseScore,
-            rank,
-            entry,
-        });
     }
 
     // Sort by composite rank, then by frequency for ties
