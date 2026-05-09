@@ -254,6 +254,18 @@ export function toggleFlag(word, flag, state) {
 }
 
 /**
+ * Directly sets a word's confidence to a specific value.
+ * Used for undo operations (restoring pre-nudge state).
+ * @param {string} word Dictionary form
+ * @param {number} value Confidence value (0–1)
+ */
+export function setConfidence(word, value) {
+    const entry = ensureFullEntry(word);
+    entry.confidence = clamp(value);
+    markDirty();
+}
+
+/**
  * Resets a word's confidence to 0 and clears all flags.
  * @param {string} word Dictionary form
  */

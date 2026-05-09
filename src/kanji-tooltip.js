@@ -5,7 +5,7 @@ import { nihongoSettings } from './settings.js';
 import { deinflect } from './deinflect.js';
 import { reprocessMessagesWithKanji } from './furigana.js';
 import { getStoredMatches } from './token-matcher.js';
-import { nudgeConfidence, toggleFlag, getDerivedLevel, getConfidence, resetConfidence } from './tracking.js';
+import { nudgeConfidence, toggleFlag, getDerivedLevel, getConfidence, setConfidence, resetConfidence } from './tracking.js';
 import { openDictSearch } from './dict-search-ui.js';
 import { isFrequencyAvailable, getFrequencyTier, getCompositeFrequency, getFrequencyPercent } from './frequency.js';
 
@@ -688,6 +688,30 @@ function confidenceColor(conf) {
     return '#4caf50';
 }
 
+/** @type {Map<string, number>} word → confidence value before first nudge in this session */
+const preNudgeConfidence = new Map();
+
+/**
+ * Stores the confidence value before a nudge is applied (only first time per word per session).
+ * @param {string} word
+ */
+function savePreNudgeConfidence(word) {
+    if (!preNudgeConfidence.has(word)) {
+        preNudgeConfidence.set(word, getConfidence(word));
+    }
+}
+
+/**
+ * Restores the confidence to its pre-nudge value.
+ * @param {string} word
+ */
+function restorePreNudgeConfidence(word) {
+    const saved = preNudgeConfidence.get(word);
+    if (saved !== undefined) {
+        setConfidence(word, saved);
+    }
+}
+
 /**
  * Wires click handlers on the header action buttons (search, copy).
  * @param {HTMLElement} tip
@@ -748,14 +772,23 @@ function wireNudgeBar(tip, word) {
                 btn.classList.toggle('active');
             } else {
                 // Deselect all confidence buttons first
-                bar.querySelectorAll('.nihongo-wt-nudge-btn:not([data-action="ANKI"])').forEach(b => {
+                bar.querySelectorAll('.nihongo-wt-nudge-btn:not([data-action="ANKI"]):not([data-action="RESET"])').forEach(b => {
                     b.classList.remove('selected');
                 });
 
-                // If clicking the already-selected action, just deselect
-                if (nudgeSelections.get(word) === action) {
+                const previousAction = nudgeSelections.get(word);
+
+                // Save pre-nudge confidence before first interaction
+                savePreNudgeConfidence(word);
+
+                if (previousAction === action) {
+                    // Clicking the already-selected action → restore original confidence
+                    restorePreNudgeConfidence(word);
                     nudgeSelections.delete(word);
+                    preNudgeConfidence.delete(word);
                 } else {
+                    // Switching or first click — restore to baseline, then apply new
+                    restorePreNudgeConfidence(word);
                     nudgeConfidence(word, action.toLowerCase());
                     btn.classList.add('selected');
                     nudgeSelections.set(word, action);
