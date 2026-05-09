@@ -117,8 +117,12 @@ export function romajiToHiragana(input) {
  */
 export function isRomaji(str) {
     if (!str || str.length === 0) return false;
-    // Must be all ASCII letters (+ common punctuation like hyphen, space)
-    return /^[a-zA-Z\s\-']+$/.test(str) && str.length >= 2;
+    // Must be all ASCII letters, no spaces (spaces indicate English phrases, not romaji)
+    // Hyphens allowed for long vowels (e.g. "oo" or "ou", "rāmen" → not used, but harmless)
+    if (!/^[a-zA-Z\-']+$/.test(str) || str.length < 2) return false;
+    // Must contain at least one vowel (consonant-only strings like "bcd" aren't romaji)
+    if (!/[aeiou]/i.test(str)) return false;
+    return true;
 }
 
 function isConsonant(ch) {

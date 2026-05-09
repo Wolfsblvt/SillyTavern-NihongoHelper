@@ -139,6 +139,71 @@ export function searchDictionary(query, options = {}) {
         }
     }
 
+    // --- Phase 1b: Direct English gloss matching (substring scan) ---
+    if (!isJapanese) {
+        // For English queries, scan all entries for individual gloss matches
+        // This avoids Fuse penalizing entries with many glosses (long concatenated string)
+        const lowerQuery = trimmed.toLowerCase();
+        const words = getJMdictWords();
+        if (words) {
+            /** @type {{entry: object, matchQuality: number}[]} */
+            const glossMatches = [];
+            for (const entry of words) {
+                let bestQuality = Infinity;
+                for (const sense of entry.s) {
+                    for (const gloss of sense.g) {
+                        const lowerGloss = gloss.toLowerCase();
+                        if (lowerGloss === lowerQuery) {
+                            // Exact gloss match
+                            bestQuality = Math.min(bestQuality, 0);
+                        } else if (lowerGloss.startsWith(lowerQuery)) {
+                            // Gloss starts with query (e.g. "put in" matches "put in place")
+                            bestQuality = Math.min(bestQuality, 0.005);
+                        } else if (lowerGloss.includes(lowerQuery)) {
+                            // Query is a substring (e.g. "put in" in "to put in")
+                            bestQuality = Math.min(bestQuality, 0.01);
+                        }
+                    }
+                }
+                if (bestQuality < Infinity) {
+                    glossMatches.push({ entry, matchQuality: bestQuality });
+                }
+            }
+
+            // Sort by match quality, then common, then frequency — take top candidates
+            glossMatches.sort((a, b) => {
+                if (a.matchQuality !== b.matchQuality) return a.matchQuality - b.matchQuality;
+                const aCommon = !!a.entry.c;
+                const bCommon = !!b.entry.c;
+                if (aCommon !== bCommon) return aCommon ? -1 : 1;
+                const aFreq = hasFreq ? (getCompositeFrequency(
+                    (a.entry.k && a.entry.k[0]) || a.entry.r[0], a.entry.r[0],
+                ) || 999999) : 999999;
+                const bFreq = hasFreq ? (getCompositeFrequency(
+                    (b.entry.k && b.entry.k[0]) || b.entry.r[0], b.entry.r[0],
+                ) || 999999) : 999999;
+                return aFreq - bFreq;
+            });
+
+            for (const { entry, matchQuality } of glossMatches.slice(0, limit * 2)) {
+                if (resultMap.has(entry)) continue;
+                const word = (entry.k && entry.k[0]) || entry.r[0];
+                const readings = entry.r;
+                resultMap.set(entry, {
+                    word,
+                    reading: readings[0],
+                    kanji: entry.k || [],
+                    readings,
+                    senses: entry.s,
+                    common: !!entry.c,
+                    score: 0,
+                    rank: matchQuality,
+                    entry,
+                });
+            }
+        }
+    }
+
     // --- Phase 2: Deinflection (inflected Japanese input → dictionary forms) ---
     if (jpQuery) {
         const candidates = deinflect(jpQuery);
