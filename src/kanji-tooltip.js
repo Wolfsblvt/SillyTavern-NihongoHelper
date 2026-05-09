@@ -1018,7 +1018,10 @@ function findTooltipTarget(target) {
         if (hasKanji || (nihongoSettings.kanaWordTooltips && hasMatches)) {
             const reading = wordSpan.dataset.reading || '';
             const pos = wordSpan.dataset.pos || '';
-            return { type: 'word', key: `w:${word}:${matchId}`, el: wordSpan, word, reading, pos, matchId };
+            // In search results, position tooltip relative to the card (not the word span)
+            const searchCard = wordSpan.closest('.nihongo-search-card');
+            const posEl = searchCard || wordSpan;
+            return { type: 'word', key: `w:${word}:${matchId}`, el: posEl, word, reading, pos, matchId };
         }
     }
     // Fallback: bare kanji span (without word wrapper)

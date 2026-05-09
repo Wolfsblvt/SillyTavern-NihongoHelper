@@ -301,8 +301,8 @@ function buildResultCard(result, tags) {
 
     actions.appendChild(insertBtn);
     actions.appendChild(copyBtn);
-    glosses.appendChild(actions);
     card.appendChild(glosses);
+    card.appendChild(actions);
 
     // Click card → insert word
     card.addEventListener('click', (e) => {
