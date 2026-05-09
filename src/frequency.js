@@ -158,8 +158,17 @@ export function getFrequencyTier(word, reading) {
 
 /**
  * Converts a frequency rank to a human-readable 0–100% commonness score.
- * Uses a logarithmic scale (Zipf's law).
- * 100% = rank 1, 0% = rarest known word.
+ * Uses a sigmoid-like power curve that maps Zipf-distributed ranks to
+ * intuitive percentages for language learners:
+ *   rank ~300  → 95%  (extremely common)
+ *   rank ~1000 → 90%  (very common)
+ *   rank ~5000 → 70%  (fairly common)
+ *   rank ~15000 → 50% (moderate — roughly N1 boundary)
+ *   rank ~50000 → 28%  (uncommon)
+ *   rank ~200000 → 11% (rare)
+ *
+ * Formula: 100 / (1 + (rank / midpoint)^steepness)
+ * Midpoint = 15000 (50% mark), steepness = 0.8.
  *
  * @param {string} word Dictionary form
  * @param {string} [reading] Kana reading fallback
@@ -167,7 +176,10 @@ export function getFrequencyTier(word, reading) {
  */
 export function getFrequencyPercent(word, reading) {
     const rank = getCompositeFrequency(word, reading);
-    if (rank === null || totalWords === 0) return null;
-    const maxLog = Math.log(totalWords);
-    return Math.max(0, Math.round(100 * (1 - Math.log(rank) / maxLog)));
+    if (rank === null) return null;
+
+    const MIDPOINT = 15000;
+    const STEEPNESS = 0.8;
+    const pct = 100 / (1 + Math.pow(rank / MIDPOINT, STEEPNESS));
+    return Math.round(pct);
 }
