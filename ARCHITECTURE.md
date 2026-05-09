@@ -63,6 +63,11 @@ index.js (entry point)
 ├── kanji-tooltip.js    (hover tooltip: kanji + word, positioning, pagination)
 │   ├── meaning-provider.js, deinflect.js, token-matcher.js (getStoredMatches)
 │   └── furigana.js (reprocessMessagesWithKanji)
+├── dict-search-ui.js   (side panel search tab, result cards)
+│   └── dict-search.js  (3-phase search: direct → deinflect → Fuse)
+│       ├── romaji.js    (romaji-to-hiragana conversion)
+│       └── jmdict.js, deinflect.js, frequency.js
+├── frequency.js        (word frequency ranks, sigmoid percent, tiers)
 ├── wand-menu.js        (extensions menu)
 └── macros.js           ({{knownKanji}}, {{knownKanjiCount}})
 ```
@@ -121,6 +126,44 @@ Delegated hover detection → show/hide state machine (300ms show, 400ms hide) �
 
 Grid popup with 2998 kanji. Filter by JLPT/grade/known. Sort by freq/grade/JLPT/strokes. Known state persisted as `{ char: dateString }` in extension_settings.
 
+### `src/dict-search.js` — Dictionary Search Engine
+
+Three-phase search strategy ensuring exact matches always rank first:
+
+1. **Direct index lookup** (rank 0) — Exact kanji/kana form match via JMdict index. Handles romaji input by converting to hiragana first.
+2. **Deinflection** (rank 0.02) — Applies `deinflect()` to the query, verifies candidates against JMdict. Returns results with `inflection` and `inflectedForm` metadata.
+3. **Fuse.js fuzzy search** (rank 0.4+) — Multi-field (glosses, kanji, reading) fuzzy match. Composite scoring: prefix overlap, frequency, common flag.
+
+Deduplication by entry object identity. Tie-breaking: common first → frequency rank.
+
+**Why 3-phase:** Fuse.js alone ranks substring matches (仕入れる contains 入れる) higher than exact matches. Direct lookup guarantees the exact word appears first. Deinflection enables inflected search (まかせて → まかせる).
+
+### `src/romaji.js` — Romaji-to-Hiragana Conversion
+
+Longest-prefix table lookup (~100 mappings). Supports Hepburn + common variants (si→し, ti→ち). Handles double consonants (kk→っ), n-before-consonant (→ん). Used by dict-search to enable romaji input (e.g., "ireru" → いれる → 入れる).
+
+**Why not a full IME:** Only needed for search input, not text composition. Simple table approach is deterministic and fast.
+
+### `src/frequency.js` — Word Frequency
+
+Loads `data/frequency.json` (JPDB list, ~477K entries). Provides:
+- `getCompositeFrequency(word, reading)` — raw rank (lower = more common)
+- `getFrequencyTier(word)` — categorical: top1k, top5k, top15k, common, rare
+- `getFrequencyPercent(word)` — 0–100% sigmoid display score
+
+**Percent formula:** `100 / (1 + (rank / 15000)^0.8)` — a sigmoid curve where:
+- Rank ~300 → 95% (extremely common)
+- Rank ~1000 → 90% (very common)
+- Rank ~5000 → 70% (fairly common)
+- Rank ~15000 → 50% (midpoint, roughly N1 boundary)
+- Rank ~50000 → 28% (uncommon)
+
+**Why sigmoid, not log:** The previous `1 - log(rank)/log(total)` formula gave rank #331 only 56% in a 530K-word list. The sigmoid maps Zipf-distributed ranks to intuitive learner percentages — top-1k words should *feel* like 90%+.
+
+### `src/dict-search-ui.js` — Search UI (Side Panel Tab)
+
+Registers "Search" tab in side panel. Debounced input (200ms) triggers `searchDictionary()`. Result cards show: word, reading, frequency badge, inflection note (if deinflected), truncated glosses, action buttons (insert/copy).
+
 ### `src/macros.js` — ST Macros
 
 `{{knownKanji}}` (comma-separated list) and `{{knownKanjiCount}}` for use in system prompts to adapt LLM difficulty.
@@ -141,6 +184,13 @@ Grid popup with 2998 kanji. Filter by JLPT/grade/known. Sort by freq/grade/JLPT/
 - **Output:** `data/jmdict.json` (3.5MB, ~22.5K common entries, tracked)
 - Format: `{ v, date, src, tags, words: [{ k?, r, c?, s: [{ p, g, m?, i?, f? }] }] }`
 - Max 5 senses, 5 glosses per entry
+
+### Word Frequency
+- **Source:** JPDB frequency list (477K entries)
+- **Build:** `node scripts/build-frequency.cjs`
+- **Output:** `data/frequency.json` (~16MB, tracked)
+- Format: `{ v, builtAt, lists: { key: { name, count } }, words: { word: { listKey: rank } } }`
+- Multiple list support (currently JPDB only); composite scoring with configurable weights
 
 ### Kuromoji Tokenizer
 - Pre-built browser UMD bundle + `.dat.gz` dictionaries in `lib/kuromoji/` (gitignored, ~18MB)
