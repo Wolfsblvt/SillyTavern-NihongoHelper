@@ -1305,6 +1305,25 @@
     color: #64b5f6;
 }
 
+.nihongo-search-inflection {
+    font-size: calc(var(--mainFontSize) * 0.8);
+    color: rgba(255, 183, 77, 0.9);
+    margin: 2px 0;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.nihongo-search-inflection i {
+    font-size: 0.75em;
+    opacity: 0.7;
+}
+
+.nihongo-search-inflection-form {
+    font-weight: 500;
+    color: rgba(255, 183, 77, 1);
+}
+
 .nihongo-search-glosses {
     font-size: calc(var(--mainFontSize) * 0.85);
     opacity: 0.8;

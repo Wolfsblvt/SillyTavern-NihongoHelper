@@ -249,6 +249,14 @@ function buildResultCard(result, tags) {
     top.appendChild(tagsEl);
     card.appendChild(top);
 
+    // Inflection note (shown when result was found via deinflection)
+    if (result.inflection && result.inflectedForm) {
+        const inflNote = document.createElement('div');
+        inflNote.className = 'nihongo-search-inflection';
+        inflNote.innerHTML = `<i class="fa-solid fa-arrow-turn-up fa-rotate-90"></i> <span class="nihongo-search-inflection-form">${result.inflectedForm}</span> is the <strong>${result.inflection}</strong> of this word`;
+        card.appendChild(inflNote);
+    }
+
     // Glosses — first 2 senses, brief
     const glosses = document.createElement('div');
     glosses.className = 'nihongo-search-glosses';
