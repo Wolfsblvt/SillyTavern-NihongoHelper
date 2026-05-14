@@ -307,7 +307,7 @@ The goal: **stable cacheable prefix, self-contained turns, action instructions a
     "description": "A concise Japanese tutor for in-context word and grammar questions.",
     "personality": "You are a concise Japanese language tutor...",
     "rules": "- Be concise.\n- Match level to student ({{nihongoKnownKanjiCount}} kanji known).\n...",
-    "systemPrompt": "{{nihongoDescription}}\n\n{{nihongoPersonality}}\n\n{{nihongoRules}}",
+    "systemPrompt": "{{nihongoPersonality}}\n\nGeneral rules:\n{{nihongoRules}}",
     "actions": {
         "explain": { "system": "...", "user": "..." },
         "grammar": { "system": "...", "user": "..." },
@@ -417,16 +417,20 @@ Default: **Remove** (cleanest, best cache behavior, models infer format from pri
 - **No consecutive user messages** — History has clean pairs (or triples with system). No model confusion.
 - **Configurable repetition** — User controls whether old instructions appear in context. Power users can keep more; default removes them.
 
-##### Required Implementation Changes
+##### Implementation Status (Completed)
 
-1. **Preset format v2** — Add `systemPrompt`, `description`, `rules` fields. Register preset fields as dynamic macros (`nihongoPersonality`, `nihongoDescription`, `nihongoRules`).
-2. **`getSystemPrompt()` → split** — `getMainSystemPrompt()` (stable template) and `getActionInstructions(actionId)` (at depth).
-3. **`ChatMessage` extended** — Add `prompt`, `instructions`, `actionId` fields.
-4. **`buildMessages()` refactored** — Inserts system-at-depth before current user. Handles history system messages per setting mode.
-5. **`buildHistoryForLLM()` refactored** — Reads `msg.prompt` instead of `msg.content` for user messages. Applies system message handling mode.
-6. **UI rendering** — System bar elements, expand/collapse toggle, `[⋯]` button on user bubbles.
-7. **New setting** — "Action instructions in history" dropdown + optional "keep last N" number input.
-8. **Preset migration** — `loadPreset()` handles both v1 (legacy: personality prepended) and v2 (template-based). v1 presets auto-mapped: `systemPrompt = "{{nihongoPersonality}}"`, personality stays as-is.
+All v2 refactoring has been implemented:
+
+1. **Preset format v2** (`data/presets/default.json`, `src/side-chat-prompts.js`) — `systemPrompt` template composes `{{nihongoPersonality}}` and `{{nihongoRules}}` macros. `description`, `personality`, `rules` are separate content fields. `getPresetFieldMacros()` exposes them as dynamic macros.
+2. **Prompt split** (`src/side-chat-prompts.js`) — `getMainSystemPrompt()` returns stable template; `getActionInstructions(actionId)` returns per-action system text.
+3. **`buildPrompts()`** (`src/side-chat-llm.js`) — Builds and substitutes all prompts (main system, instructions, user prompt). Returns `BuiltPrompts` for storage + LLM call.
+4. **`ChatMessage` extended** (`src/side-chat.js`) — Added `prompt`, `instructions`, `actionId` fields. `generateResponse` stores them after building prompts.
+5. **`buildMessages()`** (`src/side-chat-llm.js`) — Layout: `[stable system] + [history] + [system-at-depth] + [user]`.
+6. **`buildHistoryForLLM()`** (`src/side-chat.js`) — Uses `msg.prompt` for user content, applies history mode setting (remove/deduplicate/keep_last_n), respects `chatMaxHistory` limit.
+7. **Settings** (`src/settings.js`, `templates/settings.html`) — `chatHistoryMode` (default: remove), `chatHistoryKeepN` (default: 3), `chatMaxHistory` (default: 20). UI with dropdown + range sliders.
+8. **UI rendering** (`src/side-chat.js`, `style.css`) — Collapsible system bars (icon + action label, click to expand full instructions). `[⋯]` prompt peek button on user messages to toggle full prompt text.
+9. **Preset migration** (`src/side-chat-prompts.js`) — `migrateV1ToV2()` handles legacy presets: `systemPrompt = "{{nihongoPersonality}}"`, personality stays as-is, `rules = ""`.
+10. **`sendChatRequest`** (`src/side-chat-llm.js`) — Now accepts pre-built prompts instead of building internally. `generateRaw` fallback concatenates main system + instructions.
 
 ---
 
