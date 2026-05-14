@@ -1244,6 +1244,9 @@ export function destroyTooltip() {
 /** Regex matching strings composed entirely of Japanese characters (kanji, hiragana, katakana, prolonged sound mark). */
 const JP_ONLY_RE = /^[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF\u3400-\u4DBF\u30FC]+$/;
 
+/** Regex matching strings that contain at least one Japanese character. */
+const CONTAINS_JP_RE = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF\u3400-\u4DBF]/;
+
 /** Converts full-width katakana to hiragana for dictionary lookups. */
 function katakanaToHiragana(str) {
     return str.replace(/[\u30A1-\u30F6]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0x60));
@@ -1335,8 +1338,9 @@ function onSelectionLookup() {
     }
 
     const text = sel.toString().trim();
-    if (!text || text.length > 30) return; // sanity limit
-    if (!JP_ONLY_RE.test(text)) return;
+    if (!text || text.length > 200) return; // sanity limit
+    // Show tooltip for any selection that contains at least one Japanese character
+    if (!CONTAINS_JP_RE.test(text)) return;
 
     // Hide any existing tooltip first
     hideTooltip();

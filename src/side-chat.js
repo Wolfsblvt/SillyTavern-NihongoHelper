@@ -138,6 +138,8 @@ export function triggerChatAction(actionId, context) {
 
 /** @type {import('./side-chat-llm.js').BuiltPrompts|null} */
 let lastBuiltPrompts = null;
+/** @type {Array<{role: string, content: string}>} - History snapshot from the last prompt build */
+let lastBuiltHistory = [];
 
 /** Builds the chat tab's DOM. Called once (lazy). */
 function buildChatView() {
@@ -161,6 +163,7 @@ function buildChatView() {
     newChatBtn.addEventListener('click', () => {
         currentSession = null;
         lastBuiltPrompts = null;
+        lastBuiltHistory = [];
         ensureSession();
         if (messageList) {
             messageList.innerHTML = '';
@@ -237,7 +240,7 @@ function showPromptViewer() {
         return;
     }
 
-    const history = buildHistoryForLLM();
+    const history = lastBuiltHistory;
     const sections = [];
     sections.push(`═══ SYSTEM PROMPT ═══\n${lastBuiltPrompts.mainSystemPrompt}`);
     if (history.length > 0) {
@@ -324,6 +327,7 @@ async function generateResponse(actionId, context, userMessage) {
     // Build prompts from preset templates + macros
     const prompts = buildPrompts(actionId, context || {}, userMessage);
     lastBuiltPrompts = prompts;
+    lastBuiltHistory = buildHistoryForLLM();
 
     // Store prompt data on the most recent user message (added by triggerChatAction/handleSend)
     if (currentSession) {
@@ -385,8 +389,8 @@ async function generateResponse(actionId, context, userMessage) {
     const startTime = Date.now();
 
     try {
-        // Build history for multi-turn (uses msg.prompt for user messages)
-        const history = buildHistoryForLLM();
+        // Use the history snapshot captured at prompt-build time
+        const history = lastBuiltHistory;
 
         const result = await sendChatRequest({
             mainSystemPrompt: prompts.mainSystemPrompt,
@@ -456,9 +460,10 @@ function buildHistoryForLLM() {
     const mode = nihongoSettings.chatHistoryMode;
     const keepN = nihongoSettings.chatHistoryKeepN;
 
-    // Get relevant messages — user and assistant with content, no errors
+    // Get relevant messages — user and assistant with content, no errors/cancelled
     const relevant = currentSession.messages
-        .filter(m => (m.role === 'user' || m.role === 'assistant') && m.content && !m.content.startsWith('*'))
+        .filter(m => (m.role === 'user' || m.role === 'assistant') && m.content
+            && !m.content.startsWith('*(cancelled)') && !m.content.startsWith('*Error:'))
         .slice(-maxHistory);
 
     // Exclude the latest user message (it becomes the current prompt)
