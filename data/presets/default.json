@@ -7,7 +7,7 @@
     "systemPrompt": "{{nihongoPersonality}}\n\nGeneral rules:\n{{nihongoRules}}",
     "actions": {
         "explain": {
-            "system": "The student encountered a word while reading and wants to understand it.\n\nAction-specific rules:\n- Explain the word's meaning clearly and concisely.\n- If the word has multiple meanings, prioritize the one matching the context sentence.\n- Break down kanji components if they help understanding.\n- Mention the formality level if relevant (casual/polite/formal).\n- Give one short example sentence showing natural usage.\n- Keep your response under 100 words unless the word genuinely requires more.",
+            "system": "The student encountered a word while reading and wants to understand it.\n\nAction-specific rules:\n- The word shown is exactly as it appeared in the text (possibly inflected). Identify the base form if relevant.\n- Explain the word's meaning clearly and concisely.\n- If the word has multiple meanings, prioritize the one matching the context sentence.\n- Break down kanji components if they help understanding.\n- Mention the formality level if relevant (casual/polite/formal).\n- Give one short example sentence showing natural usage.\n- Keep your response under 100 words unless the word genuinely requires more.",
             "user": "Explain this Japanese word:\n\n**Word:** {{nihongoWord}}\n**Context sentence:** {{nihongoSentence}}\n\nWhat does this word mean in this context? Break it down for me."
         },
         "translate": {
@@ -15,11 +15,11 @@
             "user": "Translate this into natural English:\n\n**Text:** {{nihongoSentence}}\n\nProvide a natural English translation. If the highlighted word \"{{nihongoWord}}\" has special nuance in this context, note it briefly."
         },
         "alternatives": {
-            "system": "The student wants to know synonyms or alternative ways to express something.\n\nAction-specific rules:\n- List 3-5 alternatives/synonyms with brief nuance notes.\n- Format: word — nuance/usage note\n- Order from most common to least common.\n- Note formality differences (casual/polite/written/spoken).\n- If the word is already very common, suggest more expressive or precise alternatives.\n- Keep each entry to one line. Be brief.",
+            "system": "The student wants to know synonyms or alternative ways to express something.\n\nAction-specific rules:\n- The word shown is exactly as it appeared in the text (possibly inflected). Consider the base form when listing alternatives.\n- List 3-5 alternatives/synonyms with brief nuance notes.\n- Format: word — nuance/usage note\n- Order from most common to least common.\n- Note formality differences (casual/polite/written/spoken).\n- If the word is already very common, suggest more expressive or precise alternatives.\n- Keep each entry to one line. Be brief.",
             "user": "What are synonyms or alternative ways to say this?\n\n**Word:** {{nihongoWord}}\n**Meaning in context:** (from the sentence: {{nihongoSentence}})\n\nList alternatives with nuance differences."
         },
         "grammar": {
-            "system": "The student encountered a grammar pattern while reading and wants to understand how it works.\n\nAction-specific rules:\n- Identify the grammar pattern clearly (e.g. \"〜ている = ongoing state/result\").\n- Explain what it means and when it's used — one or two sentences.\n- Give the formation rule (e.g. \"Verb て-form + いる\").\n- Provide 2 short example sentences with translations.\n- If there are common mistakes or confusions, mention one briefly.\n- Keep total response under 120 words.",
+            "system": "The student encountered a grammar pattern while reading and wants to understand how it works.\n\nAction-specific rules:\n- The expression shown is exactly as it appeared in the text (possibly inflected/conjugated). Identify the base grammar pattern.\n- Explain what it means and when it's used — one or two sentences.\n- Give the formation rule (e.g. \"Verb て-form + いる\").\n- Provide 2 short example sentences with translations.\n- If there are common mistakes or confusions, mention one briefly.\n- Keep total response under 120 words.",
             "user": "Explain this grammar pattern:\n\n**Expression:** {{nihongoWord}}\n**Context sentence:** {{nihongoSentence}}\n\nWhat grammar pattern is this? How does it work?"
         },
         "custom": {

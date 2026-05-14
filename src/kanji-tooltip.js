@@ -44,6 +44,10 @@ let pendingTarget = null;
 let mouseOverTooltip = false;
 /** @type {boolean} - true while the user is dragging a text selection */
 let isSelecting = false;
+/** @type {string} - Captured surface text from the last hovered word (persists after hoveredTarget clears) */
+let lastSurfaceText = '';
+/** @type {string} - Captured context sentence from the last hovered word's DOM position */
+let lastContextSentence = '';
 /** @type {number} - highest top position reached during card navigation (prevents jumping back down) */
 let tooltipFloorTop = Infinity;
 /** @type {{ word: string }|null} - non-null when a selection tooltip should persist (even during peek) */
@@ -754,13 +758,9 @@ function wireHeaderActions(tip) {
             const dictWord = container?.getAttribute('data-word') || '';
 
             if (actionId) {
-                // Surface text = what the user actually hovered/selected in the message
-                const surfaceText = selectionState?.word
-                    || hoveredTarget?.textContent?.trim()
-                    || dictWord;
-
-                // Use surface text as context search anchor (more likely to match message text)
-                const sentence = getContextSentence(surfaceText || dictWord);
+                // Use captured surface text (set when hoveredTarget was still valid)
+                const surfaceText = selectionState?.word || lastSurfaceText || dictWord;
+                const sentence = lastContextSentence;
 
                 triggerChatAction(actionId, {
                     word: surfaceText || dictWord,
@@ -773,51 +773,55 @@ function wireHeaderActions(tip) {
 }
 
 /**
- * Extracts a context sentence from the message element containing the hovered word.
- * Uses the stored hoveredTarget to find the source .mes_text element directly,
- * avoiding text-search which can fail for inflected forms.
- * @param {string} word The word to provide context for
+ * Gets the visible text of an element, excluding ruby annotations (rt/rp).
+ * For a span like <ruby>書<rt>か</rt></ruby>きます, returns "書きます".
+ * @param {HTMLElement} el
+ * @returns {string}
+ */
+function getTextWithoutRuby(el) {
+    if (!el) return '';
+    const clone = el.cloneNode(true);
+    clone.querySelectorAll('rt, rp').forEach(node => node.remove());
+    return clone.textContent?.trim() || '';
+}
+
+/**
+ * Extracts a context sentence from the DOM element containing the hovered word.
+ * Uses hoveredTarget's position in the DOM to find surrounding text directly,
+ * without relying on text search (which fails for inflected/ruby-wrapped forms).
  * @returns {string} Context sentence or empty string
  */
-function getContextSentence(word) {
-    // hoveredTarget is the .nihongo-word span (or search card) that triggered the tooltip
+function getContextSentence() {
     const sourceEl = hoveredTarget || pendingTarget?.el;
-    if (sourceEl) {
-        const mesText = sourceEl.closest?.('.mes_text');
-        if (mesText) {
-            const text = mesText.textContent || '';
-            // Extract a window around the word occurrence
-            const idx = text.indexOf(word);
-            if (idx >= 0) {
-                const start = Math.max(0, idx - 60);
-                const end = Math.min(text.length, idx + word.length + 60);
-                let snippet = text.slice(start, end).trim();
-                if (start > 0) snippet = '...' + snippet;
-                if (end < text.length) snippet = snippet + '...';
-                return snippet;
-            }
-            // Word not found by literal match (inflection) — return full message text (truncated)
-            return text.length > 200 ? text.slice(0, 200) + '...' : text;
-        }
-    }
+    if (!sourceEl) return '';
 
-    // Fallback: search all messages for the word
-    const chatEl = document.getElementById('chat');
-    if (!chatEl) return '';
-    const messages = chatEl.querySelectorAll('.mes_text');
-    for (let i = messages.length - 1; i >= 0; i--) {
-        const text = messages[i].textContent || '';
-        if (text.includes(word)) {
-            const idx = text.indexOf(word);
-            const start = Math.max(0, idx - 60);
-            const end = Math.min(text.length, idx + word.length + 60);
+    // Find the containing message element
+    const mesText = sourceEl.closest?.('.mes_text');
+    if (!mesText) return '';
+
+    // Strategy: get the text of the paragraph/block containing the word.
+    // Walk up to find nearest block-level parent within .mes_text, or use the whole message.
+    const blockParent = sourceEl.closest('p, div, li, blockquote, td');
+    const contextEl = (blockParent && mesText.contains(blockParent)) ? blockParent : mesText;
+    const text = contextEl.textContent || '';
+
+    // Truncate long contexts
+    if (text.length > 300) {
+        // Try to find the word's position via the source element's text
+        const wordText = sourceEl.textContent?.trim() || '';
+        const idx = wordText ? text.indexOf(wordText) : -1;
+        if (idx >= 0) {
+            const start = Math.max(0, idx - 100);
+            const end = Math.min(text.length, idx + wordText.length + 100);
             let snippet = text.slice(start, end).trim();
             if (start > 0) snippet = '...' + snippet;
             if (end < text.length) snippet = snippet + '...';
             return snippet;
         }
+        return text.slice(0, 300) + '...';
     }
-    return '';
+
+    return text.trim();
 }
 
 /**
@@ -1139,6 +1143,9 @@ export function attachKanjiTooltip(container, options = {}) {
         }
 
         hoveredTarget = found.el;
+        // Capture surface text and context sentence while hoveredTarget is valid
+        lastSurfaceText = getTextWithoutRuby(found.el);
+        lastContextSentence = getContextSentence();
         cancelHide();
 
         // Already showing this exact tooltip

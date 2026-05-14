@@ -136,10 +136,40 @@ export function triggerChatAction(actionId, context) {
 
 // ===== Internal: View Builder =====
 
+/** @type {import('./side-chat-llm.js').BuiltPrompts|null} */
+let lastBuiltPrompts = null;
+
 /** Builds the chat tab's DOM. Called once (lazy). */
 function buildChatView() {
     const view = document.createElement('div');
     view.className = 'nihongo-chat-view';
+
+    // Header bar
+    const headerBar = document.createElement('div');
+    headerBar.className = 'nihongo-chat-header';
+
+    const viewPromptBtn = document.createElement('button');
+    viewPromptBtn.className = 'nihongo-chat-header-btn';
+    viewPromptBtn.title = 'View full prompt as sent to LLM';
+    viewPromptBtn.innerHTML = '<i class="fa-solid fa-terminal"></i>';
+    viewPromptBtn.addEventListener('click', showPromptViewer);
+
+    const newChatBtn = document.createElement('button');
+    newChatBtn.className = 'nihongo-chat-header-btn';
+    newChatBtn.title = 'Start new conversation';
+    newChatBtn.innerHTML = '<i class="fa-solid fa-plus"></i>';
+    newChatBtn.addEventListener('click', () => {
+        currentSession = null;
+        lastBuiltPrompts = null;
+        ensureSession();
+        if (messageList) {
+            messageList.innerHTML = '';
+            showEmptyState();
+        }
+    });
+
+    headerBar.appendChild(viewPromptBtn);
+    headerBar.appendChild(newChatBtn);
 
     // Message list
     messageList = document.createElement('div');
@@ -173,6 +203,7 @@ function buildChatView() {
     inputBar.appendChild(inputEl);
     inputBar.appendChild(sendBtn);
 
+    view.appendChild(headerBar);
     view.appendChild(messageList);
     view.appendChild(inputBar);
 
@@ -194,6 +225,52 @@ function autoResizeInput() {
     if (!inputEl) return;
     inputEl.style.height = 'auto';
     inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
+}
+
+/**
+ * Opens a popup showing the full prompt as it was/would be sent to the LLM.
+ * Shows main system prompt, action instructions, history, and user prompt in readable format.
+ */
+function showPromptViewer() {
+    if (!lastBuiltPrompts) {
+        toastr.info('No prompt generated yet. Trigger an action or send a message first.');
+        return;
+    }
+
+    const history = buildHistoryForLLM();
+    const sections = [];
+    sections.push(`═══ SYSTEM PROMPT ═══\n${lastBuiltPrompts.mainSystemPrompt}`);
+    if (history.length > 0) {
+        sections.push(`═══ HISTORY (${history.length} messages) ═══\n${history.map(m => `[${m.role}] ${m.content}`).join('\n\n')}`);
+    }
+    if (lastBuiltPrompts.actionInstructions) {
+        sections.push(`═══ ACTION INSTRUCTIONS (at depth) ═══\n${lastBuiltPrompts.actionInstructions}`);
+    }
+    sections.push(`═══ USER PROMPT ═══\n${lastBuiltPrompts.userPrompt}`);
+
+    const text = sections.join('\n\n');
+
+    // Use SillyTavern's popup system if available, otherwise a simple overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'nihongo-prompt-viewer-overlay';
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+    const dialog = document.createElement('div');
+    dialog.className = 'nihongo-prompt-viewer';
+
+    const header = document.createElement('div');
+    header.className = 'nihongo-prompt-viewer-header';
+    header.innerHTML = `<span>Full LLM Prompt</span><button class="nihongo-prompt-viewer-close" title="Close"><i class="fa-solid fa-xmark"></i></button>`;
+    header.querySelector('button')?.addEventListener('click', () => overlay.remove());
+
+    const content = document.createElement('pre');
+    content.className = 'nihongo-prompt-viewer-content';
+    content.textContent = text;
+
+    dialog.appendChild(header);
+    dialog.appendChild(content);
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
 }
 
 // ===== Internal: Message Handling =====
@@ -246,6 +323,7 @@ async function generateResponse(actionId, context, userMessage) {
 
     // Build prompts from preset templates + macros
     const prompts = buildPrompts(actionId, context || {}, userMessage);
+    lastBuiltPrompts = prompts;
 
     // Store prompt data on the most recent user message (added by triggerChatAction/handleSend)
     if (currentSession) {
@@ -266,23 +344,24 @@ async function generateResponse(actionId, context, userMessage) {
                     // Add prompt peek button to user message if prompt differs from display
                     if (lastUserMsg.prompt && lastUserMsg.prompt !== lastUserMsg.content) {
                         const contentEl = userEl.querySelector('.nihongo-chat-msg-content');
-                        const footer = userEl.querySelector('.nihongo-chat-msg-footer');
                         if (contentEl && !contentEl.querySelector('.nihongo-chat-prompt-peek-btn')) {
                             const expandBtn = document.createElement('button');
                             expandBtn.className = 'nihongo-chat-prompt-peek-btn';
                             expandBtn.title = 'Show full prompt sent to LLM';
-                            expandBtn.textContent = '\u22ef';
+                            expandBtn.textContent = 'prompt \u25BE';
                             expandBtn.addEventListener('click', () => {
-                                const existing = userEl.querySelector('.nihongo-chat-prompt-peek');
+                                const existing = contentEl.querySelector('.nihongo-chat-prompt-peek');
                                 if (existing) {
                                     existing.remove();
                                     expandBtn.classList.remove('active');
+                                    expandBtn.textContent = 'prompt \u25BE';
                                 } else {
                                     const peek = document.createElement('div');
                                     peek.className = 'nihongo-chat-prompt-peek';
                                     peek.textContent = lastUserMsg.prompt;
-                                    userEl.insertBefore(peek, footer);
+                                    contentEl.appendChild(peek);
                                     expandBtn.classList.add('active');
+                                    expandBtn.textContent = 'prompt \u25B4';
                                 }
                             });
                             contentEl.appendChild(expandBtn);
