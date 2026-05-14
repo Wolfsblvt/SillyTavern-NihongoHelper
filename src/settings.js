@@ -1,6 +1,8 @@
-import { saveSettingsDebounced } from '../../../../../script.js';
+import { saveSettingsDebounced, eventSource } from '../../../../../script.js';
 import { extension_settings, renderExtensionTemplateAsync } from '../../../../extensions.js';
+import { event_types } from '../../../../events.js';
 import { EXTENSION_KEY, EXTENSION_NAME } from '../index.js';
+import { getPresetList, loadPreset } from './side-chat-prompts.js';
 
 /** @readonly Default settings values */
 const defaultSettings = {
@@ -17,6 +19,11 @@ const defaultSettings = {
     lookupWindowSize: 5,
     selectionLookup: true,
     panelSide: 'right',
+    chatProfileId: '',
+    chatPresetId: 'default',
+    chatHistoryMode: 'remove',
+    chatHistoryKeepN: 3,
+    chatMaxHistory: 20,
 };
 
 let uiInjected = false;
@@ -92,6 +99,51 @@ export const nihongoSettings = {
     set panelSide(val) {
         ensureSettings().panelSide = val;
         saveSettingsDebounced();
+    },
+    get chatProfileId() {
+        return String(ensureSettings().chatProfileId || '');
+    },
+    set chatProfileId(val) {
+        ensureSettings().chatProfileId = val;
+        saveSettingsDebounced();
+    },
+    get chatPresetId() {
+        return String(ensureSettings().chatPresetId || 'default');
+    },
+    set chatPresetId(val) {
+        ensureSettings().chatPresetId = val;
+        saveSettingsDebounced();
+    },
+    get chatHistoryMode() {
+        return String(ensureSettings().chatHistoryMode || 'remove');
+    },
+    set chatHistoryMode(val) {
+        ensureSettings().chatHistoryMode = val;
+        saveSettingsDebounced();
+    },
+    get chatHistoryKeepN() {
+        return Number(ensureSettings().chatHistoryKeepN) || 3;
+    },
+    set chatHistoryKeepN(val) {
+        ensureSettings().chatHistoryKeepN = val;
+        saveSettingsDebounced();
+    },
+    get chatMaxHistory() {
+        return Number(ensureSettings().chatMaxHistory) || 20;
+    },
+    set chatMaxHistory(val) {
+        ensureSettings().chatMaxHistory = val;
+        saveSettingsDebounced();
+    },
+    /** Gets known kanji count (reads from extension_settings directly) */
+    get knownKanjiCount() {
+        const known = extension_settings[EXTENSION_KEY]?.knownKanji;
+        return known ? Object.keys(known).length : 0;
+    },
+    /** Gets comma-separated known kanji string */
+    get knownKanji() {
+        const known = extension_settings[EXTENSION_KEY]?.knownKanji;
+        return known ? Object.keys(known).join(',') : '';
     },
 };
 
@@ -178,6 +230,24 @@ function applySettingsToUI() {
     if (panelSideSelect instanceof HTMLSelectElement) {
         panelSideSelect.value = settings.panelSide;
     }
+
+    const historyModeSelect = document.getElementById('nihongo_helper_history_mode');
+    if (historyModeSelect instanceof HTMLSelectElement) {
+        historyModeSelect.value = settings.chatHistoryMode;
+    }
+    // Show/hide keep-N row based on mode
+    const keepNRow = document.getElementById('nihongo_helper_keep_n_row');
+    if (keepNRow) keepNRow.style.display = settings.chatHistoryMode === 'keep_last_n' ? '' : 'none';
+
+    const keepNInput = document.getElementById('nihongo_helper_keep_n');
+    if (keepNInput instanceof HTMLInputElement) keepNInput.value = String(settings.chatHistoryKeepN);
+    const keepNValue = document.getElementById('nihongo_helper_keep_n_value');
+    if (keepNValue) keepNValue.textContent = String(settings.chatHistoryKeepN);
+
+    const maxHistoryInput = document.getElementById('nihongo_helper_max_history');
+    if (maxHistoryInput instanceof HTMLInputElement) maxHistoryInput.value = String(settings.chatMaxHistory);
+    const maxHistoryValue = document.getElementById('nihongo_helper_max_history_value');
+    if (maxHistoryValue) maxHistoryValue.textContent = String(settings.chatMaxHistory);
 
     applyCSSVariables();
 }
@@ -278,6 +348,117 @@ function registerSettingsEventListeners() {
         }
     });
 
+    // Chat profile selector
+    const chatProfileSelect = document.getElementById('nihongo_helper_chat_profile');
+    if (chatProfileSelect instanceof HTMLSelectElement) {
+        populateChatProfiles(chatProfileSelect);
+        chatProfileSelect.addEventListener('change', () => {
+            settings.chatProfileId = chatProfileSelect.value;
+            saveSettingsDebounced();
+        });
+
+        // Re-populate when connection profiles change
+        const refreshProfiles = () => populateChatProfiles(chatProfileSelect);
+        eventSource.on(event_types.CONNECTION_PROFILE_LOADED, refreshProfiles);
+        eventSource.on(event_types.CONNECTION_PROFILE_CREATED, refreshProfiles);
+        eventSource.on(event_types.CONNECTION_PROFILE_UPDATED, refreshProfiles);
+        eventSource.on(event_types.CONNECTION_PROFILE_DELETED, refreshProfiles);
+    }
+
+    // Tutor preset selector
+    const presetSelect = document.getElementById('nihongo_helper_tutor_preset');
+    if (presetSelect instanceof HTMLSelectElement) {
+        populatePresets(presetSelect);
+        presetSelect.addEventListener('change', async () => {
+            settings.chatPresetId = presetSelect.value;
+            saveSettingsDebounced();
+            await loadPreset(presetSelect.value);
+        });
+    }
+
+    // History mode selector
+    document.getElementById('nihongo_helper_history_mode')?.addEventListener('change', (e) => {
+        if (e.target instanceof HTMLSelectElement) {
+            settings.chatHistoryMode = e.target.value;
+            saveSettingsDebounced();
+            const keepNRow = document.getElementById('nihongo_helper_keep_n_row');
+            if (keepNRow) keepNRow.style.display = e.target.value === 'keep_last_n' ? '' : 'none';
+        }
+    });
+
+    document.getElementById('nihongo_helper_keep_n')?.addEventListener('input', (e) => {
+        if (e.target instanceof HTMLInputElement) {
+            settings.chatHistoryKeepN = parseInt(e.target.value, 10);
+            saveSettingsDebounced();
+            const display = document.getElementById('nihongo_helper_keep_n_value');
+            if (display) display.textContent = String(settings.chatHistoryKeepN);
+        }
+    });
+
+    document.getElementById('nihongo_helper_max_history')?.addEventListener('input', (e) => {
+        if (e.target instanceof HTMLInputElement) {
+            settings.chatMaxHistory = parseInt(e.target.value, 10);
+            saveSettingsDebounced();
+            const display = document.getElementById('nihongo_helper_max_history_value');
+            if (display) display.textContent = String(settings.chatMaxHistory);
+        }
+    });
+
+}
+
+/**
+ * Populates the chat profile dropdown with available Connection Manager profiles.
+ * @param {HTMLSelectElement} select
+ */
+function populateChatProfiles(select) {
+    const currentValue = select.value || ensureSettings().chatProfileId || '';
+
+    // Keep the default option, remove the rest
+    while (select.options.length > 1) {
+        select.remove(1);
+    }
+
+    try {
+        const context = SillyTavern.getContext();
+        if (context.extensionSettings?.disabledExtensions?.includes('connection-manager')) return;
+        const profiles = context.extensionSettings?.connectionManager?.profiles || [];
+        for (const profile of profiles) {
+            const opt = document.createElement('option');
+            opt.value = profile.id;
+            opt.textContent = profile.name || profile.id;
+            select.appendChild(opt);
+        }
+    } catch { /* Connection Manager not available */ }
+
+    // Restore selection
+    select.value = currentValue;
+    if (!select.value && currentValue) {
+        // Profile no longer exists — reset
+        select.value = '';
+    }
+}
+
+/**
+ * Populates the tutor preset dropdown with discovered presets.
+ * @param {HTMLSelectElement} select
+ */
+function populatePresets(select) {
+    const currentValue = select.value || ensureSettings().chatPresetId || 'default';
+
+    // Clear all options
+    select.innerHTML = '';
+
+    const presets = getPresetList();
+    for (const preset of presets) {
+        const opt = document.createElement('option');
+        opt.value = preset.id;
+        opt.textContent = preset.name;
+        if (preset.description) opt.title = preset.description;
+        select.appendChild(opt);
+    }
+
+    select.value = currentValue;
+    if (!select.value) select.value = 'default';
 }
 
 /**

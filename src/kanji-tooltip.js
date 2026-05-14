@@ -8,6 +8,7 @@ import { getStoredMatches } from './token-matcher.js';
 import { nudgeConfidence, toggleFlag, getDerivedLevel, getConfidence, setConfidence, resetConfidence } from './tracking.js';
 import { openDictSearch } from './dict-search-ui.js';
 import { isFrequencyAvailable, getFrequencyTier, getCompositeFrequency, getFrequencyPercent } from './frequency.js';
+import { triggerChatAction } from './side-chat.js';
 
 /**
  * Generic kanji tooltip module.
@@ -540,16 +541,18 @@ function buildSinglePage(word, originalWord, reading, pos, inflection, altWritin
                     <span class="nihongo-wt-header-actions">
                         <button class="nihongo-wt-header-btn nihongo-wt-btn-search" title="Search in dictionary" data-word="${word}"><i class="fa-solid fa-magnifying-glass"></i></button>
                         <button class="nihongo-wt-header-btn nihongo-wt-btn-copy" title="Copy word" data-word="${word}"><i class="fa-solid fa-copy"></i></button>
+                        <a class="nihongo-wt-header-btn nihongo-wt-btn-jisho" href="${jishoUrl}" target="_blank" rel="noopener" title="Look up on Jisho.org"><i class="fa-solid fa-book-open"></i></a>
                     </span>
                 </div>
                 ${inflectionHtml}
                 ${altWritingHtml}
                 ${displayPos}
                 ${sensesHtml || '<div class="nihongo-wt-meaning-placeholder">No definition found</div>'}
-                <div class="nihongo-tooltip-actions">
-                    <a class="nihongo-tooltip-jisho-link" href="${jishoUrl}" target="_blank" rel="noopener" title="Look up on Jisho.org">
-                        Jisho ↗
-                    </a>
+                <div class="nihongo-wt-chat-actions" data-word="${word}" data-reading="${reading || ''}">
+                    <button class="nihongo-wt-chat-btn" data-chat-action="explain" title="Explain this word"><i class="fa-solid fa-circle-question"></i> Explain</button>
+                    <button class="nihongo-wt-chat-btn" data-chat-action="translate" title="Translate in context"><i class="fa-solid fa-language"></i> Translate</button>
+                    <button class="nihongo-wt-chat-btn" data-chat-action="alternatives" title="Synonyms & alternatives"><i class="fa-solid fa-arrows-split-up-and-left"></i> Alternatives</button>
+                    <button class="nihongo-wt-chat-btn" data-chat-action="grammar" title="Explain grammar"><i class="fa-solid fa-spell-check"></i> Grammar</button>
                 </div>
             </div>
             ${kanjiBlocksHtml}
@@ -741,6 +744,80 @@ function wireHeaderActions(tip) {
             }
         });
     });
+
+    // Chat action buttons → trigger side chat
+    tip.querySelectorAll('.nihongo-wt-chat-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const actionId = btn.getAttribute('data-chat-action');
+            const container = btn.closest('.nihongo-wt-chat-actions');
+            const dictWord = container?.getAttribute('data-word') || '';
+
+            if (actionId) {
+                // Surface text = what the user actually hovered/selected in the message
+                const surfaceText = selectionState?.word
+                    || hoveredTarget?.textContent?.trim()
+                    || dictWord;
+
+                // Use surface text as context search anchor (more likely to match message text)
+                const sentence = getContextSentence(surfaceText || dictWord);
+
+                triggerChatAction(actionId, {
+                    word: surfaceText || dictWord,
+                    dictWord: dictWord !== surfaceText ? dictWord : '',
+                    sentence,
+                });
+            }
+        });
+    });
+}
+
+/**
+ * Extracts a context sentence from the message element containing the hovered word.
+ * Uses the stored hoveredTarget to find the source .mes_text element directly,
+ * avoiding text-search which can fail for inflected forms.
+ * @param {string} word The word to provide context for
+ * @returns {string} Context sentence or empty string
+ */
+function getContextSentence(word) {
+    // hoveredTarget is the .nihongo-word span (or search card) that triggered the tooltip
+    const sourceEl = hoveredTarget || pendingTarget?.el;
+    if (sourceEl) {
+        const mesText = sourceEl.closest?.('.mes_text');
+        if (mesText) {
+            const text = mesText.textContent || '';
+            // Extract a window around the word occurrence
+            const idx = text.indexOf(word);
+            if (idx >= 0) {
+                const start = Math.max(0, idx - 60);
+                const end = Math.min(text.length, idx + word.length + 60);
+                let snippet = text.slice(start, end).trim();
+                if (start > 0) snippet = '...' + snippet;
+                if (end < text.length) snippet = snippet + '...';
+                return snippet;
+            }
+            // Word not found by literal match (inflection) — return full message text (truncated)
+            return text.length > 200 ? text.slice(0, 200) + '...' : text;
+        }
+    }
+
+    // Fallback: search all messages for the word
+    const chatEl = document.getElementById('chat');
+    if (!chatEl) return '';
+    const messages = chatEl.querySelectorAll('.mes_text');
+    for (let i = messages.length - 1; i >= 0; i--) {
+        const text = messages[i].textContent || '';
+        if (text.includes(word)) {
+            const idx = text.indexOf(word);
+            const start = Math.max(0, idx - 60);
+            const end = Math.min(text.length, idx + word.length + 60);
+            let snippet = text.slice(start, end).trim();
+            if (start > 0) snippet = '...' + snippet;
+            if (end < text.length) snippet = snippet + '...';
+            return snippet;
+        }
+    }
+    return '';
 }
 
 /**
@@ -1253,17 +1330,23 @@ function onSelectionLookup() {
     const text = sel.toString().trim();
     if (!text || text.length > 30) return; // sanity limit
     if (!JP_ONLY_RE.test(text)) return;
-    if (!isMeaningAvailable()) return;
-
-    // Also try katakana→hiragana conversion for lookup
-    const asHiragana = katakanaToHiragana(text);
-    const lookupWord = (asHiragana !== text && !lookupMeaning(text) && lookupMeaning(asHiragana)) ? asHiragana : text;
 
     // Hide any existing tooltip first
     hideTooltip();
 
-    // populateWordTooltip handles direct match + deinflection fallback
-    const ok = populateWordTooltip(lookupWord, '', '');
+    // Try dictionary lookup first (if available)
+    let ok = false;
+    if (isMeaningAvailable()) {
+        const asHiragana = katakanaToHiragana(text);
+        const lookupWord = (asHiragana !== text && !lookupMeaning(text) && lookupMeaning(asHiragana)) ? asHiragana : text;
+        ok = populateWordTooltip(lookupWord, '', '');
+    }
+
+    // If no dictionary match, show a minimal tooltip with just chat action buttons
+    if (!ok) {
+        ok = showMinimalSelectionTooltip(text);
+    }
+
     if (!ok) return;
 
     // Position near the selection
@@ -1272,6 +1355,42 @@ function onSelectionLookup() {
     positionTooltipAtRect(rect);
     currentKey = `sel:${text}`;
     selectionState = { word: text };
+}
+
+/**
+ * Shows a minimal tooltip with just the word and chat action buttons.
+ * Used when no dictionary match is found for a selection.
+ * @param {string} word
+ * @returns {boolean}
+ */
+function showMinimalSelectionTooltip(word) {
+    const tip = ensureTooltip();
+    tooltipPages = [];
+    currentPageIndex = 0;
+
+    const html = `
+        <div class="nihongo-tooltip-inner nihongo-wt-inner">
+            <div class="nihongo-wt-word-section">
+                <div class="nihongo-wt-word-top">
+                    <span class="nihongo-wt-word">${word}</span>
+                    <span class="nihongo-wt-header-actions">
+                        <button class="nihongo-wt-header-btn nihongo-wt-btn-copy" title="Copy word" data-word="${word}"><i class="fa-solid fa-copy"></i></button>
+                    </span>
+                </div>
+                <div class="nihongo-wt-meaning-placeholder">No definition found</div>
+                <div class="nihongo-wt-chat-actions" data-word="${word}" data-reading="">
+                    <button class="nihongo-wt-chat-btn" data-chat-action="explain" title="Explain this word"><i class="fa-solid fa-circle-question"></i> Explain</button>
+                    <button class="nihongo-wt-chat-btn" data-chat-action="translate" title="Translate in context"><i class="fa-solid fa-language"></i> Translate</button>
+                    <button class="nihongo-wt-chat-btn" data-chat-action="alternatives" title="Synonyms & alternatives"><i class="fa-solid fa-arrows-split-up-and-left"></i> Alternatives</button>
+                    <button class="nihongo-wt-chat-btn" data-chat-action="grammar" title="Explain grammar"><i class="fa-solid fa-spell-check"></i> Grammar</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    tooltipPages = [{ html, label: word, displayWord: word }];
+    showTooltipPage(0);
+    return true;
 }
 
 // ===== Chat Inspect Mode =====

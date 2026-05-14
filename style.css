@@ -382,6 +382,43 @@
     border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+/* ── Chat action buttons in tooltip ── */
+
+.nihongo-wt-chat-actions {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-top: 2px;
+    padding-top: 4px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.nihongo-wt-chat-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 4px;
+    color: inherit;
+    padding: 2px 7px;
+    font-size: 0.72em;
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.15s, background 0.15s;
+    white-space: nowrap;
+}
+
+.nihongo-wt-chat-btn:hover {
+    opacity: 1;
+    background: rgba(100, 150, 255, 0.15);
+    border-color: rgba(100, 150, 255, 0.3);
+}
+
+.nihongo-wt-chat-btn i {
+    font-size: 0.9em;
+}
+
 .nihongo-tooltip-known-btn {
     display: flex;
     align-items: center;
@@ -855,6 +892,7 @@
     background: transparent;
     border: none;
     color: inherit;
+    text-decoration: none;
     cursor: pointer;
     padding: 2px 4px;
     font-size: 0.7em;
@@ -1111,10 +1149,11 @@
 
 .nihongo-sp-content {
     flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
+    min-height: 0;
+    position: relative;
 }
 
 /* ── Tab views ── */
@@ -1124,6 +1163,8 @@
     flex-direction: column;
     flex: 1;
     min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .nihongo-sp-view.active {
@@ -1397,4 +1438,381 @@
     border-top: 1px solid var(--SmartThemeBorderColor);
     flex-shrink: 0;
     text-align: right;
+}
+
+/* ═══════════════════════════════════════════════════
+   SIDE CHAT
+   ═══════════════════════════════════════════════════ */
+
+.nihongo-sp-view.nihongo-chat-view {
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+/* ── Message list ── */
+
+.nihongo-chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.nihongo-chat-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    opacity: 0.4;
+    text-align: center;
+    gap: 6px;
+}
+
+.nihongo-chat-empty i {
+    font-size: 2em;
+    margin-bottom: 8px;
+}
+
+.nihongo-chat-empty p {
+    font-size: 1.1em;
+    font-weight: 500;
+    margin: 0;
+}
+
+.nihongo-chat-empty span {
+    font-size: 0.85em;
+}
+
+/* ── Messages ── */
+
+.nihongo-chat-msg {
+    display: flex;
+    gap: 8px;
+    max-width: 90%;
+    animation: nihongo-chat-msg-in 0.2s ease-out;
+}
+
+@keyframes nihongo-chat-msg-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.nihongo-chat-msg-user {
+    align-self: flex-end;
+    flex-direction: row-reverse;
+}
+
+.nihongo-chat-msg-assistant {
+    align-self: flex-start;
+}
+
+.nihongo-chat-msg-content {
+    padding: 8px 12px;
+    border-radius: 12px;
+    line-height: 1.7;
+    font-size: calc(var(--mainFontSize) * 0.9);
+    word-break: break-word;
+}
+/* Ensure ruby annotations don't clip — give processed blocks extra breathing room */
+.nihongo-chat-msg-content .nihongo-processed {
+    display: inline;
+    line-height: 2;
+}
+
+.nihongo-chat-msg-content p:first-child { margin-top: 0; }
+.nihongo-chat-msg-content p:last-child { margin-bottom: 0; }
+.nihongo-chat-msg-content code {
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: var(--black10a);
+    font-size: 0.9em;
+}
+.nihongo-chat-msg-content pre {
+    overflow-x: auto;
+    padding: 6px 8px;
+    border-radius: 4px;
+    background: var(--black10a);
+}
+.nihongo-chat-msg-content ul,
+.nihongo-chat-msg-content ol { padding-left: 1.2em; }
+
+/* Strip auto-added quotes from <q> tags — messageFormatting adds them as text */
+.nihongo-chat-msg-content q::before,
+.nihongo-chat-msg-content q::after,
+.nihongo-chat-reasoning-text q::before,
+.nihongo-chat-reasoning-text q::after { content: ''; }
+
+/* Ruby/furigana in side chat — mirrors #chat .mes rules */
+.nihongo-chat-msg-content ruby { ruby-align: center; }
+.nihongo-chat-msg-content ruby rp { display: none; }
+.nihongo-chat-msg-content ruby rt {
+    font-size: calc(1em * var(--nihongo-furigana-scale, 0.75));
+    line-height: 1;
+    user-select: none;
+    color: var(--SmartThemeQuoteColor, inherit);
+    opacity: 0.85;
+}
+.nihongo-chat-reasoning-text ruby { ruby-align: center; }
+.nihongo-chat-reasoning-text ruby rp { display: none; }
+.nihongo-chat-reasoning-text ruby rt {
+    font-size: calc(1em * var(--nihongo-furigana-scale, 0.75));
+    line-height: 1;
+    user-select: none;
+    opacity: 0.7;
+}
+.nihongo-chat-reasoning-text .nihongo-processed { display: inline; }
+
+.nihongo-chat-msg-user .nihongo-chat-msg-content {
+    background: var(--SmartThemeQuoteColor, rgba(100, 100, 255, 0.15));
+    border-bottom-right-radius: 4px;
+}
+
+.nihongo-chat-msg-assistant .nihongo-chat-msg-content {
+    background: var(--black10a);
+    border-bottom-left-radius: 4px;
+}
+
+.nihongo-chat-msg-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.nihongo-chat-msg-footer {
+    font-size: 0.7em;
+    opacity: 0.4;
+    padding: 0 4px;
+}
+
+.nihongo-chat-msg-user .nihongo-chat-msg-footer {
+    text-align: right;
+}
+
+/* ── Profile icon ── */
+
+.nihongo-chat-msg-icon {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    margin-top: 4px;
+}
+
+.nihongo-chat-profile-icon {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    opacity: 0.7;
+}
+
+/* ── Reasoning block ── */
+
+.nihongo-chat-reasoning {
+    border-left: 2px solid rgba(255, 200, 50, 0.3);
+    padding: 4px 8px;
+    margin: 2px 0;
+    font-size: 0.8em;
+    opacity: 0.7;
+    transition: max-height 0.3s ease, opacity 0.3s ease;
+    overflow: hidden;
+}
+
+.nihongo-chat-reasoning.collapsed .nihongo-chat-reasoning-text {
+    max-height: 0;
+    opacity: 0;
+    margin-top: 0;
+}
+
+.nihongo-chat-reasoning-text {
+    max-height: 300px;
+    overflow-y: auto;
+    margin-top: 4px;
+    word-break: break-word;
+    transition: max-height 0.3s ease, opacity 0.3s ease;
+}
+
+.nihongo-chat-reasoning-header {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9em;
+    user-select: none;
+}
+
+.nihongo-chat-reasoning-header i:first-child {
+    color: rgba(255, 200, 50, 0.7);
+}
+
+.nihongo-chat-reasoning-toggle {
+    margin-left: auto;
+    transition: transform 0.2s;
+    font-size: 0.75em;
+}
+
+.nihongo-chat-reasoning.collapsed .nihongo-chat-reasoning-toggle {
+    transform: rotate(-90deg);
+}
+
+/* ── System instruction bar ── */
+
+.nihongo-chat-system-bar {
+    align-self: stretch;
+    border-radius: 6px;
+    border: 1px solid color-mix(in srgb, var(--SmartThemeBorderColor) 50%, transparent);
+    background: color-mix(in srgb, var(--SmartThemeQuoteColor, rgba(100, 100, 255, 0.1)) 15%, transparent);
+    font-size: calc(var(--mainFontSize) * 0.75);
+    overflow: hidden;
+    transition: background 0.15s;
+}
+
+.nihongo-chat-system-bar-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+    user-select: none;
+    opacity: 0.5;
+    transition: opacity 0.15s;
+}
+
+.nihongo-chat-system-bar-header:hover {
+    opacity: 0.8;
+}
+
+.nihongo-chat-system-bar-toggle {
+    margin-left: auto;
+    font-size: 0.75em;
+    transition: transform 0.2s;
+}
+
+.nihongo-chat-system-bar.expanded .nihongo-chat-system-bar-toggle {
+    transform: rotate(90deg);
+}
+
+.nihongo-chat-system-bar-content {
+    max-height: 0;
+    overflow: hidden;
+    padding: 0 10px;
+    opacity: 0;
+    transition: max-height 0.25s ease, padding 0.25s ease, opacity 0.2s ease;
+    white-space: pre-wrap;
+    line-height: 1.5;
+}
+
+.nihongo-chat-system-bar.expanded .nihongo-chat-system-bar-content {
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 6px 10px 8px;
+    opacity: 0.7;
+}
+
+/* ── Prompt peek (expand full prompt on user messages) ── */
+
+.nihongo-chat-prompt-peek-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: 1px solid color-mix(in srgb, var(--SmartThemeBorderColor) 40%, transparent);
+    border-radius: 4px;
+    color: var(--SmartThemeBodyColor);
+    cursor: pointer;
+    font-size: 1.1em;
+    line-height: 1;
+    padding: 0 4px;
+    margin-left: 6px;
+    opacity: 0.4;
+    transition: opacity 0.15s, background 0.15s;
+    vertical-align: middle;
+}
+
+.nihongo-chat-prompt-peek-btn:hover,
+.nihongo-chat-prompt-peek-btn.active {
+    opacity: 0.8;
+    background: var(--black10a);
+}
+
+.nihongo-chat-prompt-peek {
+    margin-top: 6px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: var(--black10a);
+    font-size: 0.85em;
+    opacity: 0.7;
+    white-space: pre-wrap;
+    line-height: 1.5;
+    max-height: 200px;
+    overflow-y: auto;
+    word-break: break-word;
+}
+
+/* ── Streaming indicator ── */
+
+.nihongo-chat-msg-streaming .nihongo-chat-msg-content::after {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--SmartThemeBodyColor);
+    opacity: 0.5;
+    margin-left: 4px;
+    animation: nihongo-chat-blink 1s infinite;
+}
+
+@keyframes nihongo-chat-blink {
+    0%, 100% { opacity: 0.2; }
+    50% { opacity: 0.8; }
+}
+
+/* ── Input bar ── */
+
+.nihongo-chat-input-bar {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    padding: 8px 12px;
+    border-top: 1px solid var(--SmartThemeBorderColor);
+    flex-shrink: 0;
+}
+
+.nihongo-chat-input {
+    flex: 1;
+    resize: none;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: calc(var(--mainFontSize) * 0.9);
+    background: var(--black10a);
+    color: var(--SmartThemeBodyColor);
+    line-height: 1.4;
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+.nihongo-chat-input:focus {
+    outline: none;
+    border-color: rgba(100, 150, 255, 0.5);
+}
+
+.nihongo-chat-send {
+    background: none;
+    border: none;
+    color: var(--SmartThemeBodyColor);
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 6px;
+    opacity: 0.6;
+    transition: opacity 0.15s;
+}
+
+.nihongo-chat-send:hover {
+    opacity: 1;
+    background: var(--black10a);
 }

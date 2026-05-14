@@ -87,6 +87,50 @@
                     </select>
                 </div>
                 <hr style="margin: 8px 0;" />
+                <span style="font-weight: 600; font-size: 0.9em; opacity: 0.7;">Language Assistant</span>
+                <div class="flex-container flexFlowColumn" style="margin-top: 4px;">
+                    <label for="nihongo_helper_chat_profile">
+                        <span>Connection profile</span>
+                    </label>
+                    <select id="nihongo_helper_chat_profile" class="text_pole">
+                        <option value="">— Use main model —</option>
+                    </select>
+                    <small class="notes">LLM profile for chat. Requires Connection Manager extension.</small>
+                </div>
+                <div class="flex-container flexFlowColumn" style="margin-top: 4px;">
+                    <label for="nihongo_helper_tutor_preset">
+                        <span>Tutor preset</span>
+                    </label>
+                    <select id="nihongo_helper_tutor_preset" class="text_pole">
+                        <option value="default">Default Tutor</option>
+                    </select>
+                    <small class="notes">Prompt preset defining the tutor's personality and response style</small>
+                </div>
+                <div class="flex-container flexFlowColumn" style="margin-top: 4px;">
+                    <label for="nihongo_helper_history_mode">
+                        <span>Action instructions in history</span>
+                    </label>
+                    <select id="nihongo_helper_history_mode" class="text_pole">
+                        <option value="remove">Remove (cleanest)</option>
+                        <option value="deduplicate">Deduplicate (first of each type kept)</option>
+                        <option value="keep_last_n">Keep last N</option>
+                    </select>
+                    <small class="notes">How to handle old action system prompts in conversation history</small>
+                </div>
+                <div id="nihongo_helper_keep_n_row" class="flex-container flexFlowColumn" style="margin-top: 4px; display: none;">
+                    <label for="nihongo_helper_keep_n">
+                        <span>Keep last: <span id="nihongo_helper_keep_n_value">3</span></span>
+                    </label>
+                    <input type="range" id="nihongo_helper_keep_n" min="1" max="10" step="1" value="3" />
+                </div>
+                <div class="flex-container flexFlowColumn" style="margin-top: 4px;">
+                    <label for="nihongo_helper_max_history">
+                        <span>Max history messages: <span id="nihongo_helper_max_history_value">20</span></span>
+                    </label>
+                    <input type="range" id="nihongo_helper_max_history" min="4" max="50" step="2" value="20" />
+                    <small class="notes">Maximum conversation turns sent to the LLM as context</small>
+                </div>
+                <hr style="margin: 8px 0;" />
                 <div class="flex-container">
                     <button id="nihongo_helper_open_kanji_manager" class="menu_button menu_button_icon" title="Open the Kanji Manager to browse, search, and mark kanji as known">
                         <i class="fa-solid fa-book-open"></i>

@@ -8,6 +8,9 @@ import { initMeaningProvider } from './src/meaning-provider.js';
 import { loadTracking } from './src/tracking.js';
 import { loadFrequencyData } from './src/frequency.js';
 import { initDictSearchUI } from './src/dict-search-ui.js';
+import { initSideChat } from './src/side-chat.js';
+import { initPresets } from './src/side-chat-prompts.js';
+import { nihongoSettings } from './src/settings.js';
 import { registerSearchShortcut } from './src/side-panel.js';
 
 export const EXTENSION_KEY = 'nihongo_helper';
@@ -35,8 +38,12 @@ export async function init() {
     // Initialize kanji manager
     initKanjiManager();
 
+    // Initialize prompt presets (discover + load active preset)
+    initPresets(nihongoSettings.chatPresetId);
+
     // Register side panel tabs (must come before wand menu)
     initDictSearchUI();
+    initSideChat();
 
     // Add wand menu items
     injectWandMenu();
