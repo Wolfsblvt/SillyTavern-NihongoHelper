@@ -85,10 +85,22 @@ A SillyTavern extension to help with learning Japanese through chat interactions
 
 Install via SillyTavern's extension installer or clone into `public/scripts/extensions/third-party/`.
 
+All dependencies are bundled — no internet connection or build steps required.
+
 ## Dependencies
 
-- **kuromoji.js** — Japanese morphological analyzer for deterministic furigana generation (bundled in `lib/`)
-- **JMdict** — Japanese-English dictionary data from [jmdict-simplified](https://github.com/scriptin/jmdict-simplified) (CC BY-SA 4.0), 22K+ common entries (built via `scripts/build-jmdict.cjs`)
+All bundled in the repository (~50MB total):
+
+- **kuromoji.js** — Japanese morphological analyzer for furigana generation (bundled in `lib/kuromoji/`)
+- **JMdict** — Japanese-English dictionary data from [jmdict-simplified](https://github.com/scriptin/jmdict-simplified) (CC BY-SA 4.0), 22K+ common entries (bundled in `data/jmdict.json`)
+- **Kanji data** — 2998 kanji entries with JLPT, grade, frequency, meanings, readings (bundled in `data/kanji.json`)
+- **Word frequency** — JPDB frequency list, ~477K entries (bundled in `data/frequency.json`)
+
+## Rebuilding Data (Development)
+
+The `scripts/` directory contains Node.js build scripts for updating the bundled data files from upstream sources. These are **not needed for normal use** — all data is pre-built and committed.
+
+See [`ARCHITECTURE.md` § Build Scripts](ARCHITECTURE.md#build-scripts) for detailed usage.
 
 ## License
 

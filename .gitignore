@@ -1,9 +1,5 @@
-# Dependencies / bundled libraries
-lib/
-
 # Raw data sources (processed outputs ARE tracked)
 data/kanji-raw.json
 data/jmdict-raw.json
 data/frequency-sources/
 data/downloads/
-data/frequency.json

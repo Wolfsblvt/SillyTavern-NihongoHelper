@@ -428,6 +428,10 @@ async function loadTokenizer() {
         console.debug(`[${EXTENSION_NAME}] Kuromoji tokenizer loaded successfully`);
     } catch (err) {
         console.error(`[${EXTENSION_NAME}] Failed to load kuromoji tokenizer:`, err);
+        toastr.error(
+            'NihongoHelper: Failed to load the Japanese tokenizer (kuromoji). Check the console for details.',
+            'Kuromoji Load Failed',
+        );
         tokenizer = null;
     } finally {
         tokenizerLoading = false;

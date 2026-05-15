@@ -436,37 +436,85 @@ All v2 refactoring has been implemented:
 
 ## 4. Data Pipeline
 
+All processed data files are **committed to the repository** — users never need to run build scripts. The scripts exist for developers to update or rebuild data from upstream sources.
+
 ### Kanji Data
-- **Source:** davidluzgouveia/kanji-data (KANJIDIC2-derived)
-- **Build:** `node scripts/build-kanji-data.cjs`
-- **Output:** `data/kanji.json` (425KB, 2998 entries, tracked)
+- **Source:** [davidluzgouveia/kanji-data](https://github.com/davidluzgouveia/kanji-data) (KANJIDIC2-derived)
+- **Output:** `data/kanji.json` (425KB, 2998 entries)
 - Format: `{ k, s, g, f, jlpt, m, on, kun, i }`
 
 ### JMdict Dictionary
-- **Source:** scriptin/jmdict-simplified (CC BY-SA 4.0)
-- **Build:** `node scripts/build-jmdict.cjs --download`
-- **Output:** `data/jmdict.json` (3.5MB, ~22.5K common entries, tracked)
+- **Source:** [scriptin/jmdict-simplified](https://github.com/scriptin/jmdict-simplified) (CC BY-SA 4.0)
+- **Output:** `data/jmdict.json` (3.5MB, ~22.5K common entries)
 - Format: `{ v, date, src, tags, words: [{ k?, r, c?, s: [{ p, g, m?, i?, f? }] }] }`
 - Max 5 senses, 5 glosses per entry
 
 ### Word Frequency
-- **Source:** JPDB frequency list (477K entries)
-- **Build:** `node scripts/build-frequency.cjs`
-- **Output:** `data/frequency.json` (~16MB, tracked)
+- **Source:** [JPDB frequency list](https://github.com/MarvNC/jpdb-freq-list) (Yomitan format, 477K entries)
+- **Output:** `data/frequency.json` (~16MB)
 - Format: `{ v, builtAt, lists: { key: { name, count } }, words: { word: { listKey: rank } } }`
 - Multiple list support (currently JPDB only); composite scoring with configurable weights
 
+### Kuromoji Tokenizer
+- Pre-built browser UMD bundle + `.dat.gz` dictionaries in `lib/kuromoji/` (~18MB)
+- **Why bundled:** ST extensions are client-side only. No server component possible. Kuromoji runs in-browser, deterministic, fast (<50ms/message). Bundled for fully offline operation.
+
 ### Tutor Presets
-- **Bundled:** `data/presets/default.json` (tracked in git)
+- **Bundled:** `data/presets/default.json`
 - **User presets:** `user/files/nihongo-presets/*.json` (auto-discovered via files endpoint)
 - Format (v1): `{ v, name, description, personality, actions: { actionId: { system, user } } }`
 - `personality` is prepended to every action's system prompt (shared tutor character)
 - Action IDs: `explain`, `translate`, `alternatives`, `grammar`, `custom`
 - Templates use `{{nihongoWord}}`, `{{nihongoSentence}}`, `{{nihongoKnownKanjiCount}}` etc.
 
-### Kuromoji Tokenizer
-- Pre-built browser UMD bundle + `.dat.gz` dictionaries in `lib/kuromoji/` (gitignored, ~18MB)
-- **Why bundled:** ST extensions are client-side only. No server component possible. Kuromoji runs in-browser, deterministic, fast (<50ms/message).
+### Build Scripts
+
+> **Note:** These are for development only. All output files are committed to the repo.
+
+All scripts are in `scripts/` and require Node.js. Run from the extension root directory.
+
+#### `build-kanji-data.cjs` — Rebuild kanji data
+
+Processes raw KANJIDIC2-derived JSON into the lean format used by the Kanji Manager. Includes only kanji with a school grade or JLPT level (2998 kanji). Sorts by newspaper frequency.
+
+```sh
+# Requires: data/kanji-raw.json (manually downloaded from davidluzgouveia/kanji-data)
+node scripts/build-kanji-data.cjs
+# Output: data/kanji.json
+```
+
+#### `build-jmdict.cjs` — Rebuild JMdict dictionary
+
+Downloads the latest jmdict-simplified release from GitHub, extracts the `.tgz`, and processes it into a compact lookup format. Limits to 5 senses and 5 glosses per entry. Preserves common-word flags.
+
+```sh
+node scripts/build-jmdict.cjs --download        # Download latest common-only + process
+node scripts/build-jmdict.cjs --download --full  # Download full dictionary (not just common)
+node scripts/build-jmdict.cjs                    # Re-process existing data/jmdict-raw.json
+# Output: data/jmdict.json
+```
+
+#### `download-frequency.cjs` — Download & build frequency data
+
+All-in-one script: fetches the latest JPDB frequency list (Yomitan format) from GitHub, extracts the ZIP, and feeds it into `build-frequency.cjs`. Caches the download for re-runs.
+
+```sh
+node scripts/download-frequency.cjs          # Download + build (uses cache if available)
+node scripts/download-frequency.cjs --force  # Force re-download
+# Output: data/frequency.json
+```
+
+#### `build-frequency.cjs` — Frequency data pipeline
+
+Lower-level tool for managing multiple frequency lists. Reads Yomitan-format frequency dictionaries (extracted ZIPs with `term_meta_bank_*.json` files) and merges them into a single output. Supports adding, removing, and listing frequency sources.
+
+```sh
+node scripts/build-frequency.cjs --add <name> <path>  # Add/update a frequency list from extracted Yomitan dict
+node scripts/build-frequency.cjs --remove <name>       # Remove a frequency list
+node scripts/build-frequency.cjs --list                # Show current frequency lists
+node scripts/build-frequency.cjs --rebuild             # Rebuild output from saved sources
+# Output: data/frequency.json
+```
 
 ---
 
@@ -474,7 +522,7 @@ All v2 refactoring has been implemented:
 
 | Decision | Trade-off | Rationale |
 |----------|-----------|-----------|
-| Bundled kuromoji (~18MB) | Large download | Offline, deterministic, no server |
+| Bundled kuromoji (~18MB) | Large repo (~50MB) | Fully offline, deterministic, no server, no CDN dependency |
 | Common-only JMdict (3.5MB) | Misses rare words | 95%+ conversation coverage |
 | Single-step deinflection | Misses compound inflections | Simple, covers most cases |
 | No `<rp>` tags | No ancient browser fallback | ST = modern Chromium; eliminates flash bug |
@@ -528,9 +576,10 @@ Modify `buildSinglePage()` (word) or `populateKanjiTooltip()` (kanji) in kanji-t
 ## 8. Development & Debugging
 
 ### Setup
-1. Place kuromoji files in `lib/kuromoji/` (UMD build + dict/*.dat.gz)
-2. Run `node scripts/build-jmdict.cjs --download` and `node scripts/build-kanji-data.cjs`
-3. Extension auto-loads when ST starts
+1. Clone/install the extension into `public/scripts/extensions/third-party/`
+2. Extension auto-loads when ST starts — all dependencies are bundled, no build steps needed
+
+**For development:** Build scripts in `scripts/` can rebuild data files from source (requires Node.js).
 
 ### Debugging Tips
 - Console: `[NihongoHelper]` prefix on all logs
