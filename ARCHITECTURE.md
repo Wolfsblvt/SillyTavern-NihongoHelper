@@ -61,20 +61,24 @@ index.js (entry point)
 │   │   └── deinflect.js
 │   └── kanji-data.js
 ├── kanji-manager.js    (popup UI, known tracking)
-├── kanji-tooltip.js    (hover tooltip: kanji + word, positioning, pagination)
+├── kanji-tooltip.js    (hover tooltip: kanji + word, positioning, pagination, nudge bar)
 │   ├── meaning-provider.js, deinflect.js, token-matcher.js (getStoredMatches)
+│   ├── tracking.js (nudgeConfidence, getDerivedLevel, getConfidence)
+│   ├── frequency.js (getFrequencyPercent, getFrequencyTier)
 │   ├── furigana.js (reprocessMessagesWithKanji)
 │   └── side-chat.js (triggerChatAction — from tooltip action buttons)
+├── side-panel.js       (shared tabbed side panel: register, open, close, switch)
 ├── side-chat-prompts.js (preset system: JSON loader, discovery, active preset state)
 │   └── data/presets/default.json (bundled default preset)
 ├── side-chat-llm.js    (LLM call wrapper, macro substitution)
-│   └── side-chat-prompts.js (getSystemPrompt, getUserPrompt)
+│   └── side-chat-prompts.js (getMainSystemPrompt, getActionInstructions, getUserPrompt)
 ├── side-chat.js        (chat tab UI, sessions, streaming, messageFormatting)
 │   └── side-chat-llm.js, side-chat-prompts.js
 ├── dict-search-ui.js   (side panel search tab, result cards)
 │   └── dict-search.js  (3-phase search: direct → deinflect → Fuse)
 │       ├── romaji.js    (romaji-to-hiragana conversion)
 │       └── jmdict.js, deinflect.js, frequency.js
+├── tracking.js         (word confidence tracking, file-based persistence)
 ├── frequency.js        (word frequency ranks, sigmoid percent, tiers)
 ├── wand-menu.js        (extensions menu)
 └── macros.js           ({{knownKanji}}, {{knownKanjiCount}})
@@ -87,9 +91,9 @@ index.js (entry point)
 ### `index.js` — Entry Point
 
 Called by ST via `manifest.json` hook `{ activate: "init" }`. Init order:
-1. Settings (sync) → 2. Settings UI (async) → 3. Furigana system (async, registers hooks) → 4. Kanji Manager → 5. Prompt presets (async, discover + load) → 6. Side panel tabs (Search + Chat) → 7. Wand menu → 8. Inspect shortcut → 9. Selection lookup → 10. Macros → 11. Meaning provider (async, non-blocking)
+1. Settings (sync) → 2. Settings UI (async) → 3. Furigana system (async, registers hooks) → 4. Kanji Manager → 5. Prompt presets (async, discover + load) → 6. Side panel tabs (Search + Chat) → 7. Wand menu → 8. Inspect shortcut + Search shortcut → 9. Selection lookup → 10. Macros → 11. Meaning provider (async, non-blocking) → 12. Word tracking (async, non-blocking) → 13. Frequency data (async, non-blocking)
 
-**Why this order:** Settings first (everything reads them). Furigana hooks before any messages render. Presets before side chat (chat needs prompts). JMdict loads in background (3.5MB) — furigana works immediately, tooltips become available once loaded.
+**Why this order:** Settings first (everything reads them). Furigana hooks before any messages render. Presets before side chat (chat needs prompts). JMdict, tracking, and frequency all load in background — furigana works immediately, tooltips/badges become available once loaded.
 
 ### `src/furigana.js` — Tokenization & DOM Processing
 
@@ -124,9 +128,13 @@ Loads `data/jmdict.json`, builds index `Map<string, number[]>` (kanji forms + ka
 
 Pluggable backend architecture. Currently JMdict only. Standard result shape: `{ word, readings, forms, common, senses: [{ pos, glosses, misc, info, field }], source }`.
 
-### `src/kanji-tooltip.js` — Tooltip System (~1200 lines)
+### `src/kanji-tooltip.js` — Tooltip System (~1600 lines)
 
-Delegated hover detection → show/hide state machine (300ms show, 400ms hide) → paginated word tooltips OR compact kanji tooltips → smart positioning (right→left→below, constrained to viewport) → scroll navigation (Shift+Scroll anywhere, plain scroll on tab list only) → position adjustment (only upward, never back down to prevent jitter) → selection lookup (select text to look up) → inspect mode.
+Delegated hover detection → show/hide state machine (300ms show, 400ms hide) → paginated word tooltips OR compact kanji tooltips → smart positioning (right→left→below, constrained to viewport) → scroll navigation (Shift+Scroll anywhere, plain scroll on tab list only) → position adjustment (only upward, never back down to prevent jitter) → selection lookup (select text to look up) → inspect mode → nudge bar (confidence tracking buttons) → frequency badges.
+
+**Word tooltip header:** Word + reading + common badge (icon-only when freq present, text otherwise) + frequency percentage badge (colored by tier, rank in title attribute) + search/copy action buttons.
+
+**Nudge bar:** Rendered below tooltip body. Buttons: Easy/Got it/Meh/Hard (confidence nudges), Anki (flag toggle), Reset. Confidence fill bar + level/percentage label. Mutually exclusive selection with undo (clicking same button restores pre-nudge state). Session-persisted selections via `nudgeSelections` Map.
 
 **Why delegated events:** Chat messages are dynamic. One listener on container works with all content, zero cleanup on message change.
 
@@ -182,6 +190,30 @@ Registers "Search" tab in side panel. Debounced input (200ms) triggers `searchDi
 ### `src/macros.js` — ST Macros
 
 `{{knownKanji}}` (comma-separated list) and `{{knownKanjiCount}}` for use in system prompts to adapt LLM difficulty.
+
+### `src/side-panel.js` — Shared Side Panel
+
+VSCode-style tabbed panel that slides in from the right (or left, configurable via `panelSide` setting). Different views (Search, Chat) register as tabs and provide their own content. Only one tab visible at a time.
+
+**Public API:** `registerTab(id, { icon, label, build, onActivate, onDeactivate })`, `openSidePanel(tabId)`, `closeSidePanel()`, `toggleSidePanel(tabId)`, `isSidePanelOpen()`, `switchTab(tabId)`, `registerSearchShortcut()` (Ctrl+Shift+F), `insertIntoChatInput(text)`.
+
+**Design:** Lazy-builds tab views on first activation. Saves/restores cursor position in chat input when opening/closing. Escape closes panel when focus is inside it. Left/right positioning controlled by `nihongoSettings.panelSide` with reactive CSS class toggling.
+
+### `src/tracking.js` — Word Confidence Tracking
+
+Sliding confidence model for per-word familiarity. Stores confidence score (0–1), encounter counts, timestamps, and user flags. Confidence nudged by intuitive button clicks (Easy/Got it/Meh/Hard) rather than absolute levels.
+
+**Storage:** In-memory `Map<string, WordEntry | CompactEntry>`, persisted via ST's files endpoint as `user/files/nihongo-tracking.json`. Debounced save every 30s + save on `beforeunload`/`visibilitychange`. Separate from `extension_settings` to avoid bloating settings saves.
+
+**Data model:** Two entry tiers:
+- **CompactEntry** `{ s, l }` — auto-tracked only (seen count + last seen date). Created on first passive encounter.
+- **WordEntry** (full) — promoted from compact on first user interaction. Includes `confidence`, `seenCount`, `usedCount`, `firstSeen`, `lastSeen`, `lastUsed`, `lastInteraction`, `flags[]`.
+
+**Confidence nudges:** EASY (+0.20), GOT_IT (+0.10), MEH (-0.05), HARD (-0.15), SEEN (+0.01 diminishing), USED (+0.05), FIRST_SEEN (0.05 seed). Passive exposure has diminishing returns: `0.01 * (1 / (1 + seenCount/20))`.
+
+**Derived levels** (for furigana/difficulty decisions, not shown directly to user): Mastered (≥0.85), Known (≥0.60), Familiar (≥0.30), Seen (≥0.10), Unknown (<0.10).
+
+**Public API:** `loadTracking()`, `getWordEntry(word)`, `getConfidence(word)`, `getDerivedLevel(word)`, `recordSeen(word)`, `recordUsed(word)`, `nudgeConfidence(word, action)`, `toggleFlag(word, flag)`, `setConfidence(word, value)`, `resetConfidence(word)`, `getWordsAbove(minConfidence)`, `getTrackedCount()`.
 
 ### Language Assistant Side Chat
 
@@ -462,10 +494,14 @@ All processed data files are **committed to the repository** — users never nee
 ### Tutor Presets
 - **Bundled:** `data/presets/default.json`
 - **User presets:** `user/files/nihongo-presets/*.json` (auto-discovered via files endpoint)
-- Format (v1): `{ v, name, description, personality, actions: { actionId: { system, user } } }`
-- `personality` is prepended to every action's system prompt (shared tutor character)
+- Format (v2): `{ v, name, description, personality, rules, systemPrompt, actions: { actionId: { system, user } } }`
+- `systemPrompt` is a stable template composing `{{nihongoPersonality}}` and `{{nihongoRules}}` — identical for all turns (cacheable)
+- `personality` and `rules` are raw content fields exposed as dynamic macros
+- `actions[id].system` = action-specific instructions injected at depth (before user message)
+- `actions[id].user` = user message template with context macros
 - Action IDs: `explain`, `translate`, `alternatives`, `grammar`, `custom`
 - Templates use `{{nihongoWord}}`, `{{nihongoSentence}}`, `{{nihongoKnownKanjiCount}}` etc.
+- Legacy v1 presets auto-migrated via `migrateV1ToV2()`
 
 ### Build Scripts
 
@@ -532,8 +568,8 @@ node scripts/build-frequency.cjs --rebuild             # Rebuild output from sav
 | `messageFormatting` in side chat | Couples to ST internals | Consistent rendering (markdown, regex, furigana hooks). One function gives all formatting for free. |
 | Preset JSON files (not settings) | Requires file endpoint | Presets can be large, shareable, git-friendly. Settings used only for the active preset ID. |
 | No reading in LLM context | LLM must infer reading | Dictionary reading often wrong for context (文=ぶん/ふみ). LLM does better with sentence context. |
-| History = display text (current) | LLM sees lossy history | See "Prompt Building Flow" — planned fix: store full prompt alongside display text |
-| System prompt per-action (current) | No prompt caching, mixed signals | See "Prompt Building Flow" — planned fix: stable personality + action-at-depth |
+| History stores full prompt (v2) | More data per session | Each user message stores `prompt` (full) + `content` (display). LLM history uses `prompt` for accurate multi-turn. |
+| Stable system + action-at-depth (v2) | Slightly more complex prompt building | System prompt stays identical across all turns (cacheable). Action instructions injected at depth just before user message. |
 
 ---
 
@@ -593,11 +629,17 @@ Modify `buildSinglePage()` (word) or `populateKanjiTooltip()` (kanji) in kanji-t
 
 > See [`ROADMAP.md`](ROADMAP.md) for full feature designs, rationale, and phased plans.
 
+### Implemented Architectural Expansions
+
+**Word Frequency Layer** — `data/frequency.json` with N-list support (currently JPDB, ~477K entries). Composite score function with configurable weights. Feeds into tooltip badges (percentage + tier coloring) and dict search result sorting. See `src/frequency.js`.
+
+**Word Tracking Database** — `user/files/nihongo-tracking.json` via ST files endpoint. Sliding confidence model with compact (auto-tracked) and full (user-interacted) entry tiers. Nudge buttons in tooltip (Easy/Got it/Meh/Hard/Anki/Reset) with confidence bar display. See `src/tracking.js`.
+
+**Side Panel Infrastructure** — Shared tabbed panel (`src/side-panel.js`) hosting Dictionary Search and Language Assistant Chat tabs. Left/right positioning, keyboard shortcuts, lazy tab building.
+
+**v2 Prompt Architecture** — Stable cacheable system prompt + action instructions at depth. Full prompt stored per message for accurate multi-turn history. Configurable history modes (remove/deduplicate/keep_last_n).
+
 ### Planned Architectural Expansions
-
-**Word Frequency Layer** — New `data/frequency.json` with N-list support (JPDB, Netflix/Anime, etc.). Composite score function with configurable weights. Feeds into tooltip badges, furigana visibility, and difficulty assessment.
-
-**Word Tracking Database** — Separate storage file (via ST files endpoint) for word-level encounter/familiarity data. Tiered: compact auto-tracked entries + full entries for explicitly-marked words. Decoupled from extension_settings to avoid bloating settings saves.
 
 **Prompt Preset Authoring** — UI for creating/editing presets within the extension (currently JSON-only via file system).
 
@@ -605,11 +647,15 @@ Modify `buildSinglePage()` (word) or `populateKanjiTooltip()` (kanji) in kanji-t
 
 **Anki Export** — Export tracked words with context sentences to Anki-compatible format.
 
-### Storage Tiers (Planned)
+**Adaptive Furigana Visibility** — Graduated algorithm using word confidence + frequency to determine per-word furigana visibility (currently binary known-kanji-based only).
+
+**Auto Word Tracking** — Automatic `seenCount` increments during message processing for primary matches; track user-written words on send.
+
+### Storage Tiers (Implemented)
 
 | Tier | Store | Content | Save Frequency |
 |------|-------|---------|---------------|
-| 1 | extension_settings | User prefs, known kanji, explicitly-marked words | On change (debounced) |
-| 2 | Files endpoint JSON | Full tracking DB, side-chat history, Anki queue | Every 30s / on unload |
+| 1 | extension_settings | User prefs, known kanji, panel settings | On change (debounced) |
+| 2 | Files endpoint JSON | Word tracking DB (`nihongo-tracking.json`) | Every 30s / on unload |
 
-Each planned feature builds on existing architecture: tokenizer → linguistic analysis, tooltip → UI surface, settings → user control, macros → LLM feedback loop.
+Each planned feature builds on existing architecture: tokenizer → linguistic analysis, tooltip → UI surface, settings → user control, tracking → confidence data, macros → LLM feedback loop.
