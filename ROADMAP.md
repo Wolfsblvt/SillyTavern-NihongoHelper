@@ -46,8 +46,8 @@ Colored pills in tooltip: Top 1K (bright) → 1K-5K (medium) → 5K-15K (subtle)
 | Phase | Status | Scope | Depends On |
 |-------|--------|-------|-----------|
 | 1a | ✅ | Frequency data pipeline (build script, N-list format, composite score function) | Nothing |
-| 1b | 🔲 | Import first list (JPDB or Innocent Corpus) | 1a |
-| 1c | 🔲 | Display frequency badges in word tooltip | 1b |
+| 1b | ✅ | Import first list (JPDB — ~477K entries) | 1a |
+| 1c | ✅ | Display frequency badges in word tooltip (percentage + tier coloring + rank) | 1b |
 | 1d | 🔲 | Add Netflix/Anime as second list | 1a |
 | 1e | 🔲 | User settings: which lists to display, weights for composite score | 1c, 1d |
 | 1f | 🔲 | Color-coding words in chat by frequency tier | 1c |
@@ -91,11 +91,11 @@ Per-action specialized system prompts. Vague prompts → mediocre results. Each 
 ### Phases
 | Phase | Status | Scope | Depends On |
 |-------|--------|-------|-----------|
-| 2a | 🔲 | Infrastructure: side panel UI (slide-out, collapsible), LLM call wrapper | Nothing |
-| 2b | 🔲 | Tooltip buttons: "Explain", "Translate" → fire call → show in panel | 2a |
-| 2c | 🔲 | Structured prompts with full context injection | 2b |
-| 2d | 🔲 | Follow-up messages within same panel session | 2c |
-| 2e | 🔲 | Configurable model/connection for side-chat | 2a |
+| 2a | ✅ | Infrastructure: side panel UI (tabbed, left/right), LLM call wrapper | Nothing |
+| 2b | ✅ | Tooltip buttons: "Explain", "Translate", "Alternatives", "Grammar" → panel | 2a |
+| 2c | ✅ | Structured prompts with full context injection (v2 preset system) | 2b |
+| 2d | ✅ | Follow-up messages within same panel session (multi-turn) | 2c |
+| 2e | ✅ | Configurable model/connection via Connection Manager profiles | 2a |
 | 2f | 🔲 | Persistent conversations saved per-message | 2d, Storage (#9) |
 | 2g | 🔲 | Re-access past side conversations | 2f |
 
@@ -172,8 +172,8 @@ We already have 22K+ entries in memory. Local search is instant, offline, no rat
 | Phase | Status | Scope | Depends On |
 |-------|--------|-------|------------|
 | 4a | ✅ | Search index over local JMdict (Fuse.js, English + kana + kanji) | Nothing |
-| 4b | 🔲 | Search UI (input box + result list) — modal or panel | 4a |
-| 4c | 🔲 | Result actions: copy, insert into input, open tooltip | 4b |
+| 4b | ✅ | Search UI (side panel tab with debounced input + result cards) | 4a |
+| 4c | ✅ | Result actions: copy, insert into input, open in tooltip, romaji support | 4b |
 | 4d | 🔲 | Jisho API fallback for extended results / example sentences | 4b |
 | 4e | 🔲 | Integration into tooltip: "Search Jisho" button opens results in-app | 4d |
 
@@ -333,11 +333,11 @@ See [Storage Strategy](#9-storage-strategy). Thousands of words over time. Compa
 ### Phases
 | Phase | Status | Scope | Depends On |
 |-------|--------|-------|-----------|
-| 7a | ✅ | Data model + storage infrastructure | Storage (#9) |
-| 7b | 🔲 | Auto-track seenCount for primary matches | 7a |
-| 7c | 🔲 | Tooltip nudge buttons (Easy/Got it/Meh/Hard/Anki) | 7a |
+| 7a | ✅ | Data model + storage infrastructure (files endpoint, tiered entries) | Storage (#9) |
+| 7b | 🔲 | Auto-track seenCount for primary matches during processing | 7a |
+| 7c | ✅ | Tooltip nudge buttons (Easy/Got it/Meh/Hard/Anki/Reset) + confidence bar | 7a |
 | 7d | 🔲 | Track user-written words (tokenize input on send) | 7a |
-| 7e | 🔲 | Confidence nudge logic + derived levels | 7b, 7c |
+| 7e | ✅ | Confidence nudge logic + derived levels + undo support | 7a, 7c |
 | 7f | 🔲 | Migrate kanji known state to new format | 7a |
 | 7g | 🔲 | Expose tracking data to LLM prompts (macro/context) | 7e |
 
@@ -352,17 +352,17 @@ Features interleaved by phase for maximum early value:
 | **1: Foundations** | 7a | Word tracking data model + storage infra | ✅ |
 | | 1a | Frequency pipeline (build script, N-list format, composite score) | ✅ |
 | | 4a | Search index over local JMdict (Fuse.js) | ✅ |
-| **2: First Visible** | 1b | Import first frequency list | 🔲 |
-| | 1c | Frequency badges in tooltip | 🔲 |
-| | 4b | Search UI (modal with input + results) | 🔲 |
+| **2: First Visible** | 1b | Import first frequency list (JPDB) | ✅ |
+| | 1c | Frequency badges in tooltip | ✅ |
+| | 4b | Search UI (side panel tab) | ✅ |
 | | 7b | Auto-track seenCount during processing | 🔲 |
-| | 7c | Tooltip nudge buttons (Easy/Got it/Meh/Hard/Anki) | 🔲 |
-| **3: Side Chat MVP** | 2a | Side panel UI + LLM call wrapper | 🔲 |
-| | 2b | Tooltip buttons → explain/translate → panel | 🔲 |
-| | 4c | Search result actions (copy, insert) | 🔲 |
+| | 7c | Tooltip nudge buttons (Easy/Got it/Meh/Hard/Anki/Reset) | ✅ |
+| **3: Side Chat MVP** | 2a | Side panel UI + LLM call wrapper | ✅ |
+| | 2b | Tooltip buttons → explain/translate → panel | ✅ |
+| | 4c | Search result actions (copy, insert, tooltip) | ✅ |
 | | 5a | "Save for Anki" button on tooltip | 🔲 |
 | **4: Integration** | 1d | Second frequency list (Netflix/Anime) | 🔲 |
-| | 2c | Structured prompts with full context | 🔲 |
+| | 2c | Structured prompts with full context (v2 presets) | ✅ |
 | | 3a | "Check Japanese" pre-send button | 🔲 |
 | | 6a | Graduated furigana visibility algorithm | 🔲 |
 | **5: Polish & Export** | 5b,5c | Anki export queue + CSV | 🔲 |
@@ -375,40 +375,41 @@ This order ensures: foundational data layers first → visible features quickly 
 
 ---
 
-## 9. Storage Strategy
+## 9. Storage Strategy ✅
 
 ### The Problem
 Word tracking data will grow large (thousands of entries over months). SillyTavern's `extension_settings` is JSON-serialized on every `saveSettingsDebounced()` call. Bloating it with tracking data would slow all settings saves.
 
-### Solution: Tiered Storage
+### Solution: Tiered Storage (Implemented)
 
 **Tier 1: extension_settings (small, critical data)**
 - User preferences/settings (current approach, unchanged)
 - Known kanji map (existing, small — ~3000 entries max)
 
 **Tier 2: Separate file via ST files endpoint (large, non-critical data)**
-- Full word tracking database (all auto-tracked entries)
-- Side chat history (persistent conversations)
-- Anki export queue
+- Full word tracking database → `user/files/nihongo-tracking.json`
+- Side chat history (planned — not yet persisted)
+- Anki export queue (planned)
 
-ST's files endpoint (`/api/files/upload`) allows uploading arbitrary files to the user's data directory. They can be downloaded directly via fetch. It's designed for file attachments but works for any file. The extension:
-1. Maintains an in-memory tracking database
-2. Debounced saves to a JSON file via the files endpoint (separate from settings save cycle)
-3. Loads the file on extension init
+ST's files endpoint (`/api/files/upload`) allows uploading arbitrary files to the user's data directory. They can be downloaded directly via fetch. The extension:
+1. Maintains an in-memory tracking database (`Map<string, WordEntry | CompactEntry>`)
+2. Debounced saves every 30s via the files endpoint (separate from settings save cycle)
+3. Loads the file on extension init (graceful if missing)
+4. Saves on `beforeunload` / `visibilitychange` for safety
 
-**File path:** `user/files/nihongo-helper/tracking.json` (or similar)
+**File path:** `user/files/nihongo-tracking.json`
 
 **Benefits:**
 - Settings saves remain fast (small payload)
-- Tracking data saves can be less frequent (every 30s or on visibility change)
+- Tracking data saves less frequent (every 30s or on visibility change)
 - No size concern — JSON file can grow freely
 - Backup/restore is just a file copy
 
 ### Implementation Notes
-- Custom `saveTrackingDebounced()` with longer interval than settings (30s vs instant)
-- Save on `beforeunload` / `visibilitychange` for safety
-- Graceful handling if file doesn't exist yet (first run)
-- Consider splitting into multiple files if tracking exceeds ~5MB (unlikely for most users)
+- `saveTrackingNow()` with 30s debounce timer (`SAVE_INTERVAL_MS`)
+- Fire-and-forget upload (base64-encoded JSON via `/api/files/upload`)
+- Verify endpoint check on load avoids 404 console noise on first run
+- Dirty flag prevents unnecessary saves; retry on failure
 
 ---
 
@@ -431,16 +432,27 @@ ST's files endpoint (`/api/files/upload`) allows uploading arbitrary files to th
 }
 ```
 
-### Side Chat Prompt Template Example
-```
-System: You are a Japanese language tutor helping a student who is reading
-Japanese chat messages. They know {knownKanjiCount} kanji. Answer concisely
-and at their level. Use furigana for words they likely don't know.
+### Side Chat Prompt Architecture (v2)
 
-The student asks about: {word} ({reading})
-Context sentence: {sentence}
-Action: {explain|translate|alternatives|grammar}
+Presets use a two-layer system: stable system prompt + per-action instructions at depth.
+
 ```
+messages[0] (system — STABLE, cacheable):
+  = preset.systemPrompt template (composes {{nihongoPersonality}} + {{nihongoRules}})
+  Identical across all turns in a session.
+
+messages[1..N-2] (history):
+  Interleaved user/assistant, with user msgs using stored `prompt` field.
+  Old action instructions stripped/deduped per chatHistoryMode setting.
+
+messages[N-1] (system at depth — action instructions):
+  = preset.actions[actionId].system (macro-substituted)
+
+messages[N] (user):
+  = preset.actions[actionId].user (macro-substituted with word, sentence, etc.)
+```
+
+Macros: `{{nihongoWord}}`, `{{nihongoSentence}}`, `{{nihongoKnownKanjiCount}}`, `{{nihongoPersonality}}`, `{{nihongoRules}}`, `{{nihongoUserMessage}}`.
 
 ### AnkiConnect API
 ```javascript
