@@ -4,7 +4,6 @@ import { getKnownKanji } from './kanji-manager.js';
 import { getKanji as getKanjiEntry } from './kanji-data.js';
 import { analyzeTokens, registerSpanMatches } from './token-matcher.js';
 import { recordSeen } from './tracking.js';
-import { onMessageFormatted } from '../../../../../script.js';
 
 /** @type {any} */
 let tokenizer = null;
@@ -504,12 +503,13 @@ function addFuriganaToHTML(html) {
  * Initializes the furigana system.
  */
 export async function initFurigana() {
-    const { eventSource, eventTypes } = SillyTavern.getContext();
+    const { eventSource, eventTypes, messageFormatter } = SillyTavern.getContext();
 
-    // Register synchronous formatting hook — processes HTML before it hits the DOM.
+    // Register formatting hook — processes HTML before it hits the DOM.
     // This covers all paths: streaming tokens, initial render, swipes, edits, etc.
-    onMessageFormatted((data) => {
-        data.mesText = addFuriganaToHTML(data.mesText);
+    messageFormatter.addHook((mes, ctx) => {
+        if (ctx.isSystem) return mes;
+        return addFuriganaToHTML(mes);
     });
 
     // Load tokenizer (async, non-blocking for init)
