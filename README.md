@@ -24,7 +24,7 @@ Day-to-day reading and lookup features that are tested and ready to use.
 - **Kanji Inspect Mode** — Toggle (`Ctrl+Shift+K` or wand menu) to hover any kanji in chat for full details.
 - **Kanji Tooltip** — Compact hover tooltip with smart positioning, used in both Kanji Manager and Inspect Mode.
 - **Word Tooltip** — Word-level details with grouped JMdict definitions, kanji breakdown, on/kun labels, Jisho link.
-- **Inflection Detection & De-inflection** — Recognises ~100 verb/adjective patterns (masu, te, ta, negative, potential, passive, causative, volitional, conditional, progressive, …) and chains back to dictionary form.
+- **Inflection Detection & De-inflection** — Recognises ~100 verb/adjective patterns (masu, te, ta, negative, potential, passive, causative, volitional, conditional, progressive, …) and links inflected forms back to their dictionary form.
 - **Multi-Token Matching** — Sliding-window dictionary lookup catches multi-word expressions that span kuromoji token boundaries.
 - **Paginated Tooltips** — Multiple interpretations per tooltip with tab navigation (scroll, Shift+Scroll, click).
 - **Kana Word Tooltips** — Optional setting to make kana-only words hoverable.

@@ -669,7 +669,7 @@ Word tracking data will grow large (thousands of entries over months). SillyTave
 
 **Tier 1: extension_settings (small, critical data)**
 - User preferences/settings (current approach, unchanged)
-- Known kanji map and learning kanji map, both small bounded sets. (existing, small — ~3000 entries max)
+- Unified kanji state map for known/learning kanji, small and bounded. (existing, small — ~3000 entries max)
 
 **Tier 2: Separate file via ST files endpoint (large, non-critical data)**
 - Full word tracking database → `user/files/nihongo-tracking.json`

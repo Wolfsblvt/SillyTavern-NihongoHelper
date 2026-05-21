@@ -163,7 +163,7 @@ Single source of truth for per-kanji learning state. Replaces the old `knownKanj
 - `setState(char, 'learning')` — idempotent if already learning; from `known`, demotes (clears `knownSince`, keeps `learningSince`); from `unknown`, stamps `learningSince=now`.
 - `setState(char, 'known')` — idempotent if already known; from `learning`, promotes (stamps `knownSince=now`, preserves `learningSince`); from `unknown`, stamps `knownSince=now`.
 
-**Public API:** `loadKanjiState()`, `getState(char)`, `getStateEntry(char)`, `setState(char, newState)`, `cycleState(char)`, `toggleKnown(char)` (compat helper), `isKnown(char)`, `isLearning(char)`, `getKnownKanji()` / `getLearningKanji()` (snapshot maps), `getKnownChars()` / `getLearningChars()`.
+**Public API:** `loadKanjiState()`, `getState(char)`, `getStateEntry(char)`, `setState(char, newState)`, `cycleState(char)`, `isKnown(char)`, `isLearning(char)`, `getKnownKanji()` / `getLearningKanji()` (snapshot maps), `getKnownChars()` / `getLearningChars()`.
 
 **Legacy migration:** `loadKanjiState()` reads `settings.knownKanji` (array OR object char→ISO date) on first load, populates the unified map with `state: 'known'`, then deletes the legacy key. One-shot, no ongoing dual-write.
 
