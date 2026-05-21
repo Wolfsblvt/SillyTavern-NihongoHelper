@@ -276,7 +276,9 @@ function addFuriganaToText(text) {
  * @param {HTMLElement} element
  */
 function stripFurigana(element) {
-    element.querySelectorAll('.nihongo-processed').forEach(el => {
+    // Match both unprefixed (direct DOM injection) and `custom-` prefixed (output of
+    // our messageFormatter hook after SillyTavern's DOMPurify class-prefix step).
+    element.querySelectorAll('.nihongo-processed, .custom-nihongo-processed').forEach(el => {
         const parent = el.parentNode;
         if (!parent) return;
         // Prefer stored original text (avoids including <rt> content)
@@ -301,7 +303,7 @@ function stripFurigana(element) {
  */
 function trackSeenWords(element) {
     const seen = new Set();
-    element.querySelectorAll('.nihongo-word[data-word]').forEach(el => {
+    element.querySelectorAll('.nihongo-word[data-word], .custom-nihongo-word[data-word]').forEach(el => {
         const word = el.getAttribute('data-word');
         if (word && !seen.has(word)) {
             seen.add(word);
@@ -319,8 +321,10 @@ function trackSeenWords(element) {
 function processMessageElement(element, force = false) {
     if (!tokenizer || !nihongoSettings.enabled) return;
 
-    // Track whether this is a first-time process (for word tracking)
-    const isFirstPass = !element.querySelector('.nihongo-processed');
+    // Track whether this is a first-time process (for word tracking).
+    // After SillyTavern's DOMPurify step our first-pass classes are prefixed with `custom-`,
+    // so we check for both variants when deciding whether the element was already processed.
+    const isFirstPass = !element.querySelector('.nihongo-processed, .custom-nihongo-processed');
 
     // If already processed, strip first if forcing, otherwise skip
     if (!isFirstPass) {
@@ -331,10 +335,14 @@ function processMessageElement(element, force = false) {
     // Walk all text nodes that contain any Japanese characters
     const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
         acceptNode(node) {
-            // Skip if inside a ruby element, code block, or already processed
+            // Skip if inside a ruby element, code block, or any prior wrapper of ours.
+            // We must also reject the DOMPurify-prefixed `custom-nihongo-*` variants,
+            // otherwise re-processing nests new wrappers inside the sanitized first-pass output
+            // and the tooltip's `closest('.nihongo-word')` ends up matching the inner per-kanji
+            // wrapper instead of the outer greedy word.
             const parent = node.parentElement;
             if (!parent) return NodeFilter.FILTER_REJECT;
-            if (parent.closest('ruby, code, pre, .nihongo-processed')) return NodeFilter.FILTER_REJECT;
+            if (parent.closest('ruby, code, pre, .nihongo-processed, .custom-nihongo-processed, .nihongo-word, .custom-nihongo-word, .nihongo-kanji, .custom-nihongo-kanji')) return NodeFilter.FILTER_REJECT;
             if (!containsJapanese(node.textContent || '')) return NodeFilter.FILTER_REJECT;
             return NodeFilter.FILTER_ACCEPT;
         },
@@ -383,7 +391,9 @@ function processAllMessages(force = false) {
  */
 export function reprocessMessagesWithKanji(char) {
     if (!tokenizer || !nihongoSettings.enabled) return;
-    const spans = document.querySelectorAll(`#chat .nihongo-kanji[data-kanji="${char}"]`);
+    const spans = document.querySelectorAll(
+        `#chat .nihongo-kanji[data-kanji="${char}"], #chat .custom-nihongo-kanji[data-kanji="${char}"]`,
+    );
     const processed = new Set();
     for (const span of spans) {
         const mesText = span.closest('.mes_text, .mes_reasoning');
@@ -477,12 +487,13 @@ function addFuriganaToHTML(html) {
     const container = document.createElement('div');
     container.innerHTML = html;
 
-    // Walk text nodes (same logic as processMessageElement but on a temp container)
+    // Walk text nodes (same logic as processMessageElement but on a temp container).
+    // Reject both prefixed and unprefixed wrapper variants for the same reasons documented there.
     const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
         acceptNode(node) {
             const parent = node.parentElement;
             if (!parent) return NodeFilter.FILTER_REJECT;
-            if (parent.closest('ruby, code, pre, .nihongo-processed')) return NodeFilter.FILTER_REJECT;
+            if (parent.closest('ruby, code, pre, .nihongo-processed, .custom-nihongo-processed, .nihongo-word, .custom-nihongo-word, .nihongo-kanji, .custom-nihongo-kanji')) return NodeFilter.FILTER_REJECT;
             if (!containsJapanese(node.textContent || '')) return NodeFilter.FILTER_REJECT;
             return NodeFilter.FILTER_ACCEPT;
         },

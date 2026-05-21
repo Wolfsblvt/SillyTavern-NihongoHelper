@@ -1,5 +1,17 @@
 /* ===== Nihongo Helper - Furigana Styles ===== */
 
+/*
+ * Class-prefix duality:
+ *   SillyTavern's DOMPurify hook (public/scripts/chats.js, uponSanitizeAttribute)
+ *   prefixes EVERY class on sanitized message HTML with `custom-` unless it starts
+ *   with `fa-`, `note-`, or equals `monospace`. So when our messageFormatter hook
+ *   emits `<span class="nihongo-word">`, the DOM ends up with `class="custom-nihongo-word"`.
+ *   Direct DOM injections from re-processing or non-chat surfaces (Kanji Manager,
+ *   side panel, search results) keep the original unprefixed name.
+ *   Every chat-scoped (`#chat .mes`) selector that references a `nihongo-*` class
+ *   therefore uses `:is(.nihongo-X, .custom-nihongo-X)` so it matches both variants.
+ */
+
 /* Base ruby styling */
 #chat .mes ruby {
     ruby-align: center;
@@ -18,7 +30,7 @@
 }
 
 /* Japanese text font size scaling */
-#chat .mes .nihongo-processed {
+#chat .mes :is(.nihongo-processed, .custom-nihongo-processed) {
     font-size: calc(1em * var(--nihongo-font-size, 1));
 }
 
@@ -46,17 +58,17 @@
 }
 
 /* Processed span wrapper should be inline */
-#chat .mes .nihongo-processed {
+#chat .mes :is(.nihongo-processed, .custom-nihongo-processed) {
     display: inline;
 }
 
 /* Per-kanji wrapping (inline, no visual change by default) */
-#chat .mes .nihongo-kanji {
+#chat .mes :is(.nihongo-kanji, .custom-nihongo-kanji) {
     display: inline;
 }
 
 /* Known kanji highlighting — blends current text color with green */
-#chat.nihongo-highlight-known .mes .nihongo-kanji-known {
+#chat.nihongo-highlight-known .mes :is(.nihongo-kanji-known, .custom-nihongo-kanji-known) {
     color: color-mix(in srgb, currentColor 45%, #4caf50);
 }
 
@@ -742,21 +754,21 @@
 
 /* ===== Chat Inspect Mode ===== */
 
-#chat.nihongo-inspect-mode .nihongo-word:has(.nihongo-kanji) {
+#chat.nihongo-inspect-mode :is(.nihongo-word, .custom-nihongo-word):has(:is(.nihongo-kanji, .custom-nihongo-kanji)) {
     cursor: help;
 }
 
-#chat.nihongo-inspect-mode .nihongo-word:has(.nihongo-kanji):hover {
+#chat.nihongo-inspect-mode :is(.nihongo-word, .custom-nihongo-word):has(:is(.nihongo-kanji, .custom-nihongo-kanji)):hover {
     background: rgba(255, 255, 255, 0.06);
     border-radius: 2px;
 }
 
-#chat.nihongo-inspect-mode .nihongo-kanji {
+#chat.nihongo-inspect-mode :is(.nihongo-kanji, .custom-nihongo-kanji) {
     cursor: help;
     border-bottom: 1px dotted rgba(255, 255, 255, 0.3);
 }
 
-#chat.nihongo-inspect-mode .nihongo-kanji:hover {
+#chat.nihongo-inspect-mode :is(.nihongo-kanji, .custom-nihongo-kanji):hover {
     background: rgba(255, 255, 255, 0.08);
     border-radius: 2px;
 }
@@ -865,14 +877,14 @@
 
 /* ── Kana-only hoverable words (only styled when inspect mode + kana tooltips are both active) ── */
 
-.nihongo-inspect-mode.nihongo-kana-tooltips .nihongo-word-kana {
+.nihongo-inspect-mode.nihongo-kana-tooltips :is(.nihongo-word-kana, .custom-nihongo-word-kana) {
     border-bottom: 1px dotted rgba(255, 255, 255, 0.15);
     cursor: help;
     border-radius: 2px;
     transition: background 0.1s;
 }
 
-.nihongo-inspect-mode.nihongo-kana-tooltips .nihongo-word-kana:hover {
+.nihongo-inspect-mode.nihongo-kana-tooltips :is(.nihongo-word-kana, .custom-nihongo-word-kana):hover {
     background: rgba(255, 255, 255, 0.08);
 }
 
@@ -1913,7 +1925,7 @@
 /* Slightly tinted blue underline-ish glow. Quieter than the green known
    highlight because learning kanji still show furigana, so the user already
    has a strong cue. */
-#chat.nihongo-highlight-known .mes .nihongo-kanji-learning {
+#chat.nihongo-highlight-known .mes :is(.nihongo-kanji-learning, .custom-nihongo-kanji-learning) {
     color: color-mix(in srgb, currentColor 70%, #5b9bff);
     text-decoration: underline dotted color-mix(in srgb, currentColor 30%, #5b9bff);
     text-underline-offset: 2px;

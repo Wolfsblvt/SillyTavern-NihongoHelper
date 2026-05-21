@@ -208,10 +208,19 @@ function wireKnownButtons(tip) {
                 }
             }
 
-            // Update kanji spans across the DOM (chat, search results, manager)
-            document.querySelectorAll(`.nihongo-kanji[data-kanji="${ch}"]`).forEach(s => {
+            // Update kanji spans across the DOM (chat, search results, manager).
+            // After SillyTavern's DOMPurify step, chat-message spans get prefixed to
+            // `.custom-nihongo-kanji` with state classes also prefixed (`custom-nihongo-kanji-known`
+            // etc.), so we set BOTH the prefixed and unprefixed state classes so the CSS rule
+            // (which also accepts both, see style.css) takes effect regardless of which variant
+            // is currently on the element.
+            document.querySelectorAll(
+                `.nihongo-kanji[data-kanji="${ch}"], .custom-nihongo-kanji[data-kanji="${ch}"]`,
+            ).forEach(s => {
                 s.classList.toggle('nihongo-kanji-known', newState === 'known');
                 s.classList.toggle('nihongo-kanji-learning', newState === 'learning');
+                s.classList.toggle('custom-nihongo-kanji-known', newState === 'known');
+                s.classList.toggle('custom-nihongo-kanji-learning', newState === 'learning');
             });
 
             // Re-process messages so furigana visibility (hideKnownFurigana) updates
@@ -1116,6 +1125,12 @@ function scheduleShow(found, boundingEl) {
  *   1. .nihongo-km-tile[data-kanji] → kanji tooltip (Kanji Manager)
  *   2. .nihongo-word[data-word]     → word tooltip (in-message, contains kanji blocks)
  *   3. .nihongo-kanji[data-kanji]   → kanji tooltip fallback (in-message without word wrapper)
+ *
+ * NOTE: We match both `nihongo-*` and `custom-nihongo-*` variants for in-message
+ * wrappers. SillyTavern's DOMPurify hook prefixes every class on sanitized message
+ * HTML with `custom-` (see public/scripts/chats.js uponSanitizeAttribute), so the
+ * first-pass output of our messageFormatter hook arrives in the DOM as `custom-nihongo-*`.
+ * Direct DOM injections (re-process, etc.) keep the unprefixed name.
  * @param {EventTarget|null} target
  * @returns {{ type: 'word'|'kanji', key: string, el: HTMLElement, word?: string, reading?: string, pos?: string, matchId?: string }|null}
  */
@@ -1124,8 +1139,8 @@ function findTooltipTarget(target) {
     // Kanji Manager tile — always kanji tooltip
     const tile = target.closest('.nihongo-km-tile[data-kanji]');
     if (tile) return { type: 'kanji', key: `k:${tile.dataset.kanji}`, el: tile, word: tile.dataset.kanji };
-    // In-message word span — word tooltip
-    const wordSpan = target.closest('.nihongo-word[data-word]');
+    // In-message word span — word tooltip (match both raw and sanitized class names)
+    const wordSpan = target.closest('.nihongo-word[data-word], .custom-nihongo-word[data-word]');
     if (wordSpan) {
         const word = wordSpan.dataset.word;
         const hasKanji = /[\u4e00-\u9faf\u3400-\u4dbf]/.test(word);
@@ -1141,8 +1156,8 @@ function findTooltipTarget(target) {
             return { type: 'word', key: `w:${word}:${matchId}`, el: posEl, word, reading, pos, matchId };
         }
     }
-    // Fallback: bare kanji span (without word wrapper)
-    const kanjiSpan = target.closest('.nihongo-kanji[data-kanji]');
+    // Fallback: bare kanji span (without word wrapper) — match both raw and sanitized class names
+    const kanjiSpan = target.closest('.nihongo-kanji[data-kanji], .custom-nihongo-kanji[data-kanji]');
     if (kanjiSpan) return { type: 'kanji', key: `k:${kanjiSpan.dataset.kanji}`, el: kanjiSpan, word: kanjiSpan.dataset.kanji };
     return null;
 }
@@ -1223,7 +1238,7 @@ export function attachKanjiTooltip(container, options = {}) {
     const onWheel = (e) => {
         // Shift+Scroll on word span navigates tooltip pages
         if (!e.shiftKey || tooltipPages.length <= 1) return;
-        const wordSpan = e.target instanceof HTMLElement && e.target.closest('.nihongo-word');
+        const wordSpan = e.target instanceof HTMLElement && e.target.closest('.nihongo-word, .custom-nihongo-word');
         if (!wordSpan || !currentKey) return;
         e.preventDefault();
         e.stopPropagation();
