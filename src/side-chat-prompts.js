@@ -92,18 +92,24 @@ import { buildActionRegistry, CUSTOM_ACTION_ID } from './side-chat-actions.js';
 // ===== Constants =====
 
 const CURRENT_VERSION = 3;
-const BUNDLED_PRESET_PATH = `/scripts/extensions/third-party/${EXTENSION_NAME}/data/presets/default.json`;
 const DEFAULT_PRESET_ID = 'default';
+
 const USER_PRESET_FILENAME_PREFIX = 'nihongo-preset-';
 const USER_PRESET_FILENAME_SUFFIX = '.json';
 
-const BUNDLED_DEFAULT_ENTRY = Object.freeze({
-    id: DEFAULT_PRESET_ID,
-    name: 'Default Tutor',
-    description: 'Concise, clear Japanese tutor',
-    path: BUNDLED_PRESET_PATH,
-    bundled: true,
-});
+/**
+ * Returns the bundled default preset entries.
+ * @returns {PresetEntry[]}
+ */
+const bundledDefaultEntries = () => {
+    return [{
+        id: DEFAULT_PRESET_ID,
+        name: 'Default Tutor',
+        description: 'Concise, clear Japanese tutor',
+        path: `/scripts/extensions/third-party/${EXTENSION_NAME}/data/presets/default.json`,
+        bundled: true,
+    }];
+};
 
 // ===== State =====
 
@@ -123,9 +129,9 @@ let activePreset = null;
 /** @type {{ actions: import('./side-chat-actions.js').ChatAction[], byId: Map<string, import('./side-chat-actions.js').ChatAction> }} */
 let activeRegistry = { actions: [], byId: new Map() };
 
-/** Discovered preset list (bundled + user). */
+/** Discovered preset list (bundled + user). Populated by `refreshPresetList()` during init. */
 /** @type {PresetEntry[]} */
-let presetList = [{ ...BUNDLED_DEFAULT_ENTRY }];
+let presetList = [];
 
 // ===== Public API: Reads =====
 
@@ -209,7 +215,8 @@ export function getActivePreset() {
  */
 export async function initPresets(presetId) {
     // Bundled default first — its custom action seeds the fallback registry.
-    bundledDefault = await fetchPresetFromUrl(BUNDLED_PRESET_PATH);
+    const bundledPresetPath = bundledDefaultEntries()[0].path;
+    bundledDefault = await fetchPresetFromUrl(bundledPresetPath);
     if (bundledDefault) {
         const reg = buildActionRegistry(bundledDefault.actions, null);
         bundledCustomFallback = reg.byId.get(CUSTOM_ACTION_ID) || null;
@@ -227,7 +234,7 @@ export async function initPresets(presetId) {
  */
 export async function loadPreset(presetId) {
     const entry = presetList.find(p => p.id === presetId);
-    const path = entry?.path || BUNDLED_PRESET_PATH;
+    const path = entry?.path;
 
     const data = await fetchPresetFromUrl(path);
     if (!data) {
@@ -395,7 +402,7 @@ export function isUserPreset(presetId) {
  */
 function refreshPresetList() {
     /** @type {PresetEntry[]} */
-    const list = [{ ...BUNDLED_DEFAULT_ENTRY }];
+    const list = [...bundledDefaultEntries()];
     for (const entry of getUserPresetIndex()) {
         list.push({
             id: entry.id,
