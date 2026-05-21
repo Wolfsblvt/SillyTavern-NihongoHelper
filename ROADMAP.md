@@ -354,7 +354,7 @@ Move the action registry into the tutor preset JSON. Each preset declares its ow
 ### Action Schema (per preset)
 | Field | Purpose |
 |-------|---------|
-| `id` | Stable identifier used for tracking, history, dedup. Must be unique within preset. |
+| `id` | Implied by the action object key, e.g. `actions.explain`. Used for tracking, history, and dedup. Must be unique within the preset. |
 | `label` | Button text (i18n-friendly later). |
 | `icon` | Optional FontAwesome class or emoji. |
 | `visibility` | Where the button appears: `tooltip`, `selection`, `manual` (any combination). |
@@ -521,7 +521,7 @@ Supports focused study of the next 5–20 kanji without forcing the user to "pro
 ### Phases
 | Phase | Status | Scope | Depends On |
 |-------|--------|-------|-----------|
-| 13a | 🔲 | Data model: add `learning` set alongside `known` set | #7 |
+| 13a | 🔲 | Data model: add `learning` set alongside `known` set | Kanji Manager / Settings |
 | 13b | 🔲 | Kanji Manager UI: toggle between Unknown / Learning / Known | 13a |
 | 13c | 🔲 | Macros `{{learningKanji}}` / `{{learningKanjiCount}}` | 13a |
 | 13d | 🔲 | Wire into furigana logic (learning → still show by default) | 13a, #6 |
@@ -625,7 +625,7 @@ Word tracking data will grow large (thousands of entries over months). SillyTave
 
 **Tier 1: extension_settings (small, critical data)**
 - User preferences/settings (current approach, unchanged)
-- Known kanji map (existing, small — ~3000 entries max)
+- Known kanji map and learning kanji map, both small bounded sets. (existing, small — ~3000 entries max)
 
 **Tier 2: Separate file via ST files endpoint (large, non-critical data)**
 - Full word tracking database → `user/files/nihongo-tracking.json`
@@ -709,7 +709,7 @@ fetch('http://localhost:8765', { method: 'POST', body: JSON.stringify({action:'v
 ```
 
 ### Word Tracking Strictness Implementation
-During `addFuriganaToText` processing, after `analyzeTokens` returns greedy spans:
+During message text processing, immediately after `analyzeTokens` returns greedy spans:
 - For each span with `matches.length > 0`:
   - Take `matches[0]` (primary/best match)
   - Extract dictionary form (the matched word, not the surface)
