@@ -343,40 +343,59 @@ See [Storage Strategy](#16-storage-strategy). Thousands of words over time. Comp
 
 ---
 
-## 8. Configurable Side Chat Actions
+## 8. Configurable Side Chat Actions ✅
 
 ### Problem
-Side-chat action buttons (Explain, Translate, Grammar, Alternatives) are currently hard-coded. Adding or modifying actions requires code changes, which blocks experimentation, custom tutors, and user-contributed workflows.
+Side-chat action buttons (Explain, Translate, Grammar, Alternatives) used to be hard-coded. Adding or modifying actions required code changes, which blocked experimentation, custom tutors, and user-contributed workflows.
 
-### Idea
-Move the action registry into the tutor preset JSON. Each preset declares its own actions; the extension consumes them as data. No code changes needed to add a new action or build a specialized tutor.
+### Solution (shipped)
+The action registry now lives in the tutor preset JSON. Each preset declares its own actions; the extension consumes them as data via `src/side-chat-actions.js`. No code changes needed to add an action or build a specialized tutor.
 
-### Action Schema (per preset)
+### Action Schema (preset JSON, v3)
 | Field | Purpose |
 |-------|---------|
-| `id` | Implied by the action object key, e.g. `actions.explain`. Used for tracking, history, and dedup. Must be unique within the preset. |
-| `label` | Button text (i18n-friendly later). |
-| `icon` | Optional FontAwesome class or emoji. |
-| `visibility` | Where the button appears: `tooltip`, `selection`, `manual` (any combination). |
-| `requiresDictionaryMatch` | If true, only enabled when a JMdict match is available. |
+| _key_ | Action ID is the object key (e.g. `actions.explain`). Stable; used for tracking, history, dedup. |
+| `label` | Button text. Falls back to the id if missing. |
+| `icon` | FontAwesome class (no `fa-solid` prefix). Falls back to a default icon. |
+| `visibility` | Array of contexts: `tooltip` (word tooltip), `selection` (selection-fallback tooltip), `manual` (free-form input). Unknown values dropped. |
+| `requiresDictionaryMatch` | If true, the action is excluded from contexts without a JMdict match. |
 | `system` | System prompt at depth (macro-aware). |
 | `user` | User prompt template (macro-aware). |
 
+### Validation Rules (in `buildActionRegistry`)
+- Invalid id → skip with console warning.
+- Missing label → fallback to id.
+- Missing icon → default icon.
+- Missing **both** system and user prompts → skip (nothing to send).
+- Unknown visibility value → silently dropped from the array.
+- Empty/missing visibility → defaults to `[tooltip, selection]` (or `[manual]` for `custom`).
+- No valid actions in preset → bundled default's `custom` action is injected as a fallback so free-form input always works.
+- Duplicate ids → first wins, subsequent ones logged.
+
 ### Constraints
-- Validate every action before registration; ignore invalid entries with a console warning.
 - No arbitrary JavaScript in presets — only declarative fields and macro-substituted strings.
-- Built-in core actions ship as a default preset, fully overrideable by the user.
+- Built-in core actions ship as the bundled `data/presets/default.json`, fully overrideable.
+- Preset JSON validates leniently: one bad action does not crash the extension.
 
 ### Why
-Custom tutors (beginner-only, kanji-focused, JLPT N3 cram, etc.) and custom workflows (e.g. "explain like I'm five", "Japanese-only paraphrase") become user-editable. The same mechanism enables future community-shared presets.
+Custom tutors (beginner-only, kanji-focused, JLPT N3 cram, etc.) and custom workflows (e.g. "explain like I'm five", "Japanese-only paraphrase") become user-editable. The same mechanism enables community-shared presets.
+
+### Import / Export
+Settings panel exposes Import / Export / Delete buttons next to the preset dropdown:
+- **Export** serializes the active preset as `nihongo-preset-<id>.json` for download.
+- **Import** picks a JSON file, validates the schema, slugifies the name, resolves id collisions (appends `-2`, `-3`, …), uploads it to `user/files/nihongo-preset-<slug>.json` via the standard files endpoint, and registers it in `extension_settings.nihongo_helper.userPresets` so it appears in the dropdown immediately.
+- **Delete** (visible only for user presets) removes the file and index entry, falling back to the bundled default.
+
+The bundled default cannot be deleted. Discovery no longer relies on the missing `/api/files/list` endpoint — the user-preset index is kept in extension_settings.
 
 ### Phases
 | Phase | Status | Scope | Depends On |
 |-------|--------|-------|-----------|
-| 8a | 🔲 | Define action schema + validator | #2c |
-| 8b | 🔲 | Refactor existing hard-coded actions into the default preset | 8a |
-| 8c | 🔲 | UI reads `visibility` flags to render buttons in tooltip / selection / manual contexts | 8b |
-| 8d | 🔲 | Preset import/export and inline editor | 8c |
+| 8a | ✅ | Action schema + validator (`src/side-chat-actions.js`) | #2c |
+| 8b | ✅ | Refactor built-in actions into the default preset (v3 schema) | 8a |
+| 8c | ✅ | Tooltip / selection rendering driven by `visibility` flags | 8b |
+| 8d | ✅ | Preset import / export / delete UX (file picker + download) | 8c |
+| 8e | 🔲 | Inline preset editor inside settings (rename / edit actions in-app) | 8d |
 
 ---
 
@@ -617,9 +636,10 @@ Sprints 4+ follow this dependency-aware sequence:
 | | 2c | Structured prompts with full context (v2 presets) | ✅ |
 | | 4c | Search result actions (copy, insert, tooltip) | ✅ |
 | **4: Tracking & Action Registry** | 12a | Tracking correctness refactor (seenCount semantics, primary-match strictness) | 🔲 |
-| | 8a, 8b | Action schema + validator; refactor built-ins to default preset | 🔲 |
+| | 8a, 8b | Action schema + validator; refactor built-ins to default preset | ✅ |
 | | 13a, 13b, 13c, 13d | Kanji learning mode: data model, manager UI, macros, furigana class | ✅ |
-| | 8c | Visibility-driven button rendering (tooltip/selection/manual) | 🔲 |
+| | 8c | Visibility-driven button rendering (tooltip/selection/manual) | ✅ |
+| | 8d | Preset import / export / delete UX | ✅ |
 | **5: Extended Tracking & Adaptive Furigana** | 12b, 12c | hover/lookup/action counts + bounded contexts | 🔲 |
 | | 6a, 6b | Graduated furigana visibility + threshold slider | 🔲 |
 | | 13e | Wire learning kanji into adaptive furigana visibility | 🔲 |

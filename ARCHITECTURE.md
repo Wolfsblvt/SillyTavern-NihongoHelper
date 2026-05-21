@@ -67,14 +67,18 @@ index.js (entry point)
 │   ├── tracking.js (nudgeConfidence, getDerivedLevel, getConfidence)
 │   ├── frequency.js (getFrequencyPercent, getFrequencyTier)
 │   ├── furigana.js (reprocessMessagesWithKanji)
-│   └── side-chat.js (triggerChatAction — from tooltip action buttons)
+│   ├── side-chat.js (triggerChatAction — from tooltip action buttons)
+│   ├── side-chat-prompts.js (getActiveActions — registry source)
+│   └── side-chat-actions.js (getActionsForContext, VISIBILITY — filter buttons by context)
 ├── side-panel.js       (shared tabbed side panel: register, open, close, switch)
-├── side-chat-prompts.js (preset system: JSON loader, discovery, active preset state)
-│   └── data/presets/default.json (bundled default preset)
+├── side-chat-actions.js (normalized ChatAction registry: validation, visibility filtering, custom-action fallback)
+├── side-chat-prompts.js (preset system: JSON loader, user-preset index in extension_settings, import/export, registry-backed prompt lookups)
+│   ├── side-chat-actions.js (buildActionRegistry, CUSTOM_ACTION_ID)
+│   └── data/presets/default.json (bundled default preset, v3 schema)
 ├── side-chat-llm.js    (LLM call wrapper, macro substitution)
 │   └── side-chat-prompts.js (getMainSystemPrompt, getActionInstructions, getUserPrompt)
 ├── side-chat.js        (chat tab UI, sessions, streaming, messageFormatting)
-│   └── side-chat-llm.js, side-chat-prompts.js
+│   └── side-chat-llm.js, side-chat-prompts.js, side-chat-actions.js (findManualActionId, CUSTOM_ACTION_ID)
 ├── dict-search-ui.js   (side panel search tab, result cards)
 │   └── dict-search.js  (3-phase search: direct → deinflect → Fuse)
 │       ├── romaji.js    (romaji-to-hiragana conversion)
@@ -251,14 +255,22 @@ Sliding confidence model for per-word familiarity. Stores confidence score (0–
 
 Four-module architecture for the side chat feature:
 
+**`src/side-chat-actions.js`** — Action registry & validator. Owns the normalized `ChatAction` shape (`id`, `label`, `icon`, `visibility`, `requiresDictionaryMatch`, `system`, `user`) and the `VISIBILITY` constants (`tooltip` / `selection` / `manual`). `buildActionRegistry(rawActions, customFallback)` validates each preset entry, fills in defaults for missing label/icon/visibility, skips entries with no usable prompt, and ensures a usable `custom` action is always present (falling back to the bundled default's `custom`). Consumers query the registry via `getActionsForContext(actions, ctx)` and `findManualActionId(actions)`.
+
 **`src/side-chat-prompts.js`** — Prompt Preset System. Presets are JSON files with:
-- `personality` — shared personality/rules prepended to ALL action system prompts
-- `actions` — per-action `{ system, user }` prompt templates
+- `systemPrompt` — stable template (cacheable across all turns)
+- `personality`, `description`, `rules` — content fields exposed as dynamic macros
+- `actions` — declarative per-action JSON, consumed by `side-chat-actions.js`. Each action declares its own `label`, `icon`, `visibility`, prompts, etc.
 - Templates use namespaced `{{nihongoWord}}`, `{{nihongoSentence}}`, etc. macros
 
-Bundled default preset at `data/presets/default.json`. User presets can be placed at `user/files/nihongo-presets/*.json` (auto-discovered). Active preset selected in settings, loaded at init.
+Bundled default preset at `data/presets/default.json`. User presets are uploaded to `user/files/nihongo-preset-<slug>.json` via the standard files endpoint and tracked in `extension_settings.nihongo_helper.userPresets` (no directory-listing endpoint required). Active preset selected in settings, loaded at init.
 
-Key API: `getSystemPrompt(actionId)` returns personality + action system prompt. `getUserPrompt(actionId)` returns user template. `initPresets(id)` discovers + loads. `CHAT_ACTIONS` array defines action metadata (id, label, icon).
+Key API:
+- `getMainSystemPrompt()` — stable system prompt template.
+- `getActionInstructions(actionId)`, `getUserPrompt(actionId)` — per-action prompt lookups (fall back to the registry's custom action when the requested id is unknown).
+- `getAction(actionId)`, `getActiveActions()` — read the normalized registry built from the active preset.
+- `initPresets(id)` / `loadPreset(id)` — load bundled default + the requested preset.
+- `exportActivePreset()` / `importPresetFromJson(text)` / `deleteUserPreset(id)` / `isUserPreset(id)` — preset I/O surface used by the settings UI.
 
 **`src/side-chat-llm.js`** — LLM call wrapper. Handles:
 - Connection Manager profile-based requests (streaming + non-streaming) using `ConnectionManagerRequestService.sendRequest`
@@ -280,17 +292,18 @@ Key API: `getSystemPrompt(actionId)` returns personality + action system prompt.
 - Free-form input: typing in the input bar sends a follow-up.
 
 **Tooltip integration** (`src/kanji-tooltip.js`):
-- Word tooltips include 4 quick-action buttons: Explain, Translate, Alternatives, Grammar
-- Buttons in `.nihongo-wt-chat-actions` div
-- Click handler uses `hoveredTarget` element to find the containing `.mes_text` directly (not text search), then extracts context sentence from that specific message. This ensures correct context even for inflected forms.
+- Word tooltips and the minimal selection tooltip render their action buttons from the active preset's registry via `renderChatActionsHtml(word, reading, ctx)`. The HTML helper filters the registry by visibility (`VISIBILITY.TOOLTIP` for hover/selection-with-match, `VISIBILITY.SELECTION` for the minimal no-match tooltip) and HTML-escapes preset-supplied label/icon/id values.
+- Buttons share the existing `.nihongo-wt-chat-actions` / `.nihongo-wt-chat-btn` styling. The container is omitted entirely when no actions match the context, so an empty preset doesn't leave a stray border.
+- Click handler reads `data-chat-action` from the button and forwards the id (any preset-defined id) to `triggerChatAction()`. It still uses `hoveredTarget` to find the containing `.mes_text` and extract a context sentence directly (not text search), so inflected forms keep working.
 - Reading is NOT passed to the LLM (dictionary reading may not match contextual reading — e.g., 文 as ぶん vs ふみ). The LLM determines reading from context.
-- **Selection fallback:** When selecting Japanese text with no dictionary match, a minimal tooltip with just the word + chat action buttons is shown via `showMinimalSelectionTooltip()`. This ensures AI actions are always available.
+- **Selection fallback:** When selecting Japanese text with no dictionary match, a minimal tooltip with just the word + selection-visible action buttons is shown via `showMinimalSelectionTooltip()`. Actions with `requiresDictionaryMatch: true` are excluded.
 
 **Settings** (`templates/settings.html`, `src/settings.js`):
 - "Language Assistant" section with Connection Manager profile dropdown and tutor preset selector
-- `chatProfileId` and `chatPresetId` persisted in extension_settings
+- `chatProfileId`, `chatPresetId`, and `userPresets` (array of imported-preset metadata) persisted in extension_settings
 - Profile list refreshed on connection profile events
-- Preset list populated from `getPresetList()` (discovered presets)
+- Preset list populated from `getPresetList()` (bundled default + entries from `extension_settings.nihongo_helper.userPresets`)
+- Preset Import / Export / Delete buttons next to the dropdown (`registerPresetIoHandlers`): Import opens a hidden `<input type="file">` and pipes the selected JSON through `importPresetFromJson`; Export dumps `exportActivePreset()` as a downloaded `nihongo-preset-<id>.json`; Delete (only for user presets) confirms via `Popup.show.confirm`, calls `deleteUserPreset()`, and reverts to the bundled default. The bundled default is non-deletable.
 
 ### Side Chat — Prompt Building Flow
 
@@ -524,16 +537,18 @@ All processed data files are **committed to the repository** — users never nee
 - **Why bundled:** ST extensions are client-side only. No server component possible. Kuromoji runs in-browser, deterministic, fast (<50ms/message). Bundled for fully offline operation.
 
 ### Tutor Presets
-- **Bundled:** `data/presets/default.json`
-- **User presets:** `user/files/nihongo-presets/*.json` (auto-discovered via files endpoint)
-- Format (v2): `{ v, name, description, personality, rules, systemPrompt, actions: { actionId: { system, user } } }`
+- **Bundled:** `data/presets/default.json` (v3 schema)
+- **User presets:** uploaded to `user/files/nihongo-preset-<slug>.json` via the standard `/api/files/upload` endpoint and indexed in `extension_settings.nihongo_helper.userPresets`. The flat naming scheme avoids the `validateAssetFileName` constraint (no `/` in upload names) and we don't need the missing `/api/files/list` endpoint to discover them.
+- Format (v3): `{ v, name, description, personality, rules, systemPrompt, actions: { <id>: { label, icon, visibility, requiresDictionaryMatch, system, user } } }`
 - `systemPrompt` is a stable template composing `{{nihongoPersonality}}` and `{{nihongoRules}}` — identical for all turns (cacheable)
-- `personality` and `rules` are raw content fields exposed as dynamic macros
+- `personality`, `description`, and `rules` are raw content fields exposed as dynamic macros
 - `actions[id].system` = action-specific instructions injected at depth (before user message)
 - `actions[id].user` = user message template with context macros
-- Action IDs: `explain`, `translate`, `alternatives`, `grammar`, `custom`
+- `actions[id].label` / `icon` / `visibility` / `requiresDictionaryMatch` drive tooltip/selection/manual button rendering — all data-driven, validated by `buildActionRegistry`
+- Visibility values: `tooltip` (word tooltip), `selection` (no-dictionary-match selection tooltip), `manual` (free-form follow-up). Unknown values are dropped silently.
+- Default action ids in the bundled preset: `explain`, `translate`, `alternatives`, `grammar`, `custom`. These are stable but fully overrideable per preset.
 - Templates use `{{nihongoWord}}`, `{{nihongoSentence}}`, `{{nihongoKnownKanjiCount}}`, `{{nihongoLearningKanjiCount}}`, `{{nihongoLearningKanji}}` etc.
-- Legacy v1 presets auto-migrated via `migrateV1ToV2()`
+- Legacy v1 / v2 presets auto-migrated by `migrateToCurrent()`. Action-level metadata defaults (label/icon/visibility) are filled in by the registry, so older presets continue to work — they just look like a v3 preset where every action defaults to `[tooltip, selection]` visibility.
 
 ### Build Scripts
 
@@ -598,7 +613,9 @@ node scripts/build-frequency.cjs --rebuild             # Rebuild output from sav
 | No bundler/build step | No minification | ST serves extensions as-is; simplicity wins |
 | HTML string concatenation | Not reactive/virtual DOM | Matches ST patterns; performant at this scale |
 | `messageFormatting` in side chat | Couples to ST internals | Consistent rendering (markdown, regex, furigana hooks). One function gives all formatting for free. |
-| Preset JSON files (not settings) | Requires file endpoint | Presets can be large, shareable, git-friendly. Settings used only for the active preset ID. |
+| Preset JSON files (not settings) | Requires file endpoint | Presets can be large, shareable, git-friendly. Settings only hold the active id and a small index of imported user presets. |
+| Flat preset filenames (`nihongo-preset-<slug>.json`) instead of a `nihongo-presets/` subfolder | Slight prefix noise in `user/files/` | Avoids the `validateAssetFileName` no-slash constraint on uploads and dodges the missing `/api/files/list` endpoint. |
+| Action registry built from preset JSON | Preset edits drive button surface | Adding/renaming/removing actions is a JSON change. `buildActionRegistry` validates each entry and falls back to the bundled custom action so free-form input always works. |
 | No reading in LLM context | LLM must infer reading | Dictionary reading often wrong for context (文=ぶん/ふみ). LLM does better with sentence context. |
 | History stores full prompt (v2) | More data per session | Each user message stores `prompt` (full) + `content` (display). LLM history uses `prompt` for accurate multi-turn. |
 | Stable system + action-at-depth (v2) | Slightly more complex prompt building | System prompt stays identical across all turns (cacheable). Action instructions injected at depth just before user message. |
@@ -621,10 +638,24 @@ node scripts/build-frequency.cjs --rebuild             # Rebuild output from sav
 `tryRule(word, fromSuffix, toSuffix, ruleName, candidates)` in deinflect.js
 
 ### Adding a Tutor Preset
-1. Copy `data/presets/default.json` to `user/files/nihongo-presets/my-preset.json`
-2. Edit `personality` (shared tutor character) and per-action prompts
-3. Use `{{nihongoWord}}`, `{{nihongoSentence}}`, `{{nihongoKnownKanjiCount}}` (and `{{nihongoLearningKanji}}` to bias toward kanji the student is actively studying) macros
-4. Restart ST or re-open settings — preset auto-discovered and appears in dropdown
+1. Open Settings → Nihongo Helper → Language Assistant → click the **Export** button next to the preset dropdown to download a copy of the active preset as a starting point.
+2. Edit the JSON: tweak `personality`, `rules`, `systemPrompt`, and the `actions` map. Each action declares its own `label`, `icon`, `visibility` (`tooltip` / `selection` / `manual`), and `system` / `user` prompt templates. Use `{{nihongoWord}}`, `{{nihongoSentence}}`, `{{nihongoKnownKanjiCount}}` (and `{{nihongoLearningKanji}}` to bias toward kanji the student is actively studying) macros.
+3. Click the **Import** button and select your JSON file. The preset is uploaded to `user/files/`, registered in extension_settings, selected in the dropdown, and ready to use immediately. Use the trash icon to delete user presets.
+4. Manually placing files into `user/files/` is also supported — just name them `nihongo-preset-<id>.json` and add a matching entry to `extension_settings.nihongo_helper.userPresets` (id, fileName, name). The Import button is the easier path.
+
+### Adding a Side Chat Action
+1. Open the Tutor Preset JSON (Export → edit → Import).
+2. Add a new entry under `actions`, keyed by a stable id:
+   ```json
+   "literal": {
+       "label": "Literal",
+       "icon": "fa-align-left",
+       "visibility": ["tooltip"],
+       "system": "Translate literally word-by-word.",
+       "user": "Provide a literal translation: {{nihongoWord}} (in: {{nihongoSentence}})"
+   }
+   ```
+3. Re-import. The button appears wherever its visibility includes the current context. Setting `requiresDictionaryMatch: true` excludes it from the no-match selection tooltip.
 
 ### Adding Tooltip Content
 Modify `buildSinglePage()` (word) or `populateKanjiTooltip()` (kanji) in kanji-tooltip.js. Add CSS under `.nihongo-tooltip` scope.
@@ -671,9 +702,13 @@ Modify `buildSinglePage()` (word) or `populateKanjiTooltip()` (kanji) in kanji-t
 
 **v2 Prompt Architecture** — Stable cacheable system prompt + action instructions at depth. Full prompt stored per message for accurate multi-turn history. Configurable history modes (remove/deduplicate/keep_last_n).
 
+**v3 Data-Driven Action Registry** — Tutor presets now own the action button registry (label / icon / visibility / system / user prompts). `src/side-chat-actions.js` validates each entry and guarantees a `custom` action fallback so free-form input always works. Tooltip and selection-tooltip rendering consume the registry directly.
+
+**Tutor Preset Import / Export** — Settings-panel buttons next to the preset dropdown for downloading the active preset as JSON and importing user presets via file picker. Imported presets are stored under `user/files/nihongo-preset-<slug>.json` and indexed in `extension_settings.nihongo_helper.userPresets` (no directory listing required).
+
 ### Planned Architectural Expansions
 
-**Prompt Preset Authoring** — UI for creating/editing presets within the extension (currently JSON-only via file system).
+**Prompt Preset Authoring** — In-app editor for tweaking presets without leaving SillyTavern (current Import/Export covers the round-trip; an inline editor is still future work).
 
 **Chat Session Persistence** — Save/restore chat sessions via files endpoint (currently in-memory only).
 

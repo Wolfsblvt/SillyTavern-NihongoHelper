@@ -38,16 +38,16 @@ Working but not finalised. Expect rough edges, schema changes, and behaviour shi
 
 - **Word Frequency Badges** — JPDB rank shown in tooltips with tier coloring. Additional lists (Netflix/Anime, etc.), configurable weights, and chat-wide frequency coloring are still planned.
 - **Dictionary Search UI** — Side-panel search tab with English / kana / kanji / romaji input and result actions (copy, insert, tooltip). Jisho fallback for rare words and example sentences is planned.
-- **Language Assistant Side Chat** — Slide-out panel with Explain / Translate / Alternatives / Grammar buttons, using your configured Connection Manager profile. Persistent / re-openable conversations are not yet saved.
+- **Language Assistant Side Chat** — Slide-out panel with action buttons (Explain / Translate / Alternatives / Grammar by default) and a free-form follow-up input, using your configured Connection Manager profile. Persistent / re-openable conversations are not yet saved.
 - **Word Tracking & Confidence Nudges** — Tooltip Easy / Got it / Meh / Hard / Anki buttons drive a sliding confidence score. Underlying seen-count tracking, user-written word capture, and exposure to LLM prompts still need correctness work.
-- **Prompt Preset System** — Tutor presets (JSON) define personality and per-action prompts for the side chat. The action set itself is still hard-coded; configurable actions per preset are planned.
+- **Tutor Preset System (data-driven actions)** — Tutor presets (JSON) define personality, rules, and the **action button registry** for the side chat. Each action declares its own label, icon, visibility (tooltip / selection / manual), and macro-aware system / user prompt templates. Adding, removing, renaming, or customizing actions is a JSON edit — no code changes. The custom / free-form action always falls back to the bundled default if a preset omits it.
+- **Tutor Preset Import / Export** — Settings panel buttons next to the preset dropdown to export the active preset as JSON and import preset JSON files. Imported presets are stored under `user/files/` and become selectable immediately.
 
 ### 🔮 Planned
 
 Designed but not implemented. See [`ROADMAP.md`](ROADMAP.md) for rationale, dependencies, and phased plans.
 
 - **Tracking Correctness Improvements** — Fix seen-count semantics and primary-match strictness before extending tracking further.
-- **Configurable Side-Chat Actions** — Move the action registry into tutor preset JSON so users can add buttons, tutors, and workflows without code changes.
 - **Extended Interaction Tracking** — Hover / lookup / per-action counts and a small bounded list of useful contexts per word.
 - **Adaptive Furigana Visibility** — Graduated show / hover / hide based on frequency, tracking, and known-kanji state, with a single visibility slider.
 - **Writing Feedback / Grammar Check** — Pre-send "Check Japanese" button with structured grammar / word-choice / register / naturalness feedback.
