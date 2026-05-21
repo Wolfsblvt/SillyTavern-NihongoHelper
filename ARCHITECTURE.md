@@ -307,71 +307,21 @@ Key API:
 
 ### Side Chat — Prompt Building Flow
 
-This section documents how the LLM messages array is constructed for every side chat request, and the known problems with the current approach.
+This section documents the current v2/v3 prompt architecture and the historical problems it solved (v1 flat array approach).
 
-#### Message Array Structure (Current)
+#### Historical Problem: v1 Flat Prompt Array
 
-Every request builds a flat messages array: `[system, ...history, user]`
+The original design used a flat messages array: `[system, ...history, user]` with a combined system prompt that changed per request. This caused several issues:
 
-```
-┌─────────────────────────────────────────────────────────┐
-│ messages[0]: system                                     │
-│   = preset.personality + preset.actions[actionId].system│
-│   (macro-substituted with CURRENT context)              │
-├─────────────────────────────────────────────────────────┤
-│ messages[1..N-1]: history                               │
-│   = last 10 user/assistant messages from session        │
-│   (raw display text from UI, NOT the original prompts)  │
-├─────────────────────────────────────────────────────────┤
-│ messages[N]: user                                       │
-│   = preset.actions[actionId].user                       │
-│   (macro-substituted with CURRENT context)              │
-└─────────────────────────────────────────────────────────┘
-```
+- **System prompt mutation** — Each action rebuilt personality+action system prompt. Prior history turns were generated under different instructions, creating mixed signals for the LLM.
+- **UI text in history** — History stored display labels like `"Grammar: 書きます"` instead of the full prompts actually sent to the LLM.
+- **Consecutive user messages** — New actions in existing sessions added display messages to history immediately followed by the actual user prompt.
+- **Context macro inconsistency** — `{{nihongoWord}}` in the system prompt reflected only the latest action's context, not the context of prior history turns.
+- **No prompt caching** — The ever-changing system prompt defeated API-level prefix caching (longest stable prefix was zero tokens).
 
-#### Scenario Walk-throughs
+These problems motivated the v2 architecture refactor.
 
-**A. First action (Grammar on 書きます) — no history**
-```
-[system] personality + grammar rules (mentions 書きます via macros)
-[user]   "Explain this grammar pattern: **Expression:** 書きます ..."
-```
-Works correctly — single turn, self-contained.
-
-**B. Follow-up text ("Does kaku mean both write and draw?")**
-```
-[system] personality + custom rules ("answer the student's question directly")
-[user]   "Grammar: 書きます"          ← history (UI display text!)
-[asst]   "[grammar explanation]"       ← history
-[user]   "Does kaku mean both write and draw?"  ← from {{nihongoUserMessage}}
-```
-Problem: system prompt CHANGED from grammar→custom. History user msg is the short display label `"Grammar: 書きます"`, not the full prompt that was actually sent. The LLM sees an inconsistent conversation.
-
-**C. New action on different word (Explain on 食べる) — same session**
-```
-[system] personality + explain rules (now about explaining words)
-[user]   "Grammar: 書きます"          ← history (UI display text)
-[asst]   "[grammar explanation]"       ← history
-[user]   "Does kaku mean both write and draw?"  ← history
-[asst]   "[follow-up answer]"          ← history
-[user]   "Explain: 食べる"             ← history (UI display text!)
-[user]   "Explain this word: **Word:** 食べる ..."  ← current prompt
-```
-Problems: system prompt is now explain-rules (was grammar-rules for earlier turns). Two consecutive user messages (history display text + actual prompt). History entries from different topics/actions mixed under one system prompt.
-
-#### Known Problems
-
-1. **System prompt mutates per request.** Each action rebuilds personality+action system prompt. Prior history turns were generated under different system instructions. The LLM sees mixed signals.
-
-2. **History contains UI display text, not actual prompts.** `formatActionMessage()` produces `"Grammar: 書きます"` for display. This string goes into history. But the LLM originally received a full template like `"Explain this grammar pattern: **Expression:** 書きます **Context:** ..."`. The short label is not meaningful to the LLM as conversation context.
-
-3. **Consecutive user messages.** When a new action is triggered in an existing session, the action's display message (`"Explain: 食べる"`) is in history as a user message, immediately followed by the actual user prompt. Two user messages in a row confuse most models.
-
-4. **Context macros are always from the CURRENT request.** The `{{nihongoWord}}` etc. in the system prompt reflect the latest action's context. But the system prompt also governs interpretation of older history turns that used different words/contexts.
-
-5. **No prompt cache benefit.** The system prompt changes on every request (different action rules, different macro values). API-level prompt prefix caching (Anthropic, OpenAI) is defeated because the longest stable prefix is zero tokens.
-
-#### Target Architecture (v2 Refactor)
+#### Current Architecture (v2/v3 Implemented)
 
 The goal: **stable cacheable prefix, self-contained turns, action instructions at depth, configurable history handling.**
 
