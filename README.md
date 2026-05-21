@@ -19,8 +19,8 @@ Day-to-day reading and lookup features that are tested and ready to use.
 - **Hover-only Mode** — Furigana only appears on hover, with reserved space to avoid layout shifts.
 - **Font Size Controls** — Adjustable Japanese text size and furigana scale.
 - **Settings Panel** — Toggle furigana, hover mode, font sizes, streaming interval, and more.
-- **Kanji Manager** — Browser popup over 2998 kanji. Filter by JLPT / grade / known status, sort by frequency / grade / JLPT / strokes, per-kanji detail view, full keyboard navigation, Jisho.org link.
-- **Known Kanji Highlighting** — Subtle color highlight for known kanji in chat (toggleable).
+- **Kanji Manager** — Browser popup over 2998 kanji. Filter by JLPT / grade / learning status (unknown / learning / known), sort by frequency / grade / JLPT / strokes, per-kanji detail view with tri-state selector and timestamps, full keyboard navigation, Jisho.org link.
+- **Known / Learning Kanji Highlighting** — Subtle color highlight for known kanji and a quieter underline for kanji actively being learned (toggleable).
 - **Kanji Inspect Mode** — Toggle (`Ctrl+Shift+K` or wand menu) to hover any kanji in chat for full details.
 - **Kanji Tooltip** — Compact hover tooltip with smart positioning, used in both Kanji Manager and Inspect Mode.
 - **Word Tooltip** — Word-level details with grouped JMdict definitions, kanji breakdown, on/kun labels, Jisho link.
@@ -29,7 +29,8 @@ Day-to-day reading and lookup features that are tested and ready to use.
 - **Paginated Tooltips** — Multiple interpretations per tooltip with tab navigation (scroll, Shift+Scroll, click).
 - **Kana Word Tooltips** — Optional setting to make kana-only words hoverable.
 - **Hide Known Furigana** — Skip furigana on words where every kanji is already marked known.
-- **`{{knownKanji}}` / `{{knownKanjiCount}}` macros** — Inject known-kanji state into system prompts to adapt LLM difficulty.
+- **Kanji Learning Mode** — Mark kanji as `learning` in addition to `known`. Learning kanji keep furigana visible (so you can still read), but are surfaced to the model via macros so it uses them naturally. Tri-state controls in the Kanji Manager and tooltips let you flip Unknown / Learning / Known with one click.
+- **`{{knownKanji}}` / `{{knownKanjiCount}}` / `{{learningKanji}}` / `{{learningKanjiCount}}` macros** — Inject kanji state into system prompts to adapt LLM difficulty and bias active study.
 
 ### 🧪 Experimental / In Progress
 
@@ -47,7 +48,6 @@ Designed but not implemented. See [`ROADMAP.md`](ROADMAP.md) for rationale, depe
 
 - **Tracking Correctness Improvements** — Fix seen-count semantics and primary-match strictness before extending tracking further.
 - **Configurable Side-Chat Actions** — Move the action registry into tutor preset JSON so users can add buttons, tutors, and workflows without code changes.
-- **Kanji Learning Mode** — A "learning" state alongside "known", plus `{{learningKanji}}` macros that bias the model toward those kanji while keeping furigana visible.
 - **Extended Interaction Tracking** — Hover / lookup / per-action counts and a small bounded list of useful contexts per word.
 - **Adaptive Furigana Visibility** — Graduated show / hover / hide based on frequency, tracking, and known-kanji state, with a single visibility slider.
 - **Writing Feedback / Grammar Check** — Pre-send "Check Japanese" button with structured grammar / word-choice / register / naturalness feedback.

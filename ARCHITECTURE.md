@@ -19,7 +19,7 @@ A **SillyTavern extension for learning Japanese through immersive chat**. Rather
 2. **Deterministic & Offline** — All analysis runs locally with bundled data. No network calls for core functionality.
 3. **Non-Destructive** — Never modifies message data. Annotations are DOM overlays, original text preserved in `data-original`.
 4. **Progressive Disclosure** — Furigana always visible → meanings on hover → all interpretations via pagination.
-5. **Adaptive to Learner Level** — Known kanji tracking hides unneeded info. `{{knownKanji}}` macro feeds into LLM prompts for difficulty adaptation.
+5. **Adaptive to Learner Level** — Per-kanji state (unknown / learning / known) drives furigana visibility, highlighting, and prompt macros, so the LLM can adapt difficulty to what the user already knows or is actively studying.
 6. **SillyTavern-Native** — Uses ST's extension API, settings persistence, event hooks, UI conventions.
 
 ### Long-Term Goal
@@ -60,8 +60,9 @@ index.js (entry point)
 │   │   ├── meaning-provider.js → jmdict.js
 │   │   └── deinflect.js
 │   └── kanji-data.js
-├── kanji-manager.js    (popup UI, known tracking)
-├── kanji-tooltip.js    (hover tooltip: kanji + word, positioning, pagination, nudge bar)
+├── kanji-state.js      (unified per-kanji state map: unknown/learning/known + timestamps + legacy migration)
+├── kanji-manager.js    (popup UI, tri-state selector, learning/known counts)
+├── kanji-tooltip.js    (hover tooltip: kanji + word, positioning, pagination, nudge bar, tri-state controls)
 │   ├── meaning-provider.js, deinflect.js, token-matcher.js (getStoredMatches)
 │   ├── tracking.js (nudgeConfidence, getDerivedLevel, getConfidence)
 │   ├── frequency.js (getFrequencyPercent, getFrequencyTier)
@@ -81,7 +82,7 @@ index.js (entry point)
 ├── tracking.js         (word confidence tracking, file-based persistence)
 ├── frequency.js        (word frequency ranks, sigmoid percent, tiers)
 ├── wand-menu.js        (extensions menu)
-└── macros.js           ({{knownKanji}}, {{knownKanjiCount}})
+└── macros.js           ({{knownKanji}}, {{knownKanjiCount}}, {{learningKanji}}, {{learningKanjiCount}})
 ```
 
 ---
@@ -138,9 +139,33 @@ Delegated hover detection → show/hide state machine (300ms show, 400ms hide) �
 
 **Why delegated events:** Chat messages are dynamic. One listener on container works with all content, zero cleanup on message change.
 
+### `src/kanji-state.js` — Unified Kanji State
+
+Single source of truth for per-kanji learning state. Replaces the old `knownKanji` set.
+
+**Storage:** `extension_settings.nihongo_helper.kanjiState` — only `learning` / `known` entries are persisted; absent = unknown.
+
+```js
+{
+  "食": { state: "learning", learningSince: ISO, updatedAt: ISO },
+  "見": { state: "known",    knownSince: ISO,    updatedAt: ISO,
+          learningSince?: ISO  // preserved across promotion }
+}
+```
+
+**State semantics:**
+
+- `setState(char, 'unknown')` — deletes the entry entirely.
+- `setState(char, 'learning')` — idempotent if already learning; from `known`, demotes (clears `knownSince`, keeps `learningSince`); from `unknown`, stamps `learningSince=now`.
+- `setState(char, 'known')` — idempotent if already known; from `learning`, promotes (stamps `knownSince=now`, preserves `learningSince`); from `unknown`, stamps `knownSince=now`.
+
+**Public API:** `loadKanjiState()`, `getState(char)`, `getStateEntry(char)`, `setState(char, newState)`, `cycleState(char)`, `toggleKnown(char)` (compat helper), `isKnown(char)`, `isLearning(char)`, `getKnownKanji()` / `getLearningKanji()` (snapshot maps), `getKnownChars()` / `getLearningChars()`.
+
+**Legacy migration:** `loadKanjiState()` reads `settings.knownKanji` (array OR object char→ISO date) on first load, populates the unified map with `state: 'known'`, then deletes the legacy key. One-shot, no ongoing dual-write.
+
 ### `src/kanji-manager.js` — Kanji Browser
 
-Grid popup with 2998 kanji. Filter by JLPT/grade/known. Sort by freq/grade/JLPT/strokes. Known state persisted as `{ char: dateString }` in extension_settings.
+Grid popup with 2998 kanji. Filter by JLPT/grade/learning state (unknown / learning / known). Sort by freq/grade/JLPT/strokes. The detail view exposes a tri-state segmented selector + `Learning since` / `Known since` rows. Tile classes `.nihongo-km-tile-known` (green) and `.nihongo-km-tile-learning` (blue) reflect current state. Space cycles unknown→learning→known→unknown; Shift+Space jumps directly to/from known. State storage lives in `kanji-state.js`.
 
 ### `src/romaji.js` — Romaji-to-Hiragana Conversion
 
@@ -189,7 +214,14 @@ Registers "Search" tab in side panel. Debounced input (200ms) triggers `searchDi
 
 ### `src/macros.js` — ST Macros
 
-`{{knownKanji}}` (comma-separated list) and `{{knownKanjiCount}}` for use in system prompts to adapt LLM difficulty.
+Global macros backed by `kanji-state.js`:
+
+- `{{knownKanji}}` — comma-separated list of kanji marked `known`.
+- `{{knownKanjiCount}}` — size of the known set.
+- `{{learningKanji}}` — comma-separated list of kanji marked `learning`.
+- `{{learningKanjiCount}}` — size of the learning set.
+
+Use known macros to keep the LLM at the user's current vocabulary ceiling, and learning macros to bias it toward kanji the user is actively studying (the model is encouraged to *use* those kanji naturally; furigana stays visible because they are not yet known).
 
 ### `src/side-panel.js` — Shared Side Panel
 
@@ -500,7 +532,7 @@ All processed data files are **committed to the repository** — users never nee
 - `actions[id].system` = action-specific instructions injected at depth (before user message)
 - `actions[id].user` = user message template with context macros
 - Action IDs: `explain`, `translate`, `alternatives`, `grammar`, `custom`
-- Templates use `{{nihongoWord}}`, `{{nihongoSentence}}`, `{{nihongoKnownKanjiCount}}` etc.
+- Templates use `{{nihongoWord}}`, `{{nihongoSentence}}`, `{{nihongoKnownKanjiCount}}`, `{{nihongoLearningKanjiCount}}`, `{{nihongoLearningKanji}}` etc.
 - Legacy v1 presets auto-migrated via `migrateV1ToV2()`
 
 ### Build Scripts
@@ -591,7 +623,7 @@ node scripts/build-frequency.cjs --rebuild             # Rebuild output from sav
 ### Adding a Tutor Preset
 1. Copy `data/presets/default.json` to `user/files/nihongo-presets/my-preset.json`
 2. Edit `personality` (shared tutor character) and per-action prompts
-3. Use `{{nihongoWord}}`, `{{nihongoSentence}}`, `{{nihongoKnownKanjiCount}}` macros
+3. Use `{{nihongoWord}}`, `{{nihongoSentence}}`, `{{nihongoKnownKanjiCount}}` (and `{{nihongoLearningKanji}}` to bias toward kanji the student is actively studying) macros
 4. Restart ST or re-open settings — preset auto-discovered and appears in dropdown
 
 ### Adding Tooltip Content

@@ -497,34 +497,58 @@ After the refactor, expand per-word tracking to capture richer interaction signa
 
 ---
 
-## 13. Kanji Learning Mode
+## 13. Kanji Learning Mode ✅
 
 ### Problem
-Today kanji are binary: known or unknown. Learners actively studying a small set ("the next 10 N3 kanji") have no way to tell the model "use these naturally" while still seeing furigana for safety.
+Originally kanji were binary: known or unknown. Learners actively studying a small set ("the next 10 N3 kanji") had no way to tell the model "use these naturally" while still seeing furigana for safety.
 
-### Idea
-Introduce a second state alongside "known": **learning**.
+### Solution (shipped)
+A unified per-kanji state map replaces the legacy `knownKanji` set. Every kanji is one of three states:
 
 | State | Furigana | Counted as known | Passed to prompt |
 |-------|----------|------------------|------------------|
 | Unknown | Always shown | No | No |
-| Learning | May still be shown | No | **Yes** — model is encouraged to use them |
-| Known | Hidden | Yes | Optional (level macros) |
+| Learning | Always shown (does NOT hide furigana) | No | **Yes** — via `{{learningKanji}}` |
+| Known | May be hidden by `hideKnownFurigana` | Yes | Yes — via `{{knownKanji}}` |
+
+`known` always supersedes `learning`. Demoting a known kanji back to `learning` clears `knownSince` but preserves `learningSince` history. Unknown clears the entry entirely.
+
+### Storage
+`extension_settings.nihongo_helper.kanjiState`:
+```js
+{
+  "食": { state: "learning", learningSince: ISO, updatedAt: ISO },
+  "見": { state: "known",    knownSince: ISO,    updatedAt: ISO,
+          learningSince?: ISO  // preserved if it was learning before }
+}
+```
+
+The legacy `knownKanji` array/object is automatically migrated on first load and the old key is removed.
 
 ### Macros
-- `{{learningKanji}}` — comma-separated kanji list for prompt injection.
+- `{{learningKanji}}` — comma-separated kanji list for prompt injection (encourage the model).
 - `{{learningKanjiCount}}` — for prompt budgeting / status displays.
+- Plus the existing `{{knownKanji}}` / `{{knownKanjiCount}}`, now sourced from the same unified state map.
+- Side-chat namespaced equivalents: `{{nihongoLearningKanji}}` / `{{nihongoLearningKanjiCount}}`.
 
-### Why
-Supports focused study of the next 5–20 kanji without forcing the user to "promote" them prematurely (which would hide furigana before mastery).
+### UI
+- Kanji Manager detail header: segmented Unknown / Learning / Known selector with active state highlighting.
+- Kanji Manager filter: `Learning Only` joins `Known Only` / `Unknown Only`.
+- Kanji Manager grid: tile gets `nihongo-km-tile-learning` (subtle blue tint) or `nihongo-km-tile-known` (subtle green tint).
+- Kanji Manager detail body: `Learning since` / `Known since` rows (visible only when set).
+- Kanji tooltip (standalone): full segmented selector replaces the binary "Mark Known" button.
+- Word tooltip kanji blocks: compact icon-only segmented selector in the corner of each block.
+- Chat highlighting: `nihongo-kanji-learning` adds a subtle dotted-underline tint (toggled by the same `highlightKnown` setting that governs known highlighting). `known` styling keeps its existing green tint.
+- Stats chip: `0 learning` count chip alongside the `0 known` chip.
 
 ### Phases
 | Phase | Status | Scope | Depends On |
 |-------|--------|-------|-----------|
-| 13a | 🔲 | Data model: add `learning` set alongside `known` set | Kanji Manager / Settings |
-| 13b | 🔲 | Kanji Manager UI: toggle between Unknown / Learning / Known | 13a |
-| 13c | 🔲 | Macros `{{learningKanji}}` / `{{learningKanjiCount}}` | 13a |
-| 13d | 🔲 | Wire into furigana logic (learning → still show by default) | 13a, #6 |
+| 13a | ✅ | Unified `kanjiState` data model; `src/kanji-state.js` with legacy migration | — |
+| 13b | ✅ | Kanji Manager UI: tri-state selector + Learning filter + Learning timestamps + tile class | 13a |
+| 13c | ✅ | Macros `{{learningKanji}}` / `{{learningKanjiCount}}` (global + side-chat namespaced) | 13a |
+| 13d | ✅ | Furigana wiring: `nihongo-kanji-learning` class; `hideKnownFurigana` only checks `known`, never `learning` | 13a |
+| 13e | 🔲 | Adaptive furigana that uses `learning` state to decide visibility (graduated show/hover/hide) | 13a, #6 |
 
 ---
 
@@ -568,9 +592,9 @@ Sprints 4+ follow this dependency-aware sequence:
 
 1. **Tracking correctness refactor** (12a) — fix the foundation before extending it.
 2. **Configurable side-chat action registry** (#8) — unblocks experimentation, no schema risk.
-3. **Kanji learning mode** (#13) — small, additive, feeds prompts and adaptive furigana.
+3. ~~**Kanji learning mode** (#13)~~ — ✅ shipped (data model + UI + macros + furigana class). 13e (adaptive furigana wiring) folds into #6.
 4. **Extended interaction tracking** (12b–12c) — builds on (1).
-5. **Adaptive furigana** (6a–6b) — consumes (3) and (4).
+5. **Adaptive furigana** (6a–6b, 13e) — consumes the now-shipped learning state plus (4).
 6. **Anki export** (5a–5c) — locks down the schema before importing.
 7. **Lorebook framework** (#9) — once macros from (3)/(4) exist.
 8. **Example characters** (#10) — exercise (7) end-to-end.
@@ -594,11 +618,11 @@ Sprints 4+ follow this dependency-aware sequence:
 | | 4c | Search result actions (copy, insert, tooltip) | ✅ |
 | **4: Tracking & Action Registry** | 12a | Tracking correctness refactor (seenCount semantics, primary-match strictness) | 🔲 |
 | | 8a, 8b | Action schema + validator; refactor built-ins to default preset | 🔲 |
-| | 13a, 13b, 13c | Kanji learning mode: data model, manager UI, macros | 🔲 |
+| | 13a, 13b, 13c, 13d | Kanji learning mode: data model, manager UI, macros, furigana class | ✅ |
 | | 8c | Visibility-driven button rendering (tooltip/selection/manual) | 🔲 |
 | **5: Extended Tracking & Adaptive Furigana** | 12b, 12c | hover/lookup/action counts + bounded contexts | 🔲 |
 | | 6a, 6b | Graduated furigana visibility + threshold slider | 🔲 |
-| | 13d | Wire learning kanji into furigana logic | 🔲 |
+| | 13e | Wire learning kanji into adaptive furigana visibility | 🔲 |
 | | 7d | Track user-written words (tokenize on send) | 🔲 |
 | **6: Export, Lorebook, Examples** | 5a, 5b, 5c | "Save for Anki" + queue UI + CSV export | 🔲 |
 | | 9a, 9b | Lorebook pack + dynamic-state macros | 🔲 |
