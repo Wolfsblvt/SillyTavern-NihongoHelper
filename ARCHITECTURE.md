@@ -96,9 +96,9 @@ index.js (entry point)
 ### `index.js` — Entry Point
 
 Called by ST via `manifest.json` hook `{ activate: "init" }`. Init order:
-1. Settings (sync) → 2. Settings UI (async) → 3. Furigana system (async, registers hooks) → 4. Kanji Manager → 5. Prompt presets (async, discover + load) → 6. Side panel tabs (Search + Chat) → 7. Wand menu → 8. Inspect shortcut + Search shortcut → 9. Selection lookup → 10. Macros → 11. Meaning provider (async, non-blocking) → 12. Word tracking (async, non-blocking) → 13. Frequency data (async, non-blocking)
+1. Settings (sync, ensure extension_settings namespace) → 2. Kanji state (sync, with legacy migration) → 3. Prompt presets (await: bundled default + active preset → seeds the action registry and the preset dropdown list) → 4. Settings UI (await, renders dropdown with the up-to-date preset list) → 5. Furigana system (await, registers hooks) → 6. Kanji Manager → 7. Side panel tabs (Search + Chat) → 8. Wand menu → 9. Inspect shortcut + Search shortcut → 10. Selection lookup → 11. Macros → 12. Meaning provider (async, non-blocking) → 13. Word tracking (async, non-blocking) → 14. Frequency data (async, non-blocking)
 
-**Why this order:** Settings first (everything reads them). Furigana hooks before any messages render. Presets before side chat (chat needs prompts). JMdict, tracking, and frequency all load in background — furigana works immediately, tooltips/badges become available once loaded.
+**Why this order:** Settings first (everything reads them). Presets before the settings UI so the tutor preset dropdown shows imported user presets on first render and so the side-chat action registry is ready before any tooltip/chat action can fire. Furigana hooks before any messages render. JMdict, tracking, and frequency all load in background — furigana works immediately, tooltips/badges become available once loaded.
 
 ### `src/furigana.js` — Tokenization & DOM Processing
 

@@ -36,6 +36,12 @@ export async function init() {
     // BEFORE any consumer (furigana, macros, tooltip) reads it.
     loadKanjiState();
 
+    // Initialize prompt presets (discover + load active preset).
+    // Awaited BEFORE the settings UI is injected so the preset dropdown
+    // is populated with imported user presets on first render, and so the
+    // side-chat action registry is ready before any tooltip can fire.
+    await initPresets(nihongoSettings.chatPresetId);
+
     await injectSettingsUI();
 
     // Initialize furigana processing
@@ -43,9 +49,6 @@ export async function init() {
 
     // Initialize kanji manager
     initKanjiManager();
-
-    // Initialize prompt presets (discover + load active preset)
-    initPresets(nihongoSettings.chatPresetId);
 
     // Register side panel tabs (must come before wand menu)
     initDictSearchUI();
