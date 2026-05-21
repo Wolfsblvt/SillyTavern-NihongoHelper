@@ -433,11 +433,16 @@ function populateChatProfiles(select) {
 }
 
 /**
- * Populates the tutor preset dropdown with discovered presets.
+ * Populates the tutor preset dropdown with discovered presets and selects
+ * the active one from settings.
+ *
+ * Reads `settings.chatPresetId` first (the source of truth) and only falls
+ * back to the current `select.value` if no preset is configured.
+ *
  * @param {HTMLSelectElement} select
  */
 function populatePresets(select) {
-    const currentValue = select.value || ensureSettings().chatPresetId || 'default';
+    const desiredValue = ensureSettings().chatPresetId || select.value || 'default';
 
     // Clear all options
     select.innerHTML = '';
@@ -451,7 +456,10 @@ function populatePresets(select) {
         select.appendChild(opt);
     }
 
-    select.value = currentValue;
+    // If the saved preset id no longer matches any registered preset
+    // (e.g. the user-preset file was deleted out-of-band), fall back to
+    // the bundled default rather than leaving the dropdown blank.
+    select.value = desiredValue;
     if (!select.value) select.value = 'default';
 }
 
