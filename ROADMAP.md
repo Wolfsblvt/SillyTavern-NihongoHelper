@@ -96,7 +96,7 @@ Per-action specialized system prompts. Vague prompts → mediocre results. Each 
 | 2c | ✅ | Structured prompts with full context injection (v2 preset system) | 2b |
 | 2d | ✅ | Follow-up messages within same panel session (multi-turn) | 2c |
 | 2e | ✅ | Configurable model/connection via Connection Manager profiles | 2a |
-| 2f | 🔲 | Persistent conversations saved per-message | 2d, Storage (#9) |
+| 2f | 🔲 | Persistent conversations saved per-message | 2d, Storage (#16) |
 | 2g | 🔲 | Re-access past side conversations | 2f |
 
 ---
@@ -328,12 +328,12 @@ Buttons shown on word tooltip (gut-reaction, minimal cognitive load):
 The button set is inspired by Anki's answer buttons but without the SRS scheduling complexity. The user just clicks their gut feeling and moves on.
 
 ### Scale & Storage
-See [Storage Strategy](#9-storage-strategy). Thousands of words over time. Compact format for auto-tracked (no interaction), full format once user engages or score reaches threshold.
+See [Storage Strategy](#16-storage-strategy). Thousands of words over time. Compact format for auto-tracked (no interaction), full format once user engages or score reaches threshold.
 
 ### Phases
 | Phase | Status | Scope | Depends On |
 |-------|--------|-------|-----------|
-| 7a | ✅ | Data model + storage infrastructure (files endpoint, tiered entries) | Storage (#9) |
+| 7a | ✅ | Data model + storage infrastructure (files endpoint, tiered entries) | Storage (#16) |
 | 7b | 🔲 | Auto-track seenCount for primary matches during processing | 7a |
 | 7c | ✅ | Tooltip nudge buttons (Easy/Got it/Meh/Hard/Anki/Reset) + confidence bar | 7a |
 | 7d | 🔲 | Track user-written words (tokenize input on send) | 7a |
@@ -343,9 +343,241 @@ See [Storage Strategy](#9-storage-strategy). Thousands of words over time. Compa
 
 ---
 
-## 8. Implementation Order
+## 8. Configurable Side Chat Actions
 
-Features interleaved by phase for maximum early value:
+### Problem
+Side-chat action buttons (Explain, Translate, Grammar, Alternatives) are currently hard-coded. Adding or modifying actions requires code changes, which blocks experimentation, custom tutors, and user-contributed workflows.
+
+### Idea
+Move the action registry into the tutor preset JSON. Each preset declares its own actions; the extension consumes them as data. No code changes needed to add a new action or build a specialized tutor.
+
+### Action Schema (per preset)
+| Field | Purpose |
+|-------|---------|
+| `id` | Stable identifier used for tracking, history, dedup. Must be unique within preset. |
+| `label` | Button text (i18n-friendly later). |
+| `icon` | Optional FontAwesome class or emoji. |
+| `visibility` | Where the button appears: `tooltip`, `selection`, `manual` (any combination). |
+| `requiresDictionaryMatch` | If true, only enabled when a JMdict match is available. |
+| `system` | System prompt at depth (macro-aware). |
+| `user` | User prompt template (macro-aware). |
+
+### Constraints
+- Validate every action before registration; ignore invalid entries with a console warning.
+- No arbitrary JavaScript in presets — only declarative fields and macro-substituted strings.
+- Built-in core actions ship as a default preset, fully overrideable by the user.
+
+### Why
+Custom tutors (beginner-only, kanji-focused, JLPT N3 cram, etc.) and custom workflows (e.g. "explain like I'm five", "Japanese-only paraphrase") become user-editable. The same mechanism enables future community-shared presets.
+
+### Phases
+| Phase | Status | Scope | Depends On |
+|-------|--------|-------|-----------|
+| 8a | 🔲 | Define action schema + validator | #2c |
+| 8b | 🔲 | Refactor existing hard-coded actions into the default preset | 8a |
+| 8c | 🔲 | UI reads `visibility` flags to render buttons in tooltip / selection / manual contexts | 8b |
+| 8d | 🔲 | Preset import/export and inline editor | 8c |
+
+---
+
+## 9. Lorebook & Prompt Framework for Character Chats
+
+### Problem
+Side chat covers reactive lookups, but the main RP itself drives the bulk of exposure. Today, a learner has no portable way to make any character chat "Japanese-learning aware" without manually editing each character card or jamming setup into the system prompt.
+
+### Idea
+Provide a core ST lorebook / world-info pack defining stable Japanese-learning behavior, plus macros that inject dynamic learner state. Lorebook for stable, user-editable prompt content (ST-native, scoped, swappable per chat). Macros / JS injection for runtime state.
+
+### Division of Responsibility
+| Concern | Mechanism |
+|---------|-----------|
+| Difficulty level, correction style, overexplanation rules, katakana/kanji practice modes | Lorebook entries (user-editable, ST-native) |
+| Known kanji, learning kanji, known vocab, tracking summaries, current difficulty setting | Macros / JS injection |
+
+### Trigger / Module Examples
+- `[NihongoBeginner]` — simple grammar, frequent translations, slow pace.
+- `[NihongoNoOverexplain]` — no romaji, no English crutches unless asked.
+- `[NihongoKatakanaPractice]` — bias loanwords / foreign names into katakana drills.
+- `[NihongoAdvancedTutor]` — keigo, idioms, register correction.
+
+These are activation keys, not magic strings — the underlying entries remain plain user-editable lorebook text.
+
+### Why Lorebook (not pure macros)
+- ST-native: works with existing world-info UI, scoping, position, depth controls.
+- User-editable without touching the extension.
+- Composable: users mix-and-match modules per chat.
+- Survives extension updates without prompt resets.
+
+### Phases
+| Phase | Status | Scope | Depends On |
+|-------|--------|-------|-----------|
+| 9a | 🔲 | Ship base lorebook pack with module entries (Beginner / NoOverexplain / KatakanaPractice / AdvancedTutor) | Nothing |
+| 9b | 🔲 | Macros for dynamic state: `{{knownKanji}}`, `{{learningKanji}}`, `{{knownVocabSummary}}`, `{{difficulty}}` | #7, #13 |
+| 9c | 🔲 | One-click "install / update lorebook" action from settings | 9a |
+| 9d | 🔲 | Per-chat toggle UI to enable individual modules | 9a |
+
+---
+
+## 10. Example Tutor / Chat Partner Characters
+
+### Problem
+The extension is currently validated mostly on tooltips and side chat. Real immersive use — a Japanese-speaking partner that adapts to learner level over a long chat — has no first-party reference implementation.
+
+### Idea
+Ship one or two example character cards (or prompt examples) that consume the lorebook framework (#9) and demonstrate end-to-end usage. Strictly examples, **not** core dependencies.
+
+### Suggested Examples
+- **Friendly chat partner** — casual register, encouraging, light corrections only when asked.
+- **Stricter tutor / mentor** — explicit corrections, grammar tagging, register coaching.
+
+### Phases
+| Phase | Status | Scope | Depends On |
+|-------|--------|-------|-----------|
+| 10a | 🔲 | Friendly partner example card + sample chat | #9 |
+| 10b | 🔲 | Stricter tutor example card + sample chat | #9 |
+| 10c | 🔲 | Documentation pointing at examples for first-time users | 10a, 10b |
+
+---
+
+## 11. Anki Import / Learning State Sync
+
+### Problem
+Learners with an existing Anki deck arrive with significant prior knowledge. Without importing it, the extension treats them as beginners and over-shows furigana, over-suggests known vocab, and starts tracking from zero.
+
+### Idea
+Import vocab/kanji and review state from Anki (CSV first, AnkiConnect later). Use the imported state to seed: tracking confidence, known/learning vocab status, known/learning kanji, adaptive furigana thresholds, and prompt macros.
+
+### Scope
+- **Sources:** Anki CSV export (baseline), AnkiConnect query (advanced/future).
+- **Mapping:** Anki ease / interval → confidence seed; suspended → ignored; due-today / learning queue → tagged as learning kanji / learning vocab.
+- **Conflict policy:** Imported state never destroys higher confidence already gained in-extension. Take the max.
+
+### Why After Export
+Export and tracking shape the data model; importing is much easier once the schema is proven and stable. Premature import would force schema churn.
+
+### Phases
+| Phase | Status | Scope | Depends On |
+|-------|--------|-------|-----------|
+| 11a | 🔲 | CSV import: map fields → seed tracking + known/learning kanji | #5 (export schema), #7, #13 |
+| 11b | 🔲 | Conflict resolution + dry-run preview | 11a |
+| 11c | 🔲 | AnkiConnect sync: pull review state on demand | 11a |
+| 11d | 🔲 | Periodic / on-open re-sync option | 11c |
+
+---
+
+## 12. Extended Interaction Tracking
+
+### Problem
+Current seen-tracking is the bare minimum and not yet correct (counts spans inconsistently, doesn't distinguish hover vs lookup vs explicit nudge). Before extending, the existing path needs a correctness refactor.
+
+### Idea
+After the refactor, expand per-word tracking to capture richer interaction signals that feed Anki suggestions, "vocab from this chat", and adaptive difficulty.
+
+### Tracked Signals (extension of #7 data model)
+| Field | Purpose |
+|-------|---------|
+| `hoverCount` | User hovered word but did not engage further. Weak signal. |
+| `lookupCount` | User opened the full tooltip / dictionary view. Stronger signal. |
+| `actionCounts` | Per-side-chat-action: `explain`, `translate`, `grammar`, etc. Reveals what the user actually struggles with. |
+| `lastHoverAt` / `lastLookupAt` / `lastActionAt` | Recency for decay and suggestion ranking. |
+| `contexts` | **Bounded** list (e.g. last 3) of `{ sentence, chatId, messageId, ts }`, captured only on hover / explain / Anki-queue. |
+
+### Bounded Contexts
+- Hard cap (e.g. 3 per word) — never store unlimited message history.
+- Captured only on meaningful interaction, not on every passive seen.
+- Used to populate Anki example sentences and "suggest vocab from this chat".
+
+### Phases
+| Phase | Status | Scope | Depends On |
+|-------|--------|-------|-----------|
+| 12a | 🔲 | Tracking correctness refactor (fix seenCount semantics, primary-match strictness) | #7 |
+| 12b | 🔲 | Add `hoverCount` / `lookupCount` / `actionCounts` fields | 12a |
+| 12c | 🔲 | Bounded `contexts` storage with capture rules | 12b |
+| 12d | 🔲 | "Suggest vocab from this chat" UI consuming the data | 12c, #5 |
+
+---
+
+## 13. Kanji Learning Mode
+
+### Problem
+Today kanji are binary: known or unknown. Learners actively studying a small set ("the next 10 N3 kanji") have no way to tell the model "use these naturally" while still seeing furigana for safety.
+
+### Idea
+Introduce a second state alongside "known": **learning**.
+
+| State | Furigana | Counted as known | Passed to prompt |
+|-------|----------|------------------|------------------|
+| Unknown | Always shown | No | No |
+| Learning | May still be shown | No | **Yes** — model is encouraged to use them |
+| Known | Hidden | Yes | Optional (level macros) |
+
+### Macros
+- `{{learningKanji}}` — comma-separated kanji list for prompt injection.
+- `{{learningKanjiCount}}` — for prompt budgeting / status displays.
+
+### Why
+Supports focused study of the next 5–20 kanji without forcing the user to "promote" them prematurely (which would hide furigana before mastery).
+
+### Phases
+| Phase | Status | Scope | Depends On |
+|-------|--------|-------|-----------|
+| 13a | 🔲 | Data model: add `learning` set alongside `known` set | #7 |
+| 13b | 🔲 | Kanji Manager UI: toggle between Unknown / Learning / Known | 13a |
+| 13c | 🔲 | Macros `{{learningKanji}}` / `{{learningKanjiCount}}` | 13a |
+| 13d | 🔲 | Wire into furigana logic (learning → still show by default) | 13a, #6 |
+
+---
+
+## 14. Partial Furigana Suppression (Experimental)
+
+### Problem
+In a multi-kanji word, today's logic is all-or-nothing: show furigana for the whole word, or hide it. A learner who knows 食 but not 物 in 食べ物 still sees furigana over both (or none).
+
+### Idea
+Hide furigana on per-kanji segments the user knows, while keeping it on segments they don't.
+
+### Why "Experimental"
+Reading-to-kanji alignment is genuinely hard:
+- **Compounds with okurigana** (食べ物) — partial kana, partial kanji.
+- **Jukujikun** (今日 = きょう) — reading does not map to individual kanji at all.
+- **Rendaku** (時々 = ときどき) — second kanji's reading mutates.
+- **Ateji** (寿司 = すし) — phonetic-only assignment.
+
+A naive split produces wrong, distracting furigana that's worse than the all-or-nothing baseline.
+
+### Conservative Strategy
+- Attempt per-kanji suppression **only** when alignment is unambiguous (e.g. each kanji has exactly one matching reading from the dictionary).
+- On any ambiguity (jukujikun, rendaku, ateji, multiple kanji-reading candidates) → fall back to whole-word furigana.
+- Ship behind a setting; off by default.
+
+### Phases
+| Phase | Status | Scope | Depends On |
+|-------|--------|-------|-----------|
+| 14a | 🔲 | Alignment detector with conservative confidence threshold | kuromoji reading data |
+| 14b | 🔲 | Per-kanji suppression renderer; fall-back path for ambiguous cases | 14a, #6, #13 |
+| 14c | 🔲 | Setting + opt-in telemetry for incorrect-alignment reports | 14b |
+
+---
+
+## 15. Implementation Order
+
+Features interleaved by phase for maximum early value.
+
+### Recommended Near-Term Order
+Sprints 4+ follow this dependency-aware sequence:
+
+1. **Tracking correctness refactor** (12a) — fix the foundation before extending it.
+2. **Configurable side-chat action registry** (#8) — unblocks experimentation, no schema risk.
+3. **Kanji learning mode** (#13) — small, additive, feeds prompts and adaptive furigana.
+4. **Extended interaction tracking** (12b–12c) — builds on (1).
+5. **Adaptive furigana** (6a–6b) — consumes (3) and (4).
+6. **Anki export** (5a–5c) — locks down the schema before importing.
+7. **Lorebook framework** (#9) — once macros from (3)/(4) exist.
+8. **Example characters** (#10) — exercise (7) end-to-end.
+9. **Anki import** (#11) — depends on stable export schema.
+10. **Partial furigana experiments** (#14) — last; opt-in, ambiguity-prone.
+
+### Sprints
 
 | Sprint | Phase | Scope | Status |
 |--------|-------|-------|--------|
@@ -355,27 +587,36 @@ Features interleaved by phase for maximum early value:
 | **2: First Visible** | 1b | Import first frequency list (JPDB) | ✅ |
 | | 1c | Frequency badges in tooltip | ✅ |
 | | 4b | Search UI (side panel tab) | ✅ |
-| | 7b | Auto-track seenCount during processing | 🔲 |
 | | 7c | Tooltip nudge buttons (Easy/Got it/Meh/Hard/Anki/Reset) | ✅ |
 | **3: Side Chat MVP** | 2a | Side panel UI + LLM call wrapper | ✅ |
 | | 2b | Tooltip buttons → explain/translate → panel | ✅ |
-| | 4c | Search result actions (copy, insert, tooltip) | ✅ |
-| | 5a | "Save for Anki" button on tooltip | 🔲 |
-| **4: Integration** | 1d | Second frequency list (Netflix/Anime) | 🔲 |
 | | 2c | Structured prompts with full context (v2 presets) | ✅ |
-| | 3a | "Check Japanese" pre-send button | 🔲 |
-| | 6a | Graduated furigana visibility algorithm | 🔲 |
-| **5: Polish & Export** | 5b,5c | Anki export queue + CSV | 🔲 |
-| | 3b | Structured feedback display | 🔲 |
-| | 1e | Frequency list settings/weights | 🔲 |
-| | 6b | Visibility threshold slider | 🔲 |
-| | 7d | Track user-written words | 🔲 |
+| | 4c | Search result actions (copy, insert, tooltip) | ✅ |
+| **4: Tracking & Action Registry** | 12a | Tracking correctness refactor (seenCount semantics, primary-match strictness) | 🔲 |
+| | 8a, 8b | Action schema + validator; refactor built-ins to default preset | 🔲 |
+| | 13a, 13b, 13c | Kanji learning mode: data model, manager UI, macros | 🔲 |
+| | 8c | Visibility-driven button rendering (tooltip/selection/manual) | 🔲 |
+| **5: Extended Tracking & Adaptive Furigana** | 12b, 12c | hover/lookup/action counts + bounded contexts | 🔲 |
+| | 6a, 6b | Graduated furigana visibility + threshold slider | 🔲 |
+| | 13d | Wire learning kanji into furigana logic | 🔲 |
+| | 7d | Track user-written words (tokenize on send) | 🔲 |
+| **6: Export, Lorebook, Examples** | 5a, 5b, 5c | "Save for Anki" + queue UI + CSV export | 🔲 |
+| | 9a, 9b | Lorebook pack + dynamic-state macros | 🔲 |
+| | 10a | Friendly partner example card | 🔲 |
+| | 9c, 9d | Lorebook install action + per-chat module toggles | 🔲 |
+| **7: Import & Experiments** | 11a, 11b | Anki CSV import + dry-run preview | 🔲 |
+| | 10b, 10c | Stricter tutor example card + first-time docs | 🔲 |
+| | 14a, 14b | Partial furigana suppression (experimental) + fall-back | 🔲 |
+| | 11c, 11d | AnkiConnect sync + periodic resync | 🔲 |
+| | 1d, 1e | Additional frequency lists + weights | 🔲 |
+| | 3a, 3b | "Check Japanese" pre-send button + structured display | 🔲 |
+| | 14c | Partial furigana setting + opt-in telemetry | 🔲 |
 
-This order ensures: foundational data layers first → visible features quickly → LLM features once panel exists → integration features that combine everything.
+This order ensures: foundational data layers first → visible features quickly → LLM features once panel exists → tracking correctness before extension → schema-stable export before import → experimental work last.
 
 ---
 
-## 9. Storage Strategy ✅
+## 16. Storage Strategy ✅
 
 ### The Problem
 Word tracking data will grow large (thousands of entries over months). SillyTavern's `extension_settings` is JSON-serialized on every `saveSettingsDebounced()` call. Bloating it with tracking data would slow all settings saves.
@@ -413,7 +654,7 @@ ST's files endpoint (`/api/files/upload`) allows uploading arbitrary files to th
 
 ---
 
-## 10. Technical Notes
+## 17. Technical Notes
 
 ### Frequency Data Format
 ```javascript
