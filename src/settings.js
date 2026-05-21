@@ -3,7 +3,6 @@ import { extension_settings, renderExtensionTemplateAsync } from '../../../../ex
 import { event_types } from '../../../../events.js';
 import { EXTENSION_KEY, EXTENSION_NAME } from '../index.js';
 import { getPresetList, loadPreset } from './side-chat-prompts.js';
-import { getKnownChars, getLearningChars } from './kanji-state.js';
 
 /** @readonly Default settings values */
 const defaultSettings = {
@@ -135,22 +134,6 @@ export const nihongoSettings = {
     set chatMaxHistory(val) {
         ensureSettings().chatMaxHistory = val;
         saveSettingsDebounced();
-    },
-    /** Number of kanji currently in the 'known' state */
-    get knownKanjiCount() {
-        return getKnownChars().length;
-    },
-    /** Comma-separated list of kanji currently in the 'known' state */
-    get knownKanji() {
-        return getKnownChars().join(',');
-    },
-    /** Number of kanji currently in the 'learning' state */
-    get learningKanjiCount() {
-        return getLearningChars().length;
-    },
-    /** Comma-separated list of kanji currently in the 'learning' state */
-    get learningKanji() {
-        return getLearningChars().join(',');
     },
 };
 

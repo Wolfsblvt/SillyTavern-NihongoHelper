@@ -13,6 +13,7 @@ import { ConnectionManagerRequestService } from '../../../../extensions/shared.j
 import { extension_settings } from '../../../../extensions.js';
 import { nihongoSettings } from './settings.js';
 import { getMainSystemPrompt, getActionInstructions, getUserPrompt, getPresetFieldMacros } from './side-chat-prompts.js';
+import { getKnownChars, getLearningChars } from './kanji-state.js';
 import { EXTENSION_NAME } from '../index.js';
 
 /** Default max tokens for side chat responses */
@@ -186,19 +187,19 @@ function buildDynamicMacros(context, userMessage) {
         },
         nihongoKnownKanjiCount: {
             description: 'Number of kanji the student has marked as known',
-            handler: () => String(nihongoSettings.knownKanjiCount || 0),
+            handler: () => String(getKnownChars().length),
         },
         nihongoKnownKanji: {
             description: 'Comma-separated list of known kanji characters',
-            handler: () => nihongoSettings.knownKanji || '',
+            handler: () => getKnownChars().join(','),
         },
         nihongoLearningKanjiCount: {
             description: 'Number of kanji the student is actively studying (learning state)',
-            handler: () => String(nihongoSettings.learningKanjiCount || 0),
+            handler: () => String(getLearningChars().length),
         },
         nihongoLearningKanji: {
             description: 'Comma-separated list of kanji the student is actively studying (learning state)',
-            handler: () => nihongoSettings.learningKanji || '',
+            handler: () => getLearningChars().join(','),
         },
     };
 }

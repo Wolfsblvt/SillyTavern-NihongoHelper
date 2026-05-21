@@ -65,6 +65,9 @@ export function loadKanjiState() {
         }
     }
 
+    // TODO(pre-release): the legacy `knownKanji` shape only ever shipped in pre-release
+    // builds. Once we cut a public release we can drop `migrateLegacyKnownKanji` and the
+    // line below entirely — nothing in the wild ever wrote that format.
     const migrated = migrateLegacyKnownKanji(settings);
     if (migrated > 0) {
         console.debug(`[${EXTENSION_NAME}] Migrated ${migrated} known kanji to unified state map`);
@@ -218,21 +221,6 @@ export function cycleState(char) {
         known: 'unknown',
     });
     return setState(char, next[getState(char)]);
-}
-
-/**
- * Convenience for binary "Mark Known" UI: toggles between known and unknown.
- * If the kanji is currently learning, it is promoted to known (not toggled off).
- * @param {string} char
- * @returns {boolean} true if now known
- */
-export function toggleKnown(char) {
-    if (isKnown(char)) {
-        setState(char, 'unknown');
-        return false;
-    }
-    setState(char, 'known');
-    return true;
 }
 
 /**
