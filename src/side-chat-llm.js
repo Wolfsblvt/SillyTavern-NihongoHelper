@@ -60,8 +60,12 @@ export function buildPrompts(actionId, context, userMessage) {
     const dynamicMacros = buildDynamicMacros(context || {}, userMessage);
     const macroOptions = { dynamicMacros };
 
+    // getActionInstructions / getUserPrompt already fall back to the registry's
+    // custom action when actionId is unknown, so no extra hard-coded fallback is
+    // needed here. userMessage is kept as the last-resort user prompt for the
+    // free-form case where even the custom template is empty.
     const mainSystemTemplate = getMainSystemPrompt();
-    const instructionsTemplate = getActionInstructions(actionId) || getActionInstructions('explain') || '';
+    const instructionsTemplate = getActionInstructions(actionId);
     const userPromptTemplate = getUserPrompt(actionId) || userMessage || '';
 
     return {
