@@ -9,6 +9,8 @@ import { nudgeConfidence, toggleFlag, getDerivedLevel, getConfidence, setConfide
 import { openDictSearch } from './dict-search-ui.js';
 import { isFrequencyAvailable, getFrequencyTier, getCompositeFrequency, getFrequencyPercent } from './frequency.js';
 import { triggerChatAction } from './side-chat.js';
+import { getActiveActions } from './side-chat-prompts.js';
+import { getActionsForContext, VISIBILITY } from './side-chat-actions.js';
 
 /**
  * Generic kanji tooltip module.
@@ -105,6 +107,51 @@ function ensureTooltip() {
     }, { passive: false });
 
     return tooltipEl;
+}
+
+/**
+ * Escapes a string for safe insertion as HTML text content or attribute value.
+ * Used for preset-supplied data (label, icon, title) that may contain quotes
+ * or angle brackets.
+ * @param {string} s
+ * @returns {string}
+ */
+function escapeHtml(s) {
+    if (s == null) return '';
+    return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+/**
+ * Renders the chat-action buttons block for a word tooltip page.
+ * Buttons are sourced from the active preset's action registry, filtered by
+ * the given visibility context. Returns an empty string when no actions are
+ * applicable so the block is omitted entirely (no empty border).
+ *
+ * @param {string} word        Display word (passed to side chat as the dictionary word)
+ * @param {string} reading
+ * @param {string} context     One of VISIBILITY.* — usually TOOLTIP or SELECTION
+ * @param {Object} [opts]
+ * @param {boolean} [opts.hasDictionaryMatch=true]
+ * @returns {string}
+ */
+function renderChatActionsHtml(word, reading, context, opts = {}) {
+    const all = getActiveActions();
+    const visible = getActionsForContext(all, context, {
+        hasDictionaryMatch: opts.hasDictionaryMatch !== false,
+    });
+    if (visible.length === 0) return '';
+
+    const buttons = visible.map(a => {
+        const iconHtml = a.icon ? `<i class="fa-solid ${escapeHtml(a.icon)}"></i> ` : '';
+        return `<button class="nihongo-wt-chat-btn" data-chat-action="${escapeHtml(a.id)}" title="${escapeHtml(a.label)}">${iconHtml}${escapeHtml(a.label)}</button>`;
+    }).join('');
+
+    return `<div class="nihongo-wt-chat-actions" data-word="${escapeHtml(word)}" data-reading="${escapeHtml(reading || '')}">${buttons}</div>`;
 }
 
 /**
@@ -597,12 +644,7 @@ function buildSinglePage(word, originalWord, reading, pos, inflection, altWritin
                 ${altWritingHtml}
                 ${displayPos}
                 ${sensesHtml || '<div class="nihongo-wt-meaning-placeholder">No definition found</div>'}
-                <div class="nihongo-wt-chat-actions" data-word="${word}" data-reading="${reading || ''}">
-                    <button class="nihongo-wt-chat-btn" data-chat-action="explain" title="Explain this word"><i class="fa-solid fa-circle-question"></i> Explain</button>
-                    <button class="nihongo-wt-chat-btn" data-chat-action="translate" title="Translate in context"><i class="fa-solid fa-language"></i> Translate</button>
-                    <button class="nihongo-wt-chat-btn" data-chat-action="alternatives" title="Synonyms & alternatives"><i class="fa-solid fa-arrows-split-up-and-left"></i> Alternatives</button>
-                    <button class="nihongo-wt-chat-btn" data-chat-action="grammar" title="Explain grammar"><i class="fa-solid fa-spell-check"></i> Grammar</button>
-                </div>
+                ${renderChatActionsHtml(word, reading, VISIBILITY.TOOLTIP, { hasDictionaryMatch: Boolean(meaning) })}
             </div>
             ${kanjiBlocksHtml}
         </div>
@@ -1440,12 +1482,7 @@ function showMinimalSelectionTooltip(word) {
                     </span>
                 </div>
                 <div class="nihongo-wt-meaning-placeholder">No definition found</div>
-                <div class="nihongo-wt-chat-actions" data-word="${word}" data-reading="">
-                    <button class="nihongo-wt-chat-btn" data-chat-action="explain" title="Explain this word"><i class="fa-solid fa-circle-question"></i> Explain</button>
-                    <button class="nihongo-wt-chat-btn" data-chat-action="translate" title="Translate in context"><i class="fa-solid fa-language"></i> Translate</button>
-                    <button class="nihongo-wt-chat-btn" data-chat-action="alternatives" title="Synonyms & alternatives"><i class="fa-solid fa-arrows-split-up-and-left"></i> Alternatives</button>
-                    <button class="nihongo-wt-chat-btn" data-chat-action="grammar" title="Explain grammar"><i class="fa-solid fa-spell-check"></i> Grammar</button>
-                </div>
+                ${renderChatActionsHtml(word, '', VISIBILITY.SELECTION, { hasDictionaryMatch: false })}
             </div>
         </div>
     `;

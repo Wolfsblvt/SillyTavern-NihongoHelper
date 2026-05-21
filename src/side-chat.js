@@ -14,7 +14,8 @@
 
 import { registerTab, openSidePanel } from './side-panel.js';
 import { sendChatRequest, buildPrompts, getProfileIcon } from './side-chat-llm.js';
-import { getChatAction } from './side-chat-prompts.js';
+import { getAction, getActiveActions } from './side-chat-prompts.js';
+import { findManualActionId, CUSTOM_ACTION_ID } from './side-chat-actions.js';
 import { nihongoSettings } from './settings.js';
 import { EXTENSION_NAME } from '../index.js';
 import { humanizeGenTime } from '../../../../RossAscends-mods.js';
@@ -102,9 +103,10 @@ export function initSideChat() {
 
 /**
  * Opens the side chat and triggers a quick action.
- * Called from tooltip buttons.
+ * Called from tooltip buttons. Accepts any preset-defined action id; unknown
+ * ids are silently ignored.
  *
- * @param {string} actionId - Action type (explain, translate, alternatives, grammar)
+ * @param {string} actionId - Action id from the active preset's registry
  * @param {Object} context - Word context
  * @param {string} context.word
  * @param {string} [context.dictWord]
@@ -116,13 +118,16 @@ export function initSideChat() {
  * @param {string} [context.matchId]
  */
 export function triggerChatAction(actionId, context) {
+    const action = getAction(actionId);
+    if (!action) {
+        console.warn(`[${EXTENSION_NAME}] Ignoring unknown chat action id: ${actionId}`);
+        return;
+    }
+
     openSidePanel('chat');
 
     // Start a new session or continue existing
     ensureSession();
-
-    const action = getChatAction(actionId);
-    if (!action) return;
 
     // Add the user "action" message
     const userMsg = createMessage('user', formatActionMessage(action, context), {
@@ -291,9 +296,13 @@ function handleSend() {
     inputEl.value = '';
     autoResizeInput();
 
-    // Determine action: if there was recent context, use 'custom' with that context
+    // Determine action: if there was recent context, use the active preset's
+    // manual action with that context. Falls back to the canonical custom id
+    // if the preset has nothing tagged manual (the registry's custom-action
+    // fallback ensures this is always resolvable).
     const lastContext = getLastContext();
-    generateResponse('custom', lastContext, text);
+    const manualId = findManualActionId(getActiveActions()) || CUSTOM_ACTION_ID;
+    generateResponse(manualId, lastContext, text);
 }
 
 /**
@@ -477,7 +486,7 @@ function buildHistoryForLLM() {
         if (msg.role === 'user' && msg.instructions && mode !== 'remove') {
             if (mode === 'deduplicate') {
                 if (msg.actionId && seenActionIds.has(msg.actionId)) {
-                    const action = getChatAction(msg.actionId);
+                    const action = getAction(msg.actionId);
                     result.push({ role: 'system', content: `[Same instructions as '${action?.label || msg.actionId}' above]` });
                 } else {
                     if (msg.actionId) seenActionIds.add(msg.actionId);
@@ -598,7 +607,7 @@ function renderSystemBar(msg) {
     const bar = document.createElement('div');
     bar.className = 'nihongo-chat-system-bar';
 
-    const action = msg.actionId ? getChatAction(msg.actionId) : null;
+    const action = msg.actionId ? getAction(msg.actionId) : null;
     const label = action ? action.label : 'System';
     const icon = action ? action.icon : 'fa-gear';
 
