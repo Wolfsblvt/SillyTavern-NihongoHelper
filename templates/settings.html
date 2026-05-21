@@ -101,10 +101,22 @@
                     <label for="nihongo_helper_tutor_preset">
                         <span>Tutor preset</span>
                     </label>
-                    <select id="nihongo_helper_tutor_preset" class="text_pole">
-                        <option value="default">Default Tutor</option>
-                    </select>
-                    <small class="notes">Prompt preset defining the tutor's personality and response style</small>
+                    <div class="flex-container alignItemsCenter" style="gap: 4px;">
+                        <select id="nihongo_helper_tutor_preset" class="text_pole flex1">
+                            <option value="default">Default Tutor</option>
+                        </select>
+                        <button id="nihongo_helper_preset_import" class="menu_button menu_button_icon" title="Import preset from a JSON file">
+                            <i class="fa-solid fa-file-import"></i>
+                        </button>
+                        <button id="nihongo_helper_preset_export" class="menu_button menu_button_icon" title="Export the active preset as JSON">
+                            <i class="fa-solid fa-file-export"></i>
+                        </button>
+                        <button id="nihongo_helper_preset_delete" class="menu_button menu_button_icon" title="Delete this imported preset" style="display: none;">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                    <input type="file" id="nihongo_helper_preset_import_file" accept="application/json,.json" style="display: none;" />
+                    <small class="notes">Prompt preset defining the tutor's personality, rules, and action buttons. Import a JSON file to add custom presets.</small>
                 </div>
                 <div class="flex-container flexFlowColumn" style="margin-top: 4px;">
                     <label for="nihongo_helper_history_mode">

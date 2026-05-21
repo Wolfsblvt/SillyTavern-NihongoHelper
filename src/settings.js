@@ -2,7 +2,8 @@ import { saveSettingsDebounced, eventSource } from '../../../../../script.js';
 import { extension_settings, renderExtensionTemplateAsync } from '../../../../extensions.js';
 import { event_types } from '../../../../events.js';
 import { EXTENSION_KEY, EXTENSION_NAME } from '../index.js';
-import { getPresetList, loadPreset } from './side-chat-prompts.js';
+import { getPresetList, loadPreset, exportActivePreset, importPresetFromJson, deleteUserPreset, isUserPreset } from './side-chat-prompts.js';
+import { Popup } from '../../../../popup.js';
 
 /** @readonly Default settings values */
 const defaultSettings = {
@@ -355,7 +356,7 @@ function registerSettingsEventListeners() {
         eventSource.on(event_types.CONNECTION_PROFILE_DELETED, refreshProfiles);
     }
 
-    // Tutor preset selector
+    // Tutor preset selector + import/export controls
     const presetSelect = document.getElementById('nihongo_helper_tutor_preset');
     if (presetSelect instanceof HTMLSelectElement) {
         populatePresets(presetSelect);
@@ -363,7 +364,10 @@ function registerSettingsEventListeners() {
             settings.chatPresetId = presetSelect.value;
             saveSettingsDebounced();
             await loadPreset(presetSelect.value);
+            updatePresetActionButtons();
         });
+        registerPresetIoHandlers(presetSelect);
+        updatePresetActionButtons();
     }
 
     // History mode selector
@@ -449,6 +453,105 @@ function populatePresets(select) {
 
     select.value = currentValue;
     if (!select.value) select.value = 'default';
+}
+
+/**
+ * Wires up the preset import/export/delete buttons.
+ * Import: opens a hidden file input → reads JSON → registers the preset.
+ * Export: serializes the active preset and triggers a download.
+ * Delete: confirms, removes the user preset, falls back to default.
+ *
+ * @param {HTMLSelectElement} presetSelect
+ */
+function registerPresetIoHandlers(presetSelect) {
+    const importBtn = document.getElementById('nihongo_helper_preset_import');
+    const exportBtn = document.getElementById('nihongo_helper_preset_export');
+    const deleteBtn = document.getElementById('nihongo_helper_preset_delete');
+    const fileInput = document.getElementById('nihongo_helper_preset_import_file');
+
+    if (importBtn && fileInput instanceof HTMLInputElement) {
+        importBtn.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', async () => {
+            const file = fileInput.files?.[0];
+            // Reset value so re-importing the same file fires `change` again.
+            fileInput.value = '';
+            if (!file) return;
+
+            try {
+                const text = await file.text();
+                const entry = await importPresetFromJson(text);
+                ensureSettings().chatPresetId = entry.id;
+                saveSettingsDebounced();
+                populatePresets(presetSelect);
+                presetSelect.value = entry.id;
+                await loadPreset(entry.id);
+                updatePresetActionButtons();
+                if (typeof toastr !== 'undefined') {
+                    toastr.success(`Imported preset: ${entry.name}`);
+                }
+            } catch (err) {
+                console.error(`[${EXTENSION_NAME}] Preset import failed:`, err);
+                if (typeof toastr !== 'undefined') {
+                    toastr.error(err?.message || 'Could not import preset.', 'Preset import failed');
+                }
+            }
+        });
+    }
+
+    if (exportBtn) {
+        exportBtn.addEventListener('click', () => {
+            const json = exportActivePreset();
+            if (!json) {
+                if (typeof toastr !== 'undefined') toastr.warning('No active preset to export.');
+                return;
+            }
+            const presetId = presetSelect.value || ensureSettings().chatPresetId || 'preset';
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `nihongo-preset-${presetId}.json`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            // Revoke shortly after the download is triggered.
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        });
+    }
+
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', async () => {
+            const presetId = presetSelect.value;
+            if (!presetId || !isUserPreset(presetId)) return;
+
+            const confirmed = await Popup.show.confirm(
+                'Delete preset?',
+                `Remove the imported preset "${presetSelect.options[presetSelect.selectedIndex]?.textContent || presetId}"? This cannot be undone.`,
+            );
+            if (!confirmed) return;
+
+            await deleteUserPreset(presetId);
+            // Fall back to the default preset.
+            ensureSettings().chatPresetId = 'default';
+            saveSettingsDebounced();
+            populatePresets(presetSelect);
+            presetSelect.value = 'default';
+            await loadPreset('default');
+            updatePresetActionButtons();
+            if (typeof toastr !== 'undefined') toastr.success('Preset deleted.');
+        });
+    }
+}
+
+/**
+ * Shows/hides the delete button based on whether the active preset is a
+ * user-imported one (the bundled default cannot be deleted).
+ */
+function updatePresetActionButtons() {
+    const select = document.getElementById('nihongo_helper_tutor_preset');
+    const deleteBtn = document.getElementById('nihongo_helper_preset_delete');
+    if (!(select instanceof HTMLSelectElement) || !(deleteBtn instanceof HTMLElement)) return;
+    deleteBtn.style.display = isUserPreset(select.value) ? '' : 'none';
 }
 
 /**
