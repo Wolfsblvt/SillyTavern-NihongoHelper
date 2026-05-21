@@ -5,81 +5,60 @@ A SillyTavern extension to help with learning Japanese through chat interactions
 > [!CAUTION]
 > Status: This is a work in progress 🚧
 
-## Features
+## Feature Status
 
-### Implemented
-- [x] **Auto Furigana** — Automatically adds furigana (reading annotations) above kanji in chat messages
-  - Works during streaming (real-time, throttled)
-  - Covers both message text and reasoning blocks
-  - Handles edits, swipes, chat changes, lazy loading
-- [x] **Hover-only Mode** — Furigana only appears on hover, with space reserved to prevent layout shifts
-- [x] **Font Size Controls** — Adjustable Japanese text size and furigana scale via range sliders
-- [x] **Settings Panel** — Enable/disable furigana, hover mode, font sizes, streaming interval
-- [x] **Kanji Manager** — Comprehensive kanji browser/manager popup (2998 kanji)
-  - Browse and filter by JLPT level (N5–N1), school grade, known/unknown status
-  - Sort by frequency, grade, JLPT, or stroke count with context-aware badges
-  - Per-kanji detail view with meanings, on/kun readings, JLPT, grade, strokes, frequency
-  - Mark kanji as "known" with date tracking — known kanji are excluded from furigana
-  - Search by kanji character, meaning, or reading
-  - Infinite scroll, persisted sort/filter preferences
-  - Full keyboard navigation: arrow keys, Enter/Space, Escape/Backspace
-  - Jisho.org integration link in detail view
-- [x] **Known Kanji Highlighting** — Known kanji in chat get subtle color highlighting (toggle in settings)
-- [x] **Kanji Inspect Mode** — Hover over any kanji in chat to see a tooltip with details
-  - Toggle via wand menu or `Ctrl+Shift+K` shortcut
-  - Tooltip shows meanings, readings, JLPT/grade/strokes/frequency tags
-  - Toggle "known" status and open Jisho.org directly from the tooltip
-  - Escape to exit, floating indicator bar shows active state
-- [x] **Kanji Tooltip** — Compact hover tooltip available in both Kanji Manager and Inspect Mode
-  - Smart positioning (right → left → below), constrained within parent
-  - Known toggle, Jisho link, smooth animations
-- [x] **Word Tooltip** — Hover over any word in inspect mode to see word-level details
-  - Word surface form, reading, part of speech
-  - **JMdict dictionary meanings** — Jisho-style grouped definitions with POS headers, numbered senses, misc notes
-  - Jisho.org link for word lookup (uses `#words` search)
-  - Compact kanji breakdown: each kanji in the word shown with meanings, readings, JLPT, frequency
-  - Known kanji toggle (checkmark icon) per kanji in breakdown
-  - On/kun reading labels (音/訓) in kanji blocks
-- [x] **Inflection Detection & De-inflection** — Recognize conjugated/inflected forms and chain to dictionary form
-  - ~100 verb/adjective patterns: masu, te, ta, negative, potential, passive, causative, volitional, conditional, progressive
-  - Tooltip shows "X is the Y-form of Z" note
-  - Applied automatically during text rendering (no selection needed)
-- [x] **Multi-Token Matching** — Sliding window dictionary lookup across token boundaries
-  - Configurable window size (1–10 tokens, default 5)
-  - Greedy longest-match with one-round overlap extension
-  - Catches multi-word expressions that span kuromoji token boundaries
-- [x] **Paginated Tooltips** — Multiple interpretations in one tooltip with tab navigation
-  - Tab list shows all matches (direct + deinflected + sub-matches)
-  - Navigate via: Scroll on tooltip, Shift+Scroll on word, click tab
-  - Wrap-around navigation (last → first and back)
-  - Tab block at top (movable to bottom via CSS)
-- [x] **Kana Word Tooltips** — Optional setting to make kana-only words hoverable
-  - Dotted underline visual distinction
-  - Applies deinflection and dictionary lookup to kana-only tokens
-  - Off by default (setting: "Kana word tooltips")
-- [x] **Hide Known Furigana** — Setting to hide furigana on words where all kanji are known
-  - Immediate re-render when toggling known state (no reload needed)
-  - On by default (setting: "Hide furigana for known words")
-- [x] **`{{knownKanji}}` Macro** — Comma-separated list of known kanji for use in system prompts
-- [x] **`{{knownKanjiCount}}` Macro** — Number of known kanji
+A compact overview of what's solid, what's still being shaped, and what's on the roadmap.
+For full design context, dependencies, and phased plans see [`ROADMAP.md`](ROADMAP.md).
+For internal architecture see [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
-### Planned
+### ✅ Stable / Usable
 
-> See [`ROADMAP.md`](ROADMAP.md) for full design context, rationale, and phased implementation plans.
+Day-to-day reading and lookup features that are tested and ready to use.
 
-- [ ] **Word Frequency Data** — Import word-level frequency lists (JPDB, Netflix/Anime, Innocent Corpus) for numerical rank badges in tooltips. Supports multiple lists with configurable weights and a composite score for downstream features.
-- [ ] **Language Assistant Side Chat** — Slide-out panel with a dedicated language helper LLM. Triggered from tooltip buttons (Explain, Translate, Alternatives). Full context injection (sentence, known kanji, level). Follow-up conversations, persistent history.
-- [ ] **Writing Feedback / Grammar Check** — Pre-send "Check Japanese" button. Separate LLM call analyzes user's input for grammar, word choice, politeness, and naturalness errors. Structured feedback with categories and "Apply fix" actions.
-- [ ] **Dictionary Search UI** — Built-in search box querying local JMdict (English, kana, kanji). Instant offline results. Click to copy or insert into chat input. Jisho API as fallback for rare words and example sentences.
-- [ ] **Anki Integration & Export** — Mark words for export from tooltips. Export queue with CSV and AnkiConnect (direct one-click add). LLM-enhanced cards with mnemonics and example sentences. Auto-suggested cards from tracking data.
-- [ ] **Adaptive Furigana Visibility** — Deterministic algorithm replaces binary hide/show. Uses word frequency + tracking level + known kanji to graduate: always show → hover-only → hide. User-configurable threshold slider.
-- [ ] **Granular Word & Kanji Tracking** — Multi-level familiarity (Unknown→Seen→Recognized→Known→Mastered). Auto-tracks encounters in LLM output and user messages. Tooltip quick-mark buttons. Foundation for adaptive difficulty, Anki suggestions, and LLM feedback loop.
+- **Auto Furigana** — Automatic reading annotations above kanji in chat. Works during streaming and covers reasoning blocks; handles edits, swipes, chat changes, and lazy-loaded messages.
+- **Hover-only Mode** — Furigana only appears on hover, with reserved space to avoid layout shifts.
+- **Font Size Controls** — Adjustable Japanese text size and furigana scale.
+- **Settings Panel** — Toggle furigana, hover mode, font sizes, streaming interval, and more.
+- **Kanji Manager** — Browser popup over 2998 kanji. Filter by JLPT / grade / known status, sort by frequency / grade / JLPT / strokes, per-kanji detail view, full keyboard navigation, Jisho.org link.
+- **Known Kanji Highlighting** — Subtle color highlight for known kanji in chat (toggleable).
+- **Kanji Inspect Mode** — Toggle (`Ctrl+Shift+K` or wand menu) to hover any kanji in chat for full details.
+- **Kanji Tooltip** — Compact hover tooltip with smart positioning, used in both Kanji Manager and Inspect Mode.
+- **Word Tooltip** — Word-level details with grouped JMdict definitions, kanji breakdown, on/kun labels, Jisho link.
+- **Inflection Detection & De-inflection** — Recognises ~100 verb/adjective patterns (masu, te, ta, negative, potential, passive, causative, volitional, conditional, progressive, …) and chains back to dictionary form.
+- **Multi-Token Matching** — Sliding-window dictionary lookup catches multi-word expressions that span kuromoji token boundaries.
+- **Paginated Tooltips** — Multiple interpretations per tooltip with tab navigation (scroll, Shift+Scroll, click).
+- **Kana Word Tooltips** — Optional setting to make kana-only words hoverable.
+- **Hide Known Furigana** — Skip furigana on words where every kanji is already marked known.
+- **`{{knownKanji}}` / `{{knownKanjiCount}}` macros** — Inject known-kanji state into system prompts to adapt LLM difficulty.
 
-### Future Ideas
-- [ ] **Grammar Pattern Detection** — Highlight grammar patterns (て-form, conditional, passive, etc.) with hover tooltips
-- [ ] **Reading Practice Mode** — Hide all kanji and show only furigana, forcing hiragana reading
-- [ ] **Conversation Review Mode** — Post-session structured review: new vocab, grammar points, common mistakes
-- [ ] **Multi-step Deinflection** — Recursive de-inflection chains for compound forms (causative-passive, etc.)
+### 🧪 Experimental / In Progress
+
+Working but not finalised. Expect rough edges, schema changes, and behaviour shifts.
+
+- **Word Frequency Badges** — JPDB rank shown in tooltips with tier coloring. Additional lists (Netflix/Anime, etc.), configurable weights, and chat-wide frequency coloring are still planned.
+- **Dictionary Search UI** — Side-panel search tab with English / kana / kanji / romaji input and result actions (copy, insert, tooltip). Jisho fallback for rare words and example sentences is planned.
+- **Language Assistant Side Chat** — Slide-out panel with Explain / Translate / Alternatives / Grammar buttons, using your configured Connection Manager profile. Persistent / re-openable conversations are not yet saved.
+- **Word Tracking & Confidence Nudges** — Tooltip Easy / Got it / Meh / Hard / Anki buttons drive a sliding confidence score. Underlying seen-count tracking, user-written word capture, and exposure to LLM prompts still need correctness work.
+- **Prompt Preset System** — Tutor presets (JSON) define personality and per-action prompts for the side chat. The action set itself is still hard-coded; configurable actions per preset are planned.
+
+### 🔮 Planned
+
+Designed but not implemented. See [`ROADMAP.md`](ROADMAP.md) for rationale, dependencies, and phased plans.
+
+- **Tracking Correctness Improvements** — Fix seen-count semantics and primary-match strictness before extending tracking further.
+- **Configurable Side-Chat Actions** — Move the action registry into tutor preset JSON so users can add buttons, tutors, and workflows without code changes.
+- **Kanji Learning Mode** — A "learning" state alongside "known", plus `{{learningKanji}}` macros that bias the model toward those kanji while keeping furigana visible.
+- **Extended Interaction Tracking** — Hover / lookup / per-action counts and a small bounded list of useful contexts per word.
+- **Adaptive Furigana Visibility** — Graduated show / hover / hide based on frequency, tracking, and known-kanji state, with a single visibility slider.
+- **Writing Feedback / Grammar Check** — Pre-send "Check Japanese" button with structured grammar / word-choice / register / naturalness feedback.
+- **Anki Export** — Mark words from the tooltip → CSV or AnkiConnect, with optional LLM-enhanced fields.
+- **Anki Import** — Seed tracking and known/learning state from existing Anki decks (CSV first, AnkiConnect later).
+- **Lorebook / Character-Chat Prompt Framework** — Core ST world-info pack plus dynamic-state macros that make any character chat Japanese-learning aware.
+- **Example Tutor / Chat Partner Characters** — Reference cards demonstrating immersive conversational use of the framework.
+- **Partial Furigana Suppression** — Hide furigana only on known kanji within multi-kanji words. Experimental — falls back to whole-word furigana when reading alignment is ambiguous.
+- **Grammar Pattern Detection** — Highlight grammar patterns (て-form, conditional, passive, …) with hover tooltips.
+- **Reading Practice Mode** — Hide kanji and show only kana, forcing hiragana reading.
+- **Conversation Review Mode** — Post-session structured review of new vocab, grammar points, and common mistakes.
 
 ## Installation
 
