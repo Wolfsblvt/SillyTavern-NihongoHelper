@@ -192,6 +192,14 @@ function buildDynamicMacros(context, userMessage) {
             description: 'Comma-separated list of known kanji characters',
             handler: () => nihongoSettings.knownKanji || '',
         },
+        nihongoLearningKanjiCount: {
+            description: 'Number of kanji the student is actively studying (learning state)',
+            handler: () => String(nihongoSettings.learningKanjiCount || 0),
+        },
+        nihongoLearningKanji: {
+            description: 'Comma-separated list of kanji the student is actively studying (learning state)',
+            handler: () => nihongoSettings.learningKanji || '',
+        },
     };
 }
 

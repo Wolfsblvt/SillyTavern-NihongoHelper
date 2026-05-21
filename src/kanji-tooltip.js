@@ -1,5 +1,5 @@
 import { getKanji, isKanjiDataLoaded } from './kanji-data.js';
-import { getKnownKanji, toggleKnown } from './kanji-manager.js';
+import { getKnownKanji, getState, setState } from './kanji-state.js';
 import { lookupMeaning, lookupAllMeanings, isMeaningAvailable } from './meaning-provider.js';
 import { nihongoSettings } from './settings.js';
 import { deinflect } from './deinflect.js';
@@ -108,6 +108,31 @@ function ensureTooltip() {
 }
 
 /**
+ * Renders a compact tri-state selector (Unknown / Learning / Known) for tooltips.
+ * @param {string} char
+ * @param {'unknown'|'learning'|'known'} state
+ * @param {'compact'|'full'} variant 'compact' = icon-only; 'full' = icon + label
+ * @returns {string} HTML string
+ */
+function renderStateSelector(char, state, variant) {
+    const btn = (s, icon, label, title) => {
+        const active = state === s ? ' nihongo-state-active' : '';
+        const variantCls = variant === 'compact' ? ' nihongo-state-btn-compact' : '';
+        return `<button class="nihongo-state-btn${variantCls}${active}" data-kanji="${char}" data-state="${s}" aria-pressed="${state === s}" title="${title}"><i class="${icon}"></i>${variant === 'full' ? `<span>${label}</span>` : ''}</button>`;
+    };
+    const wrapperCls = variant === 'compact'
+        ? 'nihongo-state-selector nihongo-state-selector-compact nihongo-wt-state-selector'
+        : 'nihongo-state-selector';
+    return `
+        <div class="${wrapperCls}" role="group" aria-label="Kanji state">
+            ${btn('unknown',  'fa-regular fa-circle',         'Unknown',  'Mark as unknown')}
+            ${btn('learning', 'fa-solid fa-graduation-cap',   'Learning', 'Mark as learning')}
+            ${btn('known',    'fa-solid fa-circle-check',     'Known',    'Mark as known')}
+        </div>
+    `;
+}
+
+/**
  * Renders a compact kanji block for use inside the word tooltip.
  * @param {string} char
  * @returns {string} HTML string
@@ -115,11 +140,12 @@ function ensureTooltip() {
 function renderKanjiBlock(char) {
     const entry = getKanji(char);
     if (!entry) return '';
-    const known = getKnownKanji();
-    const isKnown = known.has(char);
-    const knownClass = isKnown ? ' nihongo-wt-kanji-known' : '';
+    const state = getState(char);
+    const stateClass = state === 'known'
+        ? ' nihongo-wt-kanji-known'
+        : state === 'learning' ? ' nihongo-wt-kanji-learning' : '';
     return `
-        <div class="nihongo-wt-kanji-block${knownClass}" data-kanji="${char}">
+        <div class="nihongo-wt-kanji-block${stateClass}" data-kanji="${char}">
             <span class="nihongo-wt-kanji-char">${char}</span>
             <div class="nihongo-wt-kanji-info">
                 <div class="nihongo-wt-kanji-meanings">${entry.m.slice(0, 3).join(', ')}</div>
@@ -130,53 +156,65 @@ function renderKanjiBlock(char) {
                     ${entry.f ? `<span class="nihongo-tooltip-tag">#${entry.f}</span>` : ''}
                 </div>
             </div>
-            <button class="nihongo-tooltip-known-btn nihongo-wt-known-toggle" data-kanji="${char}" title="${isKnown ? 'Mark as not known' : 'Mark as known'}">
-                <i class="${isKnown ? 'fa-solid' : 'fa-regular'} fa-circle-check"></i>
-            </button>
+            ${renderStateSelector(char, state, 'compact')}
         </div>
     `;
 }
 
 /**
- * Wires up all known toggle buttons inside the tooltip.
+ * Wires up all tri-state selector buttons inside the tooltip.
+ * Each button sets the kanji to its specific state directly.
  * @param {HTMLElement} tip
  */
 function wireKnownButtons(tip) {
-    tip.querySelectorAll('.nihongo-tooltip-known-btn').forEach(knownBtn => {
-        knownBtn.addEventListener('click', (e) => {
+    tip.querySelectorAll('.nihongo-state-btn[data-kanji][data-state]').forEach(btn => {
+        if (!(btn instanceof HTMLElement)) return;
+        btn.addEventListener('click', (e) => {
             e.stopPropagation();
-            const ch = knownBtn.dataset.kanji;
-            if (!ch) return;
-            const nowKnown = toggleKnown(ch);
-            // Update button icon
-            const icon = knownBtn.querySelector('i');
-            if (icon) icon.className = nowKnown ? 'fa-solid fa-circle-check' : 'fa-regular fa-circle-check';
-            // Update button text if present
-            const span = knownBtn.querySelector('span');
-            if (span) span.textContent = nowKnown ? 'Known' : 'Mark Known';
-            // Update title
-            knownBtn.title = nowKnown ? 'Mark as not known' : 'Mark as known';
-            // Update kanji block in word tooltip
-            const block = knownBtn.closest('.nihongo-wt-kanji-block');
-            if (block) block.classList.toggle('nihongo-wt-kanji-known', nowKnown);
-            // Update the word-level known border
+            const ch = btn.dataset.kanji;
+            const next = /** @type {'unknown'|'learning'|'known'} */ (btn.dataset.state);
+            if (!ch || !next) return;
+            setState(ch, next);
+            const newState = getState(ch);
+
+            // Update every state-selector button for this kanji within the tooltip
+            tip.querySelectorAll(`.nihongo-state-btn[data-kanji="${ch}"]`).forEach(b => {
+                if (!(b instanceof HTMLElement)) return;
+                const isActive = b.dataset.state === newState;
+                b.classList.toggle('nihongo-state-active', isActive);
+                b.setAttribute('aria-pressed', String(isActive));
+            });
+
+            // Update kanji block visual state class
+            const block = tip.querySelector(`.nihongo-wt-kanji-block[data-kanji="${ch}"]`);
+            if (block) {
+                block.classList.toggle('nihongo-wt-kanji-known', newState === 'known');
+                block.classList.toggle('nihongo-wt-kanji-learning', newState === 'learning');
+            }
+
+            // Update word-tooltip-level known border:
+            //  - Word tooltip: green border only when ALL kanji in the word are known.
+            //  - Standalone kanji tooltip: directly mirrors this kanji's state.
             const inner = tip.querySelector('.nihongo-tooltip-inner');
             if (inner) {
                 const isWordTooltip = inner.classList.contains('nihongo-wt-inner');
                 if (isWordTooltip) {
-                    // Word tooltip: green border only when ALL kanji in the word are known
                     const allBlocks = tip.querySelectorAll('.nihongo-wt-kanji-block');
                     const allKnown = allBlocks.length > 0 && [...allBlocks].every(b => b.classList.contains('nihongo-wt-kanji-known'));
                     inner.classList.toggle('nihongo-tooltip-known', allKnown);
                 } else {
-                    // Standalone kanji tooltip: direct toggle
-                    inner.classList.toggle('nihongo-tooltip-known', nowKnown);
+                    inner.classList.toggle('nihongo-tooltip-known', newState === 'known');
+                    inner.classList.toggle('nihongo-tooltip-learning', newState === 'learning');
                 }
             }
-            // Update the kanji spans in the DOM
-            document.querySelectorAll(`.nihongo-kanji[data-kanji="${ch}"]`)
-                .forEach(s => s.classList.toggle('nihongo-kanji-known', nowKnown));
-            // Re-process affected messages to update furigana visibility
+
+            // Update kanji spans across the DOM (chat, search results, manager)
+            document.querySelectorAll(`.nihongo-kanji[data-kanji="${ch}"]`).forEach(s => {
+                s.classList.toggle('nihongo-kanji-known', newState === 'known');
+                s.classList.toggle('nihongo-kanji-learning', newState === 'learning');
+            });
+
+            // Re-process messages so furigana visibility (hideKnownFurigana) updates
             reprocessMessagesWithKanji(ch);
         });
     });
@@ -195,14 +233,15 @@ function populateKanjiTooltip(char) {
         return false;
     }
 
-    const known = getKnownKanji();
-    const isKnown = known.has(char);
-    const knownClass = isKnown ? ' nihongo-tooltip-known' : '';
+    const state = getState(char);
+    const stateClass = state === 'known'
+        ? ' nihongo-tooltip-known'
+        : state === 'learning' ? ' nihongo-tooltip-learning' : '';
 
     const jishoUrl = `https://jisho.org/search/${encodeURIComponent(char)}%20%23kanji`;
 
     tip.innerHTML = `
-        <div class="nihongo-tooltip-inner${knownClass}">
+        <div class="nihongo-tooltip-inner${stateClass}">
             <div class="nihongo-tooltip-top">
                 <span class="nihongo-tooltip-kanji">${char}</span>
                 <div class="nihongo-tooltip-meanings">${entry.m.slice(0, 4).join(', ')}</div>
@@ -218,10 +257,7 @@ function populateKanjiTooltip(char) {
                 ${entry.f ? `<span class="nihongo-tooltip-tag">#${entry.f}</span>` : ''}
             </div>
             <div class="nihongo-tooltip-actions">
-                <button class="nihongo-tooltip-known-btn interactable" data-kanji="${char}" title="${isKnown ? 'Mark as not known' : 'Mark as known'}">
-                    <i class="${isKnown ? 'fa-solid' : 'fa-regular'} fa-circle-check"></i>
-                    <span>${isKnown ? 'Known' : 'Mark Known'}</span>
-                </button>
+                ${renderStateSelector(char, state, 'full')}
                 <a class="nihongo-tooltip-jisho-link" href="${jishoUrl}" target="_blank" rel="noopener" title="Look up on Jisho.org">
                     Jisho ↗
                 </a>

@@ -102,6 +102,7 @@ export const FILTER_OPTIONS = {
     GRADE_6: 'grade6',
     GRADE_JH: 'grade8',
     KNOWN: 'known',
+    LEARNING: 'learning',
     UNKNOWN: 'unknown',
 };
 
@@ -111,10 +112,11 @@ export const FILTER_OPTIONS = {
  * @param {string} [options.filter='all']
  * @param {string} [options.sort='freq_asc']
  * @param {string} [options.search='']
- * @param {Set<string>|Map<string, any>} [options.knownKanji]
+ * @param {(char: string) => 'unknown'|'learning'|'known'} [options.getState]
+ *   Resolver for per-kanji state. Defaults to "everything is unknown".
  * @returns {KanjiEntry[]}
  */
-export function queryKanji({ filter = 'all', sort = 'freq_asc', search = '', knownKanji = new Map() } = {}) {
+export function queryKanji({ filter = 'all', sort = 'freq_asc', search = '', getState = () => 'unknown' } = {}) {
     let entries = [...kanjiData];
 
     // Apply text search (kanji char, meanings, readings)
@@ -142,8 +144,9 @@ export function queryKanji({ filter = 'all', sort = 'freq_asc', search = '', kno
         case FILTER_OPTIONS.GRADE_5: entries = entries.filter(e => e.g === 5); break;
         case FILTER_OPTIONS.GRADE_6: entries = entries.filter(e => e.g === 6); break;
         case FILTER_OPTIONS.GRADE_JH: entries = entries.filter(e => e.g === 8); break;
-        case FILTER_OPTIONS.KNOWN: entries = entries.filter(e => knownKanji.has(e.k)); break;
-        case FILTER_OPTIONS.UNKNOWN: entries = entries.filter(e => !knownKanji.has(e.k)); break;
+        case FILTER_OPTIONS.KNOWN: entries = entries.filter(e => getState(e.k) === 'known'); break;
+        case FILTER_OPTIONS.LEARNING: entries = entries.filter(e => getState(e.k) === 'learning'); break;
+        case FILTER_OPTIONS.UNKNOWN: entries = entries.filter(e => getState(e.k) === 'unknown'); break;
         default: break;
     }
 

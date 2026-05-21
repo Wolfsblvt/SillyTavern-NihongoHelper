@@ -1904,3 +1904,137 @@
     opacity: 1;
     background: var(--black10a);
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   Kanji Learning Mode — tri-state (Unknown / Learning / Known)
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ── Subtle "learning" highlight for kanji in chat ────────────────────── */
+/* Slightly tinted blue underline-ish glow. Quieter than the green known
+   highlight because learning kanji still show furigana, so the user already
+   has a strong cue. */
+#chat.nihongo-highlight-known .mes .nihongo-kanji-learning {
+    color: color-mix(in srgb, currentColor 70%, #5b9bff);
+    text-decoration: underline dotted color-mix(in srgb, currentColor 30%, #5b9bff);
+    text-underline-offset: 2px;
+}
+
+/* ── Kanji Manager tile: learning state ───────────────────────────────── */
+.nihongo-km-tile-learning {
+    background: rgba(91, 155, 255, 0.10);
+    border-color: rgba(91, 155, 255, 0.35);
+}
+
+.nihongo-km-tile-learning:hover {
+    background: rgba(91, 155, 255, 0.22);
+}
+
+/* ── Kanji Manager detail: learning kanji border ──────────────────────── */
+.nihongo-km-detail-kanji-learning {
+    border-color: rgba(91, 155, 255, 0.55);
+    background: rgba(91, 155, 255, 0.08);
+}
+
+/* ── Tooltip: subtle learning border on the inner card ────────────────── */
+.nihongo-tooltip-inner.nihongo-tooltip-learning {
+    border-left-color: #5b9bff;
+}
+
+.nihongo-wt-kanji-block.nihongo-wt-kanji-learning {
+    border-left-color: #5b9bff;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Tri-state segmented selector (.nihongo-state-selector / .nihongo-state-btn)
+   Used in Kanji Manager detail header, standalone kanji tooltip, and (compact
+   variant) the kanji block inside word tooltips.
+   ════════════════════════════════════════════════════════════════════════ */
+
+.nihongo-state-selector {
+    display: inline-flex;
+    align-items: stretch;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.nihongo-state-selector > button,
+.nihongo-state-selector > .nihongo-state-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 9px;
+    border: none;
+    border-right: 1px solid rgba(255, 255, 255, 0.10);
+    background: transparent;
+    color: inherit;
+    font-size: 0.78em;
+    cursor: pointer;
+    opacity: 0.65;
+    transition: opacity 0.12s, background 0.12s, color 0.12s;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.nihongo-state-selector > button:last-child,
+.nihongo-state-selector > .nihongo-state-btn:last-child {
+    border-right: none;
+}
+
+.nihongo-state-selector > button:hover,
+.nihongo-state-selector > .nihongo-state-btn:hover {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+/* Active button — colored per state */
+.nihongo-state-btn.nihongo-state-active,
+.nihongo-state-selector > button.nihongo-state-active {
+    opacity: 1;
+}
+
+.nihongo-state-btn[data-state="known"].nihongo-state-active,
+.nihongo-state-selector > button[data-state="known"].nihongo-state-active {
+    background: rgba(76, 175, 80, 0.18);
+    color: #81c784;
+}
+
+.nihongo-state-btn[data-state="learning"].nihongo-state-active,
+.nihongo-state-selector > button[data-state="learning"].nihongo-state-active {
+    background: rgba(91, 155, 255, 0.18);
+    color: #8eb3ff;
+}
+
+.nihongo-state-btn[data-state="unknown"].nihongo-state-active,
+.nihongo-state-selector > button[data-state="unknown"].nihongo-state-active {
+    background: rgba(255, 255, 255, 0.10);
+    color: var(--SmartThemeBodyColor);
+}
+
+.nihongo-state-selector i {
+    font-size: 0.95em;
+}
+
+/* ── Compact variant: icon-only, used in word-tooltip kanji blocks ──── */
+.nihongo-state-selector-compact {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: rgba(0, 0, 0, 0.20);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.nihongo-state-btn-compact {
+    padding: 2px 5px !important;
+    font-size: 0.75em !important;
+}
+
+.nihongo-state-btn-compact i {
+    font-size: 0.85em;
+}
+
+/* ── Detail-view variant: header bar context, takes a bit of breathing room ── */
+.nihongo-km-state-selector {
+    margin-left: 4px;
+}

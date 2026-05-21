@@ -1,11 +1,13 @@
-import { getKnownKanji } from './kanji-manager.js';
+import { getKnownChars, getLearningChars } from './kanji-state.js';
 
 /**
  * Registers SillyTavern macros for NihongoHelper.
  *
  * Available macros:
- *   {{knownKanji}}         — Comma-separated list of known kanji characters
- *   {{knownKanjiCount}}    — Number of known kanji
+ *   {{knownKanji}}            — Comma-separated list of known kanji characters
+ *   {{knownKanjiCount}}       — Number of known kanji
+ *   {{learningKanji}}         — Comma-separated list of kanji marked "learning"
+ *   {{learningKanjiCount}}    — Number of learning kanji
  */
 export function registerMacros() {
     const { macros } = SillyTavern.getContext();
@@ -16,17 +18,21 @@ export function registerMacros() {
 
     macros.register('knownKanji', {
         description: 'Comma-separated list of all kanji the user has marked as known in Nihongo Helper',
-        handler: () => {
-            const known = getKnownKanji();
-            return [...known.keys()].join(',');
-        },
+        handler: () => getKnownChars().join(','),
     });
 
     macros.register('knownKanjiCount', {
         description: 'Number of kanji the user has marked as known in Nihongo Helper',
-        handler: () => {
-            const known = getKnownKanji();
-            return String(known.size);
-        },
+        handler: () => String(getKnownChars().length),
+    });
+
+    macros.register('learningKanji', {
+        description: 'Comma-separated list of kanji the user is actively studying (learning state) in Nihongo Helper',
+        handler: () => getLearningChars().join(','),
+    });
+
+    macros.register('learningKanjiCount', {
+        description: 'Number of kanji the user is actively studying (learning state) in Nihongo Helper',
+        handler: () => String(getLearningChars().length),
     });
 }

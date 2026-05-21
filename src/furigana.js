@@ -1,6 +1,6 @@
 import { EXTENSION_NAME } from '../index.js';
 import { nihongoSettings } from './settings.js';
-import { getKnownKanji } from './kanji-manager.js';
+import { getKnownKanji, getLearningKanji } from './kanji-state.js';
 import { getKanji as getKanjiEntry } from './kanji-data.js';
 import { analyzeTokens, registerSpanMatches } from './token-matcher.js';
 import { recordSeen } from './tracking.js';
@@ -86,11 +86,13 @@ function escapeAttr(str) {
  * Wraps individual kanji characters with spans containing data attributes.
  * Each kanji gets class="nihongo-kanji" plus data-kanji, data-freq, data-jlpt, data-grade.
  * Known kanji additionally get class="nihongo-kanji-known".
+ * Learning kanji additionally get class="nihongo-kanji-learning".
  * @param {string} kanjiStr One or more kanji characters
  * @param {Set<string>|Map<string, any>} known Known kanji collection
+ * @param {Set<string>|Map<string, any>} learning Learning kanji collection
  * @returns {string} HTML with per-kanji spans
  */
-function wrapKanji(kanjiStr, known) {
+function wrapKanji(kanjiStr, known, learning) {
     let out = '';
     for (const ch of kanjiStr) {
         if (!isKanji(ch)) {
@@ -100,6 +102,7 @@ function wrapKanji(kanjiStr, known) {
         const entry = getKanjiEntry(ch);
         const classes = ['nihongo-kanji'];
         if (known.has(ch)) classes.push('nihongo-kanji-known');
+        else if (learning.has(ch)) classes.push('nihongo-kanji-learning');
 
         const attrs = [`data-kanji="${ch}"`];
         if (entry) {
@@ -118,9 +121,10 @@ function wrapKanji(kanjiStr, known) {
  * @param {string} surface The surface form (as written)
  * @param {string} reading The reading in hiragana
  * @param {Set<string>|Map<string, any>} known Known kanji collection
+ * @param {Set<string>|Map<string, any>} learning Learning kanji collection
  * @returns {string} HTML string
  */
-function buildRuby(surface, reading, known) {
+function buildRuby(surface, reading, known, learning) {
     // If the surface has no kanji, no ruby needed
     if (!containsKanji(surface)) {
         return surface;
@@ -129,7 +133,7 @@ function buildRuby(surface, reading, known) {
     // Simple case: entire surface is kanji
     const allKanji = [...surface].every(isKanji);
     if (allKanji) {
-        return `<ruby>${wrapKanji(surface, known)}<rt>${reading}</rt></ruby>`;
+        return `<ruby>${wrapKanji(surface, known, learning)}<rt>${reading}</rt></ruby>`;
     }
 
     // Mixed kanji/kana: try to split and align readings
@@ -181,10 +185,10 @@ function buildRuby(surface, reading, known) {
     let html = '';
     for (const part of parts) {
         if (part.type === 'kanji' && !readingUsed) {
-            html += `<ruby>${wrapKanji(part.text, known)}<rt>${remainingReading}</rt></ruby>`;
+            html += `<ruby>${wrapKanji(part.text, known, learning)}<rt>${remainingReading}</rt></ruby>`;
             readingUsed = true;
         } else if (part.type === 'kanji') {
-            html += wrapKanji(part.text, known);
+            html += wrapKanji(part.text, known, learning);
         } else {
             html += part.text;
         }
@@ -207,6 +211,7 @@ function addFuriganaToText(text) {
     const tokens = tokenizer.tokenize(text);
     const spans = analyzeTokens(tokens);
     const known = getKnownKanji();
+    const learning = getLearningKanji();
     let result = '';
 
     for (const span of spans) {
@@ -232,9 +237,9 @@ function addFuriganaToText(text) {
             const allKnown = nihongoSettings.hideKnownFurigana && known.size > 0 && kanjiChars.length > 0 && kanjiChars.every(ch => known.has(ch));
 
             if (allKnown || !reading) {
-                inner = wrapKanji(surface, known);
+                inner = wrapKanji(surface, known, learning);
             } else {
-                inner = buildRuby(surface, reading, known);
+                inner = buildRuby(surface, reading, known, learning);
             }
         } else {
             inner = surface;

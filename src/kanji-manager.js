@@ -1,15 +1,20 @@
-import { saveSettingsDebounced } from '../../../../../script.js';
-import { extension_settings, renderExtensionTemplateAsync } from '../../../../extensions.js';
+import { renderExtensionTemplateAsync } from '../../../../extensions.js';
 import { Popup, POPUP_TYPE } from '../../../../popup.js';
-import { EXTENSION_KEY, EXTENSION_NAME } from '../index.js';
+import { EXTENSION_NAME } from '../index.js';
 import { loadKanjiData, queryKanji, getKanji, getAllKanji, isKanjiDataLoaded } from './kanji-data.js';
 import { nihongoSettings } from './settings.js';
 import { attachKanjiTooltip, destroyTooltip } from './kanji-tooltip.js';
+import {
+    loadKanjiState,
+    getState,
+    getStateEntry,
+    setState,
+    isKnown,
+    getKnownKanji,
+    getLearningKanji,
+} from './kanji-state.js';
 
 const PAGE_SIZE = 200;
-
-/** @type {Map<string, string>} kanji → ISO date string */
-let knownKanji = new Map();
 
 /** @type {Popup|null} */
 let activePopup = null;
@@ -24,73 +29,8 @@ let totalKanjiCount = 0;
 let detailOpen = false;
 let lastDetailChar = null;
 
-/**
- * Loads known kanji map from extension settings.
- * Supports both legacy array format and new object-with-dates format.
- */
-function loadKnownKanji() {
-    const settings = extension_settings[EXTENSION_KEY];
-    if (!settings) return;
-    const raw = settings.knownKanji;
-    if (Array.isArray(raw)) {
-        // Legacy: plain array of characters — migrate to map with null dates
-        knownKanji = new Map(raw.map(k => [k, null]));
-    } else if (raw && typeof raw === 'object') {
-        knownKanji = new Map(Object.entries(raw));
-    }
-}
-
-/**
- * Saves known kanji map to extension settings.
- */
-function saveKnownKanji() {
-    const settings = extension_settings[EXTENSION_KEY];
-    if (settings) {
-        settings.knownKanji = Object.fromEntries(knownKanji);
-        saveSettingsDebounced();
-    }
-}
-
-/**
- * Toggles a kanji's known status.
- * @param {string} char
- * @returns {boolean} New known state
- */
-export function toggleKnown(char) {
-    if (knownKanji.has(char)) {
-        knownKanji.delete(char);
-    } else {
-        knownKanji.set(char, new Date().toISOString());
-    }
-    saveKnownKanji();
-    return knownKanji.has(char);
-}
-
-/**
- * Checks if a kanji is marked as known.
- * @param {string} char
- * @returns {boolean}
- */
-export function isKnown(char) {
-    return knownKanji.has(char);
-}
-
-/**
- * Returns the map of known kanji (kanji → date string).
- * @returns {Map<string, string>}
- */
-export function getKnownKanji() {
-    return knownKanji;
-}
-
-/**
- * Returns the date a kanji was marked as known, or null.
- * @param {string} char
- * @returns {string|null}
- */
-export function getKnownDate(char) {
-    return knownKanji.get(char) || null;
-}
+// Kanji state (known / learning / unknown) lives in src/kanji-state.js.
+// This module imports state APIs and renders the Kanji Manager UI on top of them.
 
 /**
  * Gets the badge text to show on a kanji tile based on current sort.
@@ -130,9 +70,9 @@ function renderGrid(grid) {
     for (const entry of pageEntries) {
         const tile = document.createElement('div');
         tile.className = 'nihongo-km-tile interactable';
-        if (knownKanji.has(entry.k)) {
-            tile.classList.add('nihongo-km-tile-known');
-        }
+        const tileState = getState(entry.k);
+        if (tileState === 'known') tile.classList.add('nihongo-km-tile-known');
+        else if (tileState === 'learning') tile.classList.add('nihongo-km-tile-learning');
         tile.dataset.kanji = entry.k;
 
         // Kanji character
@@ -164,10 +104,19 @@ function renderGrid(grid) {
             countEl.textContent = `${currentResults.length} kanji`;
         }
     }
-    const knownCountEl = grid.closest('#nihongo_kanji_manager')?.querySelector('#nihongo_km_known_count');
-    if (knownCountEl) {
-        knownCountEl.textContent = `${knownKanji.size} known`;
-    }
+    updateStatusCounts(grid.closest('#nihongo_kanji_manager'));
+}
+
+/**
+ * Updates the known/learning count chips in the manager header.
+ * @param {Element|null} container The #nihongo_kanji_manager element
+ */
+function updateStatusCounts(container) {
+    if (!container) return;
+    const knownCountEl = container.querySelector('#nihongo_km_known_count');
+    if (knownCountEl) knownCountEl.textContent = `${getKnownKanji().size} known`;
+    const learningCountEl = container.querySelector('#nihongo_km_learning_count');
+    if (learningCountEl) learningCountEl.textContent = `${getLearningKanji().size} learning`;
 }
 
 /**
@@ -179,7 +128,7 @@ function refreshGrid(grid) {
         filter: currentFilter,
         sort: currentSort,
         search: currentSearch,
-        knownKanji,
+        getState,
     });
     currentPage = 0;
     renderGrid(grid);
@@ -210,9 +159,9 @@ function showDetail(container, char) {
     if (detailKanji) {
         detailKanji.textContent = entry.k;
         detailKanji.className = 'nihongo-km-detail-kanji';
-        if (knownKanji.has(entry.k)) {
-            detailKanji.classList.add('nihongo-km-detail-kanji-known');
-        }
+        const detailState = getState(entry.k);
+        if (detailState === 'known') detailKanji.classList.add('nihongo-km-detail-kanji-known');
+        else if (detailState === 'learning') detailKanji.classList.add('nihongo-km-detail-kanji-learning');
     }
 
     const setField = (id, value) => {
@@ -234,42 +183,64 @@ function showDetail(container, char) {
         jishoLink.href = `https://jisho.org/search/${encodeURIComponent(entry.k)}%20%23kanji`;
     }
 
-    // Known since date
-    const knownDateRow = detail.querySelector('#nihongo_km_detail_known_since_row');
-    const knownDateEl = detail.querySelector('#nihongo_km_detail_known_since');
-    if (knownDateRow && knownDateEl) {
-        const date = getKnownDate(entry.k);
-        if (date) {
-            knownDateRow.style.display = '';
-            knownDateEl.textContent = formatKnownDate(date);
-        } else {
-            knownDateRow.style.display = 'none';
-        }
-    }
+    // Timestamps
+    updateDetailTimestamps(detail, entry.k);
 
-    // Toggle known button state
-    updateToggleButton(detail, entry.k);
+    // State selector
+    updateStateSelector(detail, entry.k);
 
     // Focus back button
     const backButton = detail.querySelector('#nihongo_km_detail_back');
-    if (backButton) {
+    if (backButton instanceof HTMLElement) {
         backButton.focus();
     }
 }
 
 /**
- * Updates the toggle known button text/icon for the current kanji.
+ * Refreshes the "Learning since" / "Known since" rows in the detail view.
  * @param {Element} detail
  * @param {string} char
  */
-function updateToggleButton(detail, char) {
-    const btn = detail.querySelector('#nihongo_km_detail_toggle_known');
-    if (!btn) return;
-    const icon = btn.querySelector('i');
-    const span = btn.querySelector('span');
-    const known = knownKanji.has(char);
-    if (icon) icon.className = known ? 'fa-solid fa-star' : 'fa-regular fa-star';
-    if (span) span.textContent = known ? 'Known' : 'Mark Known';
+function updateDetailTimestamps(detail, char) {
+    const stateEntry = getStateEntry(char);
+    const knownRow = detail.querySelector('#nihongo_km_detail_known_since_row');
+    const knownVal = detail.querySelector('#nihongo_km_detail_known_since');
+    if (knownRow instanceof HTMLElement && knownVal) {
+        if (stateEntry?.knownSince) {
+            knownRow.style.display = '';
+            knownVal.textContent = formatStateDate(stateEntry.knownSince);
+        } else {
+            knownRow.style.display = 'none';
+        }
+    }
+    const learningRow = detail.querySelector('#nihongo_km_detail_learning_since_row');
+    const learningVal = detail.querySelector('#nihongo_km_detail_learning_since');
+    if (learningRow instanceof HTMLElement && learningVal) {
+        if (stateEntry?.learningSince) {
+            learningRow.style.display = '';
+            learningVal.textContent = formatStateDate(stateEntry.learningSince);
+        } else {
+            learningRow.style.display = 'none';
+        }
+    }
+}
+
+/**
+ * Updates the active state on the segmented Unknown / Learning / Known selector.
+ * @param {Element} detail
+ * @param {string} char
+ */
+function updateStateSelector(detail, char) {
+    const selector = detail.querySelector('#nihongo_km_detail_state_selector');
+    if (!selector) return;
+    const state = getState(char);
+    selector.querySelectorAll('button[data-state]').forEach(btn => {
+        if (btn instanceof HTMLElement) {
+            const isActive = btn.dataset.state === state;
+            btn.classList.toggle('nihongo-state-active', isActive);
+            btn.setAttribute('aria-pressed', String(isActive));
+        }
+    });
 }
 
 /**
@@ -293,11 +264,11 @@ function hideDetail(container) {
 }
 
 /**
- * Formats an ISO date string to a human-readable "Known since" string.
+ * Formats an ISO date string for display in the detail timestamps.
  * @param {string} isoDate
  * @returns {string}
  */
-function formatKnownDate(isoDate) {
+function formatStateDate(isoDate) {
     try {
         const d = new Date(isoDate);
         return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
@@ -321,7 +292,7 @@ export async function openKanjiManager() {
     if (!isKanjiDataLoaded()) {
         await loadKanjiData();
     }
-    loadKnownKanji();
+    loadKanjiState();
     totalKanjiCount = getAllKanji().length;
 
     // Restore saved sort/filter
@@ -373,7 +344,7 @@ export async function openKanjiManager() {
         const filterSelect = container.querySelector('#nihongo_km_filter');
         const sortSelect = container.querySelector('#nihongo_km_sort');
         const backBtn = container.querySelector('#nihongo_km_detail_back');
-        const toggleKnownBtn = container.querySelector('#nihongo_km_detail_toggle_known');
+        const stateSelector = container.querySelector('#nihongo_km_detail_state_selector');
 
         if (!grid) return;
 
@@ -421,16 +392,16 @@ export async function openKanjiManager() {
             refreshGrid(grid);
         });
 
-        // Kanji tile click / Enter → show detail, Space → toggle known
+        // Kanji tile click / Enter → show detail, Space → cycle state, Shift+Space → mark known
         grid.addEventListener('click', (e) => {
-            const tile = e.target.closest('.nihongo-km-tile');
-            if (tile && tile.dataset.kanji) {
+            const tile = e.target instanceof Element ? e.target.closest('.nihongo-km-tile') : null;
+            if (tile instanceof HTMLElement && tile.dataset.kanji) {
                 showDetail(container, tile.dataset.kanji);
             }
         });
         grid.addEventListener('keydown', (e) => {
-            const tile = e.target.closest('.nihongo-km-tile');
-            if (!tile || !tile.dataset.kanji) return;
+            const tile = e.target instanceof Element ? e.target.closest('.nihongo-km-tile') : null;
+            if (!(tile instanceof HTMLElement) || !tile.dataset.kanji) return;
 
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -438,10 +409,11 @@ export async function openKanjiManager() {
             } else if (e.key === ' ') {
                 e.preventDefault();
                 const char = tile.dataset.kanji;
-                toggleKnown(char);
-                tile.classList.toggle('nihongo-km-tile-known', knownKanji.has(char));
-                const knownCountEl = container.querySelector('#nihongo_km_known_count');
-                if (knownCountEl) knownCountEl.textContent = `${knownKanji.size} known`;
+                // Shift+Space jumps straight to/from Known. Plain Space cycles.
+                const next = e.shiftKey
+                    ? (isKnown(char) ? 'unknown' : 'known')
+                    : ({ unknown: 'learning', learning: 'known', known: 'unknown' }[getState(char)]);
+                applyStateChange(container, grid, char, /** @type {'unknown'|'learning'|'known'} */ (next));
             } else if (['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp'].includes(e.key)) {
                 e.preventDefault();
                 const tiles = [...grid.querySelectorAll('.nihongo-km-tile')];
@@ -461,7 +433,9 @@ export async function openKanjiManager() {
                 }
 
                 if (nextIdx >= 0 && nextIdx < tiles.length) {
-                    tiles[nextIdx].focus();
+                    if (tiles[nextIdx] instanceof HTMLElement) {
+                        /** @type {HTMLElement} */ (tiles[nextIdx]).focus();
+                    }
                     tiles[nextIdx].scrollIntoView({ block: 'nearest' });
                 }
             }
@@ -472,44 +446,16 @@ export async function openKanjiManager() {
             hideDetail(container);
         });
 
-        // Toggle known in detail view
+        // Tri-state selector in detail view (Unknown / Learning / Known)
         const detailKanjiEl = container.querySelector('#nihongo_km_detail_kanji');
 
-        toggleKnownBtn?.addEventListener('click', () => {
+        stateSelector?.addEventListener('click', (e) => {
+            const target = e.target instanceof Element ? e.target.closest('button[data-state]') : null;
+            if (!(target instanceof HTMLElement)) return;
             const char = detailKanjiEl?.textContent;
-            if (!char) return;
-            toggleKnown(char);
-            updateToggleButton(container.querySelector('#nihongo_km_detail'), char);
-
-            // Update detail kanji styling
-            if (detailKanjiEl) {
-                detailKanjiEl.classList.toggle('nihongo-km-detail-kanji-known', knownKanji.has(char));
-            }
-
-            // Update known since row
-            const knownDateRow = container.querySelector('#nihongo_km_detail_known_since_row');
-            const knownDateEl = container.querySelector('#nihongo_km_detail_known_since');
-            if (knownDateRow && knownDateEl) {
-                const date = getKnownDate(char);
-                if (date) {
-                    knownDateRow.style.display = '';
-                    knownDateEl.textContent = formatKnownDate(date);
-                } else {
-                    knownDateRow.style.display = 'none';
-                }
-            }
-
-            // Update the tile in the grid if visible
-            const tile = grid.querySelector(`.nihongo-km-tile[data-kanji="${char}"]`);
-            if (tile) {
-                tile.classList.toggle('nihongo-km-tile-known', knownKanji.has(char));
-            }
-
-            // Update known count
-            const knownCountEl = container.querySelector('#nihongo_km_known_count');
-            if (knownCountEl) {
-                knownCountEl.textContent = `${knownKanji.size} known`;
-            }
+            const next = /** @type {'unknown'|'learning'|'known'} */ (target.dataset.state);
+            if (!char || !next) return;
+            applyStateChange(container, grid, char, next);
         });
 
         // Backspace in detail view → back to grid (Escape is handled by onClosing)
@@ -549,11 +495,67 @@ export async function openKanjiManager() {
 }
 
 /**
+ * Applies a state change for `char` and refreshes the affected UI surfaces:
+ * grid tile classes, status counts, detail-view kanji styling, timestamps,
+ * and the segmented selector. Also notifies the rest of the app so
+ * furigana / DOM kanji spans update.
+ * @param {Element} container The #nihongo_kanji_manager element
+ * @param {HTMLElement} grid The kanji grid element
+ * @param {string} char
+ * @param {'unknown'|'learning'|'known'} newState
+ */
+function applyStateChange(container, grid, char, newState) {
+    setState(char, newState);
+
+    // Update tile in grid
+    const tile = grid.querySelector(`.nihongo-km-tile[data-kanji="${char}"]`);
+    if (tile) {
+        const s = getState(char);
+        tile.classList.toggle('nihongo-km-tile-known', s === 'known');
+        tile.classList.toggle('nihongo-km-tile-learning', s === 'learning');
+    }
+
+    // Update detail view if showing this kanji
+    const detail = container.querySelector('#nihongo_km_detail');
+    const detailKanjiEl = container.querySelector('#nihongo_km_detail_kanji');
+    if (detail && detailKanjiEl?.textContent === char) {
+        const s = getState(char);
+        detailKanjiEl.classList.toggle('nihongo-km-detail-kanji-known', s === 'known');
+        detailKanjiEl.classList.toggle('nihongo-km-detail-kanji-learning', s === 'learning');
+        updateDetailTimestamps(detail, char);
+        updateStateSelector(detail, char);
+    }
+
+    updateStatusCounts(container);
+    notifyStateChanged(char);
+}
+
+/**
+ * Notifies other parts of the extension that the state of `char` changed.
+ * Updates kanji span classes already in the DOM, then re-processes affected
+ * messages so furigana visibility (`hideKnownFurigana`) updates.
+ * Imported lazily to avoid a hard cycle (kanji-manager ↔ furigana / kanji-tooltip).
+ * @param {string} char
+ */
+async function notifyStateChanged(char) {
+    document.querySelectorAll(`.nihongo-kanji[data-kanji="${char}"]`).forEach(el => {
+        el.classList.toggle('nihongo-kanji-known', isKnown(char));
+        el.classList.toggle('nihongo-kanji-learning', getState(char) === 'learning');
+    });
+    try {
+        const { reprocessMessagesWithKanji } = await import('./furigana.js');
+        reprocessMessagesWithKanji(char);
+    } catch (err) {
+        console.warn(`[${EXTENSION_NAME}] notifyStateChanged: failed to reprocess`, err);
+    }
+}
+
+/**
  * Initializes the kanji manager module.
  * Registers the button listener and preloads data.
  */
 export function initKanjiManager() {
-    loadKnownKanji();
+    loadKanjiState();
     // Preload kanji data in background
     loadKanjiData();
 

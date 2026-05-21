@@ -1,6 +1,7 @@
 import { initSettings, injectSettingsUI } from './src/settings.js';
 import { initFurigana } from './src/furigana.js';
 import { initKanjiManager } from './src/kanji-manager.js';
+import { loadKanjiState } from './src/kanji-state.js';
 import { injectWandMenu } from './src/wand-menu.js';
 import { registerInspectShortcut, enableSelectionLookup } from './src/kanji-tooltip.js';
 import { registerMacros } from './src/macros.js';
@@ -30,6 +31,11 @@ export async function init() {
 
     // Initialize settings
     initSettings();
+
+    // Load unified kanji state (known/learning) and migrate legacy data
+    // BEFORE any consumer (furigana, macros, tooltip) reads it.
+    loadKanjiState();
+
     await injectSettingsUI();
 
     // Initialize furigana processing
