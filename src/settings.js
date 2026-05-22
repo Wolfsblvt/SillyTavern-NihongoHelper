@@ -553,7 +553,8 @@ function registerPresetIoHandlers(presetSelect) {
 
 /**
  * Shows/hides the delete button based on whether the active preset is a
- * user-imported one (the bundled default cannot be deleted).
+ * user-imported one. Bundled presets shipped with the extension are never
+ * deletable.
  */
 function updatePresetActionButtons() {
     const select = document.getElementById('nihongo_helper_tutor_preset');

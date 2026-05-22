@@ -47,8 +47,13 @@
  * v1/v2 presets are auto-migrated to v3 (action metadata defaults filled in).
  *
  * Storage:
- * - Bundled default: data/presets/default.json (read-only, shipped with extension)
- * - User presets:    user/files/nihongo-preset-<id>.json (uploaded via files endpoint)
+ * - Bundled presets: data/presets/<id>.json (read-only, shipped with extension).
+ *                    Listed in BUNDLED_PRESET_FILENAMES; the file basename is
+ *                    the preset id and the JSON itself supplies name and
+ *                    description. All bundled presets are non-deletable.
+ *                    The 'default' id is the canonical first-run selection
+ *                    and seeds the custom-action fallback.
+ * - User presets:    user/files/nihongo-preset-<id>.json (uploaded via files endpoint).
  *                    Indexed in extension_settings.nihongo_helper.userPresets
  *                    so we don't depend on a directory-listing endpoint.
  */
@@ -98,26 +103,56 @@ const USER_PRESET_FILENAME_PREFIX = 'nihongo-preset-';
 const USER_PRESET_FILENAME_SUFFIX = '.json';
 
 /**
- * Returns the bundled default preset entries.
- * @returns {PresetEntry[]}
+ * Filenames of presets shipped with the extension under `data/presets/`.
+ * Each filename's basename (sans `.json`) becomes its preset id; the display
+ * name, description, and content all come from the loaded JSON — nothing
+ * else is hardcoded here. To ship a new bundled preset, drop a JSON file in
+ * `data/presets/` and add its filename to this list.
+ *
+ * The id `'default'` is the canonical first-run selection AND seeds the
+ * custom-action fallback used when an active preset omits its own `custom`
+ * action. All bundled presets are non-deletable.
  */
-const bundledDefaultEntries = () => {
-    return [{
-        id: DEFAULT_PRESET_ID,
-        name: 'Default Tutor',
-        description: 'Concise, clear Japanese tutor',
-        path: `/scripts/extensions/third-party/${EXTENSION_NAME}/data/presets/default.json`,
-        bundled: true,
-    }];
-};
+const BUNDLED_PRESET_FILENAMES = Object.freeze([
+    'default.json',
+]);
+
+/**
+ * URL to fetch a bundled preset JSON from. Built lazily so we don't read
+ * `EXTENSION_NAME` at module load time (it's exported from a sibling module
+ * that may not be initialized yet during the import cycle).
+ *
+ * @param {string} filename
+ * @returns {string}
+ */
+const bundledPresetUrl = (filename) =>
+    `/scripts/extensions/third-party/${EXTENSION_NAME}/data/presets/${filename}`;
+
+/**
+ * @param {string} filename e.g. `'default.json'`
+ * @returns {string} Preset id, e.g. `'default'`
+ */
+const presetIdFromFilename = (filename) =>
+    filename.replace(/\.json$/i, '');
 
 // ===== State =====
 
-/** Bundled default preset (loaded once at init). Used as the source of the custom-action fallback. */
-/** @type {TutorPreset|null} */
-let bundledDefault = null;
+/**
+ * @typedef {Object} BundledPresetRecord
+ * @property {string} id
+ * @property {string} filename
+ * @property {string} url
+ * @property {TutorPreset} data
+ */
 
-/** Cached fallback action object derived from `bundledDefault.actions.custom`. */
+/**
+ * Bundled presets keyed by id, loaded once at init from `data/presets/<filename>`.
+ * Populated by `initPresets()`.
+ * @type {Map<string, BundledPresetRecord>}
+ */
+let bundledPresets = new Map();
+
+/** Cached fallback action object derived from the `'default'` bundled preset's `custom` action. */
 /** @type {import('./side-chat-actions.js').ChatAction|null} */
 let bundledCustomFallback = null;
 
@@ -209,17 +244,33 @@ export function getActivePreset() {
 // ===== Public API: Init / Loading =====
 
 /**
- * Loads the bundled default preset, discovers user presets, and activates
- * the requested preset (falling back to default).
+ * Loads all bundled presets, discovers user presets, and activates the
+ * requested preset (falling back to the canonical `'default'` bundled).
  * @param {string} [presetId]
  */
 export async function initPresets(presetId) {
-    // Bundled default first — its custom action seeds the fallback registry.
-    const bundledPresetPath = bundledDefaultEntries()[0].path;
-    bundledDefault = await fetchPresetFromUrl(bundledPresetPath);
-    if (bundledDefault) {
-        const reg = buildActionRegistry(bundledDefault.actions, null);
+    // Load all bundled presets in parallel. A failure on one (HTTP error,
+    // malformed JSON) is non-fatal — it's just filtered out and the others
+    // remain usable.
+    bundledPresets = new Map();
+    const loaded = await Promise.all(BUNDLED_PRESET_FILENAMES.map(async (filename) => {
+        const id = presetIdFromFilename(filename);
+        const url = bundledPresetUrl(filename);
+        const data = await fetchPresetFromUrl(url);
+        return data ? /** @type {BundledPresetRecord} */ ({ id, filename, url, data }) : null;
+    }));
+    for (const entry of loaded) {
+        if (entry) bundledPresets.set(entry.id, entry);
+    }
+
+    // The canonical `default` preset seeds the custom-action fallback used
+    // when an active preset omits its own `custom` action.
+    const defaultBundled = bundledPresets.get(DEFAULT_PRESET_ID);
+    if (defaultBundled) {
+        const reg = buildActionRegistry(defaultBundled.data.actions, null);
         bundledCustomFallback = reg.byId.get(CUSTOM_ACTION_ID) || null;
+    } else {
+        bundledCustomFallback = null;
     }
 
     refreshPresetList();
@@ -361,12 +412,13 @@ export async function importPresetFromJson(jsonText) {
 }
 
 /**
- * Deletes a user preset (file + index entry). Bundled default cannot be deleted.
+ * Deletes a user preset (file + index entry). All bundled presets are
+ * non-deletable.
  * @param {string} presetId
  * @returns {Promise<boolean>}
  */
 export async function deleteUserPreset(presetId) {
-    if (presetId === DEFAULT_PRESET_ID) return false;
+    if (bundledPresets.has(presetId)) return false;
     const index = getUserPresetIndex();
     const entry = index.find(e => e.id === presetId);
     if (!entry) return false;
@@ -398,11 +450,22 @@ export function isUserPreset(presetId) {
 // ===== Internal: Discovery =====
 
 /**
- * Rebuilds the in-memory presetList from the bundled default + the user-preset index.
+ * Rebuilds the in-memory `presetList` from the loaded bundled presets and
+ * the user-preset index. Names and descriptions for bundled entries come
+ * from their loaded JSON, not from any hardcoded metadata.
  */
 function refreshPresetList() {
     /** @type {PresetEntry[]} */
-    const list = [...bundledDefaultEntries()];
+    const list = [];
+    for (const entry of bundledPresets.values()) {
+        list.push({
+            id: entry.id,
+            name: entry.data.name || entry.id,
+            description: entry.data.description || '',
+            path: entry.url,
+            bundled: true,
+        });
+    }
     for (const entry of getUserPresetIndex()) {
         list.push({
             id: entry.id,
@@ -493,7 +556,9 @@ function migrateToCurrent(data) {
 /**
  * Converts a display name to a filesystem-safe slug usable as both an id
  * and a filename component. Falls back to a timestamp-based id if the name
- * has no usable characters.
+ * has no usable characters. Slugs that collide with a bundled preset id
+ * get a `-user` suffix so the import never silently shadows a bundled.
+ *
  * @param {string} name
  * @returns {string}
  */
@@ -504,18 +569,19 @@ function slugifyId(name) {
         .replace(/^-+|-+$/g, '')
         .replace(/-{2,}/g, '-');
     if (!s) s = `preset-${Date.now().toString(36)}`;
-    if (s === DEFAULT_PRESET_ID) s = `${s}-user`;
+    if (bundledPresets.has(s)) s = `${s}-user`;
     return s.slice(0, 64);
 }
 
 /**
- * Returns an id that does not collide with the bundled default or any
- * existing user preset, by appending a `-2`, `-3`, ... suffix.
+ * Returns an id that does not collide with any bundled preset or existing
+ * user preset, by appending a `-2`, `-3`, ... suffix.
  * @param {string} baseId
  * @returns {string}
  */
 function uniquifyId(baseId) {
-    const taken = new Set([DEFAULT_PRESET_ID]);
+    const taken = new Set();
+    for (const id of bundledPresets.keys()) taken.add(id);
     for (const e of getUserPresetIndex()) taken.add(e.id);
     if (!taken.has(baseId)) return baseId;
     let n = 2;
