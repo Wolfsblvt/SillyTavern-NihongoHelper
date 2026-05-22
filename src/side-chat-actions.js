@@ -10,6 +10,7 @@
  *   "actions": {
  *     "explain": {
  *       "label": "Explain",
+ *       "description": "Explain the highlighted word in context.",  // optional, used as button tooltip
  *       "icon": "fa-circle-question",         // optional
  *       "visibility": ["tooltip", "selection"], // optional, defaults to tooltip+selection
  *       "requiresDictionaryMatch": false,     // optional, defaults to false
@@ -18,6 +19,7 @@
  *     },
  *     "custom": {
  *       "label": "Ask",
+ *       "description": "Ask a free-form follow-up question.",
  *       "visibility": ["manual"],
  *       "system": "...",
  *       "user": "..."
@@ -62,6 +64,8 @@ export const CUSTOM_ACTION_ID = 'custom';
  * @typedef {Object} ChatAction
  * @property {string} id
  * @property {string} label
+ * @property {string} description         Free-form longer description; used as button tooltip
+ *                                        and may surface in future action listings.
  * @property {string} icon                FontAwesome class (without the style prefix)
  * @property {string[]} visibility        Subset of VISIBILITY values
  * @property {boolean} requiresDictionaryMatch
@@ -174,11 +178,12 @@ function normalizeAction(id, raw) {
     }
 
     const label = (typeof raw.label === 'string' && raw.label.trim()) ? raw.label.trim() : id;
+    const description = (typeof raw.description === 'string') ? raw.description.trim() : '';
     const icon = (typeof raw.icon === 'string' && raw.icon.trim()) ? raw.icon.trim() : DEFAULT_ICON;
     const visibility = normalizeVisibility(raw.visibility, id);
     const requiresDictionaryMatch = Boolean(raw.requiresDictionaryMatch);
 
-    return { id, label, icon, visibility, requiresDictionaryMatch, system, user };
+    return { id, label, description, icon, visibility, requiresDictionaryMatch, system, user };
 }
 
 /**

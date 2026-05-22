@@ -148,7 +148,10 @@ function renderChatActionsHtml(word, reading, context, opts = {}) {
 
     const buttons = visible.map(a => {
         const iconHtml = a.icon ? `<i class="fa-solid ${escapeHtml(a.icon)}"></i> ` : '';
-        return `<button class="nihongo-wt-chat-btn" data-chat-action="${escapeHtml(a.id)}" title="${escapeHtml(a.label)}">${iconHtml}${escapeHtml(a.label)}</button>`;
+        // Prefer the action's description as the hover tooltip; fall back to
+        // the label so we never end up with a bare "" title.
+        const titleText = a.description || a.label;
+        return `<button class="nihongo-wt-chat-btn" data-chat-action="${escapeHtml(a.id)}" title="${escapeHtml(titleText)}">${iconHtml}${escapeHtml(a.label)}</button>`;
     }).join('');
 
     return `<div class="nihongo-wt-chat-actions" data-word="${escapeHtml(word)}" data-reading="${escapeHtml(reading || '')}">${buttons}</div>`;

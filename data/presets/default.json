@@ -8,6 +8,7 @@
     "actions": {
         "explain": {
             "label": "Explain",
+            "description": "Explain the highlighted word's meaning, formality, and usage in the current context.",
             "icon": "fa-circle-question",
             "visibility": ["tooltip", "selection"],
             "system": "The student encountered a word while reading and wants to understand it.\n\nAction-specific rules:\n- The word shown is exactly as it appeared in the text (possibly inflected). Identify the base form if relevant.\n- Explain the word's meaning clearly and concisely.\n- If the word has multiple meanings, prioritize the one matching the context sentence.\n- Break down kanji components if they help understanding.\n- Mention the formality level if relevant (casual/polite/formal).\n- Give one short example sentence showing natural usage.\n- Keep your response under 100 words unless the word genuinely requires more.",
@@ -15,6 +16,7 @@
         },
         "translate": {
             "label": "Translate",
+            "description": "Translate the surrounding sentence into natural English, noting nuance for the highlighted word.",
             "icon": "fa-language",
             "visibility": ["tooltip", "selection"],
             "system": "The student wants a natural English translation of a Japanese phrase or sentence in context.\n\nAction-specific rules:\n- Provide a natural, fluent English translation (not word-by-word).\n- If the phrase is idiomatic, explain the idiom briefly after the translation.\n- If there are multiple valid interpretations, give the most likely one first, then briefly note alternatives.\n- For incomplete sentences or fragments, translate what's there and note what's implied.\n- Keep it short. Translation + brief note if needed.",
@@ -22,6 +24,7 @@
         },
         "alternatives": {
             "label": "Alternatives",
+            "description": "List synonyms and alternative phrasings for the highlighted word, with nuance notes.",
             "icon": "fa-arrows-split-up-and-left",
             "visibility": ["tooltip", "selection"],
             "system": "The student wants to know synonyms or alternative ways to express something.\n\nAction-specific rules:\n- The word shown is exactly as it appeared in the text (possibly inflected). Consider the base form when listing alternatives.\n- List 3-5 alternatives/synonyms with brief nuance notes.\n- Format: word — nuance/usage note\n- Order from most common to least common.\n- Note formality differences (casual/polite/written/spoken).\n- If the word is already very common, suggest more expressive or precise alternatives.\n- Keep each entry to one line. Be brief.",
@@ -29,6 +32,7 @@
         },
         "grammar": {
             "label": "Grammar",
+            "description": "Break down the grammar pattern around the highlighted expression with formation rules and examples.",
             "icon": "fa-spell-check",
             "visibility": ["tooltip", "selection"],
             "system": "The student encountered a grammar pattern while reading and wants to understand how it works.\n\nAction-specific rules:\n- The expression shown is exactly as it appeared in the text (possibly inflected/conjugated). Identify the base grammar pattern.\n- Explain what it means and when it's used — one or two sentences.\n- Give the formation rule (e.g. \"Verb て-form + いる\").\n- Provide 2 short example sentences with translations.\n- If there are common mistakes or confusions, mention one briefly.\n- Keep total response under 120 words.",
@@ -36,6 +40,7 @@
         },
         "custom": {
             "label": "Ask",
+            "description": "Ask a free-form follow-up question about the highlighted word or sentence.",
             "icon": "fa-comment",
             "visibility": ["manual"],
             "system": "The student has a follow-up question about something they encountered while reading.",
