@@ -2050,3 +2050,117 @@
 .nihongo-km-state-selector {
     margin-left: 4px;
 }
+
+/* ===== Nihongo Helper - Tutor Preset Selector (settings panel) ===== */
+
+/* Card-like container in the settings panel that presents the active preset. */
+.nihongo-preset-selector {
+    background: var(--SmartThemeBlurTintColor);
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 8px;
+    padding: 8px 12px;
+}
+
+.nihongo-preset-selector-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.nihongo-preset-selector-icon {
+    color: var(--SmartThemeQuoteColor);
+    font-size: 1.05em;
+    flex-shrink: 0;
+}
+
+.nihongo-preset-selector-title-display {
+    font-weight: bold;
+    font-size: 1em;
+    flex: 1;
+    min-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nihongo-preset-selector-dropdown-wrapper {
+    display: none;
+    flex: 1;
+    min-width: 200px;
+}
+
+/* When selecting: hide the static title, expand the select2 dropdown into the gap. */
+.nihongo-preset-selector.selecting .nihongo-preset-selector-title-display {
+    display: none;
+}
+
+.nihongo-preset-selector.selecting .nihongo-preset-selector-dropdown-wrapper {
+    display: block;
+}
+
+.nihongo-preset-selector.selecting .nihongo-preset-selector-select-btn {
+    opacity: 0.5;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+.nihongo-preset-selector-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.nihongo-preset-selector-description {
+    font-size: 0.9em;
+    opacity: 0.8;
+    font-style: italic;
+    margin-top: 6px;
+    line-height: 1.4;
+    white-space: pre-wrap;
+}
+
+.nihongo-preset-selector-description:empty {
+    display: none;
+}
+
+.nihongo-preset-selector-dropdown {
+    width: 100%;
+}
+
+/* select2 dropdown option styling — title + description rows. */
+.nihongo-preset-selector-option {
+    padding: 6px 8px;
+}
+
+.nihongo-preset-selector-option-title {
+    font-weight: bold;
+    margin-bottom: 2px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.nihongo-preset-selector-option-badge {
+    font-size: 0.7em;
+    font-weight: normal;
+    padding: 1px 6px;
+    border-radius: 8px;
+    background: var(--SmartThemeBorderColor);
+    opacity: 0.8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.nihongo-preset-selector-option-desc {
+    font-size: 0.85em;
+    opacity: 0.75;
+    font-style: italic;
+    line-height: 1.3;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+}

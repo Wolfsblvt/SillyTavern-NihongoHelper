@@ -357,18 +357,7 @@ function registerSettingsEventListeners() {
     }
 
     // Tutor preset selector + import/export controls
-    const presetSelect = document.getElementById('nihongo_helper_tutor_preset');
-    if (presetSelect instanceof HTMLSelectElement) {
-        populatePresets(presetSelect);
-        presetSelect.addEventListener('change', async () => {
-            settings.chatPresetId = presetSelect.value;
-            saveSettingsDebounced();
-            await loadPreset(presetSelect.value);
-            updatePresetActionButtons();
-        });
-        registerPresetIoHandlers(presetSelect);
-        updatePresetActionButtons();
-    }
+    initPresetSelector();
 
     // History mode selector
     document.getElementById('nihongo_helper_history_mode')?.addEventListener('change', (e) => {
@@ -432,8 +421,43 @@ function populateChatProfiles(select) {
     }
 }
 
+/** True once select2 has been bound to the preset dropdown. */
+let presetSelect2Initialized = false;
+
 /**
- * Populates the tutor preset dropdown with discovered presets and selects
+ * One-time setup of the rich preset selector card. Wires:
+ *  - `<select>` is populated and bound to select2 with custom matcher /
+ *    templateResult (renders preset name + description for each option).
+ *  - The shuffle button opens select2 and toggles the card into selecting
+ *    mode (hides the static title, expands the dropdown).
+ *  - `select2:select` writes the new id to settings, loads the preset, and
+ *    refreshes the title + description display.
+ *  - Import / export / delete buttons (handled in `registerPresetIoHandlers`).
+ */
+function initPresetSelector() {
+    const container = /** @type {HTMLElement|null} */ (document.querySelector('.nihongo-preset-selector'));
+    const select = document.getElementById('nihongo_helper_tutor_preset');
+    if (!container || !(select instanceof HTMLSelectElement)) return;
+
+    populatePresets(select);
+    initPresetSelect2(select, container);
+
+    const selectBtn = container.querySelector('.nihongo-preset-selector-select-btn');
+    if (selectBtn) {
+        selectBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            togglePresetSelector(container, true);
+        });
+    }
+
+    registerPresetIoHandlers(select, container);
+    updatePresetSelectorDisplay(container);
+    updatePresetActionButtons();
+}
+
+/**
+ * Populates the tutor preset `<select>` with discovered presets and selects
  * the active one from settings.
  *
  * Reads `settings.chatPresetId` first (the source of truth) and only falls
@@ -461,6 +485,149 @@ function populatePresets(select) {
     // the bundled default rather than leaving the dropdown blank.
     select.value = desiredValue;
     if (!select.value) select.value = 'default';
+
+    // Keep select2 (if already bound) in sync with the new option set.
+    if (presetSelect2Initialized) {
+        // @ts-ignore — select2 is a global jQuery plugin in SillyTavern.
+        $(select).trigger('change.select2');
+    }
+}
+
+/**
+ * Binds select2 to the preset dropdown with a custom matcher and rich
+ * option rendering. Idempotent — only runs once per page lifetime.
+ *
+ * @param {HTMLSelectElement} select
+ * @param {HTMLElement} container
+ */
+function initPresetSelect2(select, container) {
+    if (presetSelect2Initialized) return;
+    presetSelect2Initialized = true;
+
+    // @ts-ignore — select2 is a global jQuery plugin in SillyTavern.
+    const $select = $(select);
+    // @ts-ignore
+    $select.select2({
+        width: '100%',
+        dropdownAutoWidth: true,
+        matcher: presetSelect2Matcher,
+        templateResult: presetSelect2TemplateResult,
+        templateSelection: (state) => state.text,
+    });
+
+    // @ts-ignore
+    $select.on('select2:select', async (e) => {
+        const id = String(e.params.data.id);
+        togglePresetSelector(container, false);
+
+        const settings = ensureSettings();
+        if (id === settings.chatPresetId) {
+            updatePresetSelectorDisplay(container);
+            return;
+        }
+        settings.chatPresetId = id;
+        saveSettingsDebounced();
+        await loadPreset(id);
+        updatePresetSelectorDisplay(container);
+        updatePresetActionButtons();
+    });
+
+    // @ts-ignore
+    $select.on('select2:close', () => togglePresetSelector(container, false));
+}
+
+/**
+ * Matches preset entries by substring against name + description (case-insensitive).
+ * Empty term keeps everything. Typed as `any` because select2's official
+ * typings model option/optgroup data more strictly than we need here.
+ *
+ * @param {any} params
+ * @param {any} data
+ * @returns {any}
+ */
+function presetSelect2Matcher(params, data) {
+    if (!params.term || !params.term.trim()) return data;
+    if (!data || !data.id) return null;
+    const term = params.term.trim().toLowerCase();
+    const preset = getPresetList().find(p => p.id === data.id);
+    if (!preset) return null;
+    const haystack = `${preset.name} ${preset.description || ''}`.toLowerCase();
+    return haystack.includes(term) ? data : null;
+}
+
+/**
+ * Renders a select2 option as a two-line block (title + description) with a
+ * "Bundled" badge for shipped presets.
+ *
+ * @param {any} state
+ * @returns {any}
+ */
+function presetSelect2TemplateResult(state) {
+    if (!state.id) return state.text || '';
+    const preset = getPresetList().find(p => p.id === state.id);
+    if (!preset) return state.text || '';
+
+    const wrapper = document.createElement('div');
+    wrapper.classList.add('nihongo-preset-selector-option');
+
+    const titleDiv = document.createElement('div');
+    titleDiv.classList.add('nihongo-preset-selector-option-title');
+    titleDiv.append(document.createTextNode(preset.name));
+    if (preset.bundled) {
+        const badge = document.createElement('span');
+        badge.classList.add('nihongo-preset-selector-option-badge');
+        badge.textContent = 'Bundled';
+        titleDiv.appendChild(badge);
+    }
+    wrapper.appendChild(titleDiv);
+
+    if (preset.description) {
+        const descDiv = document.createElement('div');
+        descDiv.classList.add('nihongo-preset-selector-option-desc');
+        descDiv.textContent = preset.description;
+        wrapper.appendChild(descDiv);
+    }
+
+    // @ts-ignore — select2 expects a jQuery wrapper for templateResult.
+    return $(wrapper);
+}
+
+/**
+ * Toggles the selecting mode on the preset card and opens/closes select2.
+ *
+ * @param {HTMLElement} container
+ * @param {boolean} open
+ */
+function togglePresetSelector(container, open) {
+    container.classList.toggle('selecting', open);
+    const select = container.querySelector('.nihongo-preset-selector-dropdown');
+    // @ts-ignore
+    if (select && $(select).data('select2')) {
+        // @ts-ignore
+        if (open) $(select).select2('open');
+        // @ts-ignore
+        else $(select).select2('close');
+    }
+}
+
+/**
+ * Refreshes the static title + description shown on the preset card to
+ * match the currently selected preset.
+ *
+ * @param {HTMLElement} container
+ */
+function updatePresetSelectorDisplay(container) {
+    const select = container.querySelector('.nihongo-preset-selector-dropdown');
+    if (!(select instanceof HTMLSelectElement)) return;
+
+    const id = select.value || ensureSettings().chatPresetId || 'default';
+    const preset = getPresetList().find(p => p.id === id);
+
+    const titleDisplay = container.querySelector('.nihongo-preset-selector-title-display');
+    if (titleDisplay) titleDisplay.textContent = preset?.name || id;
+
+    const description = container.querySelector('.nihongo-preset-selector-description');
+    if (description) description.textContent = preset?.description || '';
 }
 
 /**
@@ -470,8 +637,9 @@ function populatePresets(select) {
  * Delete: confirms, removes the user preset, falls back to default.
  *
  * @param {HTMLSelectElement} presetSelect
+ * @param {HTMLElement} container Preset selector card (used to refresh title + description display)
  */
-function registerPresetIoHandlers(presetSelect) {
+function registerPresetIoHandlers(presetSelect, container) {
     const importBtn = document.getElementById('nihongo_helper_preset_import');
     const exportBtn = document.getElementById('nihongo_helper_preset_export');
     const deleteBtn = document.getElementById('nihongo_helper_preset_delete');
@@ -493,6 +661,7 @@ function registerPresetIoHandlers(presetSelect) {
                 populatePresets(presetSelect);
                 presetSelect.value = entry.id;
                 await loadPreset(entry.id);
+                updatePresetSelectorDisplay(container);
                 updatePresetActionButtons();
                 if (typeof toastr !== 'undefined') {
                     toastr.success(`Imported preset: ${entry.name}`);
@@ -532,9 +701,14 @@ function registerPresetIoHandlers(presetSelect) {
             const presetId = presetSelect.value;
             if (!presetId || !isUserPreset(presetId)) return;
 
+            // Resolve display name from the registered preset list — the
+            // <select>'s options no longer hold descriptive text after
+            // select2 rendering, but presetList is the source of truth.
+            const presetName = getPresetList().find(p => p.id === presetId)?.name || presetId;
+
             const confirmed = await Popup.show.confirm(
                 'Delete preset?',
-                `Remove the imported preset "${presetSelect.options[presetSelect.selectedIndex]?.textContent || presetId}"? This cannot be undone.`,
+                `Remove the imported preset "${presetName}"? This cannot be undone.`,
             );
             if (!confirmed) return;
 
@@ -545,6 +719,7 @@ function registerPresetIoHandlers(presetSelect) {
             populatePresets(presetSelect);
             presetSelect.value = 'default';
             await loadPreset('default');
+            updatePresetSelectorDisplay(container);
             updatePresetActionButtons();
             if (typeof toastr !== 'undefined') toastr.success('Preset deleted.');
         });
