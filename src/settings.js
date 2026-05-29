@@ -2,7 +2,17 @@ import { saveSettingsDebounced, eventSource } from '../../../../../script.js';
 import { extension_settings, renderExtensionTemplateAsync } from '../../../../extensions.js';
 import { event_types } from '../../../../events.js';
 import { EXTENSION_KEY, EXTENSION_NAME } from '../index.js';
-import { getPresetList, loadPreset, exportActivePreset, importPresetFromJson, deleteUserPreset, isUserPreset } from './side-chat-prompts.js';
+import {
+    getPresetList,
+    loadPreset,
+    exportActivePreset,
+    importPresetFromJson,
+    deleteUserPreset,
+    isUserPreset,
+    getChatBoundPresetId,
+    getEffectivePresetId,
+} from './side-chat-prompts.js';
+import { mountPresetSelector, refreshAllPresetSelectors } from './preset-selector.js';
 import { Popup } from '../../../../popup.js';
 
 /** @readonly Default settings values */
@@ -356,8 +366,8 @@ function registerSettingsEventListeners() {
         eventSource.on(event_types.CONNECTION_PROFILE_DELETED, refreshProfiles);
     }
 
-    // Tutor preset selector + import/export controls
-    initPresetSelector();
+    // "My default tutor" card (settings instance — no chain button, has IO buttons).
+    initSettingsPresetSelector();
 
     // History mode selector
     document.getElementById('nihongo_helper_history_mode')?.addEventListener('change', (e) => {
@@ -421,321 +431,122 @@ function populateChatProfiles(select) {
     }
 }
 
-/** True once select2 has been bound to the preset dropdown. */
-let presetSelect2Initialized = false;
-
 /**
- * One-time setup of the rich preset selector card. Wires:
- *  - `<select>` is populated and bound to select2 with custom matcher /
- *    templateResult (renders preset name + description for each option).
- *  - The shuffle button opens select2 and toggles the card into selecting
- *    mode (hides the static title, expands the dropdown).
- *  - `select2:select` writes the new id to settings, loads the preset, and
- *    refreshes the title + description display.
- *  - Import / export / delete buttons (handled in `registerPresetIoHandlers`).
- */
-function initPresetSelector() {
-    const container = /** @type {HTMLElement|null} */ (document.querySelector('.nihongo-preset-selector'));
-    const select = document.getElementById('nihongo_helper_tutor_preset');
-    if (!container || !(select instanceof HTMLSelectElement)) return;
-
-    populatePresets(select);
-    initPresetSelect2(select, container);
-
-    const selectBtn = container.querySelector('.nihongo-preset-selector-select-btn');
-    if (selectBtn) {
-        selectBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            togglePresetSelector(container, true);
-        });
-    }
-
-    registerPresetIoHandlers(select, container);
-    updatePresetSelectorDisplay(container);
-    updatePresetActionButtons();
-}
-
-/**
- * Populates the tutor preset `<select>` with discovered presets and selects
- * the active one from settings.
+ * Mounts the "My default tutor" card into the placeholder rendered by
+ * `templates/settings.html`. The card itself is built inside
+ * `mountPresetSelector` (see `src/preset-selector.js`); this function just
+ * supplies the source-of-truth callbacks:
  *
- * Reads `settings.chatPresetId` first (the source of truth) and only falls
- * back to the current `select.value` if no preset is configured.
- *
- * @param {HTMLSelectElement} select
+ *  - `getActiveId`: returns the user's default preset id from settings.
+ *  - `onSelect`: writes the picked id to settings. If the current chat is
+ *    *not* pinned to a specific tutor, the active preset also reloads so the
+ *    side panel reflects the new default immediately. If the chat *is*
+ *    pinned, only the default changes — the chat keeps its bound tutor.
+ *  - `io.onImport / onExport / onDelete`: thin wrappers over the preset
+ *    import/export pipeline; both also bump `settings.chatPresetId` so the
+ *    just-imported preset becomes the new default and call
+ *    `refreshAllPresetSelectors()` so the side-chat card updates in lockstep.
  */
-function populatePresets(select) {
-    const desiredValue = ensureSettings().chatPresetId || select.value || 'default';
+function initSettingsPresetSelector() {
+    const card = document.getElementById('nihongo_helper_default_preset_card');
+    if (!(card instanceof HTMLElement)) return;
 
-    // Clear all options
-    select.innerHTML = '';
-
-    const presets = getPresetList();
-    for (const preset of presets) {
-        const opt = document.createElement('option');
-        opt.value = preset.id;
-        opt.textContent = preset.name;
-        if (preset.description) opt.title = preset.description;
-        select.appendChild(opt);
-    }
-
-    // If the saved preset id no longer matches any registered preset
-    // (e.g. the user-preset file was deleted out-of-band), fall back to
-    // the bundled default rather than leaving the dropdown blank.
-    select.value = desiredValue;
-    if (!select.value) select.value = 'default';
-
-    // Keep select2 (if already bound) in sync with the new option set.
-    if (presetSelect2Initialized) {
-        // @ts-ignore — select2 is a global jQuery plugin in SillyTavern.
-        $(select).trigger('change.select2');
-    }
-}
-
-/**
- * Binds select2 to the preset dropdown with a custom matcher and rich
- * option rendering. Idempotent — only runs once per page lifetime.
- *
- * @param {HTMLSelectElement} select
- * @param {HTMLElement} container
- */
-function initPresetSelect2(select, container) {
-    if (presetSelect2Initialized) return;
-    presetSelect2Initialized = true;
-
-    // @ts-ignore — select2 is a global jQuery plugin in SillyTavern.
-    const $select = $(select);
-    // @ts-ignore
-    $select.select2({
-        width: '100%',
-        dropdownAutoWidth: true,
-        matcher: presetSelect2Matcher,
-        templateResult: presetSelect2TemplateResult,
-        templateSelection: (state) => state.text,
-    });
-
-    // @ts-ignore
-    $select.on('select2:select', async (e) => {
-        const id = String(e.params.data.id);
-        togglePresetSelector(container, false);
-
-        const settings = ensureSettings();
-        if (id === settings.chatPresetId) {
-            updatePresetSelectorDisplay(container);
-            return;
-        }
-        settings.chatPresetId = id;
-        saveSettingsDebounced();
-        await loadPreset(id);
-        updatePresetSelectorDisplay(container);
-        updatePresetActionButtons();
-    });
-
-    // @ts-ignore
-    $select.on('select2:close', () => togglePresetSelector(container, false));
-}
-
-/**
- * Matches preset entries by substring against name + description (case-insensitive).
- * Empty term keeps everything. Typed as `any` because select2's official
- * typings model option/optgroup data more strictly than we need here.
- *
- * @param {any} params
- * @param {any} data
- * @returns {any}
- */
-function presetSelect2Matcher(params, data) {
-    if (!params.term || !params.term.trim()) return data;
-    if (!data || !data.id) return null;
-    const term = params.term.trim().toLowerCase();
-    const preset = getPresetList().find(p => p.id === data.id);
-    if (!preset) return null;
-    const haystack = `${preset.name} ${preset.description || ''}`.toLowerCase();
-    return haystack.includes(term) ? data : null;
-}
-
-/**
- * Renders a select2 option as a two-line block (title + description) with a
- * "Bundled" badge for shipped presets.
- *
- * @param {any} state
- * @returns {any}
- */
-function presetSelect2TemplateResult(state) {
-    if (!state.id) return state.text || '';
-    const preset = getPresetList().find(p => p.id === state.id);
-    if (!preset) return state.text || '';
-
-    const wrapper = document.createElement('div');
-    wrapper.classList.add('nihongo-preset-selector-option');
-
-    const titleDiv = document.createElement('div');
-    titleDiv.classList.add('nihongo-preset-selector-option-title');
-    titleDiv.append(document.createTextNode(preset.name));
-    if (preset.bundled) {
-        const badge = document.createElement('span');
-        badge.classList.add('nihongo-preset-selector-option-badge');
-        badge.textContent = 'Bundled';
-        titleDiv.appendChild(badge);
-    }
-    wrapper.appendChild(titleDiv);
-
-    if (preset.description) {
-        const descDiv = document.createElement('div');
-        descDiv.classList.add('nihongo-preset-selector-option-desc');
-        descDiv.textContent = preset.description;
-        wrapper.appendChild(descDiv);
-    }
-
-    // @ts-ignore — select2 expects a jQuery wrapper for templateResult.
-    return $(wrapper);
-}
-
-/**
- * Toggles the selecting mode on the preset card and opens/closes select2.
- *
- * @param {HTMLElement} container
- * @param {boolean} open
- */
-function togglePresetSelector(container, open) {
-    container.classList.toggle('selecting', open);
-    const select = container.querySelector('.nihongo-preset-selector-dropdown');
-    // @ts-ignore
-    if (select && $(select).data('select2')) {
-        // @ts-ignore
-        if (open) $(select).select2('open');
-        // @ts-ignore
-        else $(select).select2('close');
-    }
-}
-
-/**
- * Refreshes the static title + description shown on the preset card to
- * match the currently selected preset.
- *
- * @param {HTMLElement} container
- */
-function updatePresetSelectorDisplay(container) {
-    const select = container.querySelector('.nihongo-preset-selector-dropdown');
-    if (!(select instanceof HTMLSelectElement)) return;
-
-    const id = select.value || ensureSettings().chatPresetId || 'default';
-    const preset = getPresetList().find(p => p.id === id);
-
-    const titleDisplay = container.querySelector('.nihongo-preset-selector-title-display');
-    if (titleDisplay) titleDisplay.textContent = preset?.name || id;
-
-    const description = container.querySelector('.nihongo-preset-selector-description');
-    if (description) description.textContent = preset?.description || '';
-}
-
-/**
- * Wires up the preset import/export/delete buttons.
- * Import: opens a hidden file input → reads JSON → registers the preset.
- * Export: serializes the active preset and triggers a download.
- * Delete: confirms, removes the user preset, falls back to default.
- *
- * @param {HTMLSelectElement} presetSelect
- * @param {HTMLElement} container Preset selector card (used to refresh title + description display)
- */
-function registerPresetIoHandlers(presetSelect, container) {
-    const importBtn = document.getElementById('nihongo_helper_preset_import');
-    const exportBtn = document.getElementById('nihongo_helper_preset_export');
-    const deleteBtn = document.getElementById('nihongo_helper_preset_delete');
-    const fileInput = document.getElementById('nihongo_helper_preset_import_file');
-
-    if (importBtn && fileInput instanceof HTMLInputElement) {
-        importBtn.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', async () => {
-            const file = fileInput.files?.[0];
-            // Reset value so re-importing the same file fires `change` again.
-            fileInput.value = '';
-            if (!file) return;
-
-            try {
-                const text = await file.text();
-                const entry = await importPresetFromJson(text);
-                ensureSettings().chatPresetId = entry.id;
-                saveSettingsDebounced();
-                populatePresets(presetSelect);
-                presetSelect.value = entry.id;
-                await loadPreset(entry.id);
-                updatePresetSelectorDisplay(container);
-                updatePresetActionButtons();
-                if (typeof toastr !== 'undefined') {
-                    toastr.success(`Imported preset: ${entry.name}`);
-                }
-            } catch (err) {
-                console.error(`[${EXTENSION_NAME}] Preset import failed:`, err);
-                if (typeof toastr !== 'undefined') {
-                    toastr.error(err?.message || 'Could not import preset.', 'Preset import failed');
-                }
-            }
-        });
-    }
-
-    if (exportBtn) {
-        exportBtn.addEventListener('click', () => {
-            const json = exportActivePreset();
-            if (!json) {
-                if (typeof toastr !== 'undefined') toastr.warning('No active preset to export.');
-                return;
-            }
-            const presetId = presetSelect.value || ensureSettings().chatPresetId || 'preset';
-            const blob = new Blob([json], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `nihongo-preset-${presetId}.json`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            // Revoke shortly after the download is triggered.
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-        });
-    }
-
-    if (deleteBtn) {
-        deleteBtn.addEventListener('click', async () => {
-            const presetId = presetSelect.value;
-            if (!presetId || !isUserPreset(presetId)) return;
-
-            // Resolve display name from the registered preset list — the
-            // <select>'s options no longer hold descriptive text after
-            // select2 rendering, but presetList is the source of truth.
-            const presetName = getPresetList().find(p => p.id === presetId)?.name || presetId;
-
-            const confirmed = await Popup.show.confirm(
-                'Delete preset?',
-                `Remove the imported preset "${presetName}"? This cannot be undone.`,
-            );
-            if (!confirmed) return;
-
-            await deleteUserPreset(presetId);
-            // Fall back to the default preset.
-            ensureSettings().chatPresetId = 'default';
+    mountPresetSelector(card, {
+        getActiveId: () => ensureSettings().chatPresetId || 'default',
+        onSelect: async (id) => {
+            const settings = ensureSettings();
+            if (id === settings.chatPresetId) return;
+            settings.chatPresetId = id;
             saveSettingsDebounced();
-            populatePresets(presetSelect);
-            presetSelect.value = 'default';
-            await loadPreset('default');
-            updatePresetSelectorDisplay(container);
-            updatePresetActionButtons();
-            if (typeof toastr !== 'undefined') toastr.success('Preset deleted.');
-        });
+            // Only reload the active preset if the current chat isn't pinned —
+            // a pinned chat keeps following its own binding regardless of the
+            // default changing.
+            if (!getChatBoundPresetId()) {
+                await loadPreset(id);
+            }
+            refreshAllPresetSelectors();
+        },
+        io: {
+            onImport: handleImportPresetFile,
+            onExport: handleExportActivePreset,
+            onDelete: handleDeleteActivePreset,
+            canDelete: () => isUserPreset(ensureSettings().chatPresetId || ''),
+        },
+    });
+}
+
+/**
+ * Imports a user preset from a JSON file, makes it the new default, and
+ * (when no chat-binding is active) loads it as the active preset.
+ *
+ * @param {File} file
+ */
+async function handleImportPresetFile(file) {
+    try {
+        const text = await file.text();
+        const entry = await importPresetFromJson(text);
+        ensureSettings().chatPresetId = entry.id;
+        saveSettingsDebounced();
+        if (!getChatBoundPresetId()) {
+            await loadPreset(entry.id);
+        }
+        refreshAllPresetSelectors();
+        if (typeof toastr !== 'undefined') {
+            toastr.success(`Imported preset: ${entry.name}`);
+        }
+    } catch (err) {
+        console.error(`[${EXTENSION_NAME}] Preset import failed:`, err);
+        if (typeof toastr !== 'undefined') {
+            toastr.error(err?.message || 'Could not import preset.', 'Preset import failed');
+        }
     }
 }
 
 /**
- * Shows/hides the delete button based on whether the active preset is a
- * user-imported one. Bundled presets shipped with the extension are never
- * deletable.
+ * Serializes the currently-active preset to JSON and triggers a download.
  */
-function updatePresetActionButtons() {
-    const select = document.getElementById('nihongo_helper_tutor_preset');
-    const deleteBtn = document.getElementById('nihongo_helper_preset_delete');
-    if (!(select instanceof HTMLSelectElement) || !(deleteBtn instanceof HTMLElement)) return;
-    deleteBtn.style.display = isUserPreset(select.value) ? '' : 'none';
+function handleExportActivePreset() {
+    const json = exportActivePreset();
+    if (!json) {
+        if (typeof toastr !== 'undefined') toastr.warning('No active preset to export.');
+        return;
+    }
+    const presetId = getEffectivePresetId() || 'preset';
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `nihongo-preset-${presetId}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/**
+ * Deletes the currently-default user preset (after confirmation), reverts
+ * the default to the bundled `'default'`, and reloads the active preset
+ * when no chat-binding is active.
+ */
+async function handleDeleteActivePreset() {
+    const presetId = ensureSettings().chatPresetId;
+    if (!presetId || !isUserPreset(presetId)) return;
+
+    const presetName = getPresetList().find(p => p.id === presetId)?.name || presetId;
+    const confirmed = await Popup.show.confirm(
+        'Delete preset?',
+        `Remove the imported preset "${presetName}"? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+
+    await deleteUserPreset(presetId);
+    ensureSettings().chatPresetId = 'default';
+    saveSettingsDebounced();
+    if (!getChatBoundPresetId()) {
+        await loadPreset('default');
+    }
+    refreshAllPresetSelectors();
+    if (typeof toastr !== 'undefined') toastr.success('Preset deleted.');
 }
 
 /**
