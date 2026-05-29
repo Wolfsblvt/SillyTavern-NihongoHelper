@@ -60,8 +60,8 @@
  *                    so we don't depend on a directory-listing endpoint.
  */
 
-import { getRequestHeaders, saveSettingsDebounced } from '../../../../../script.js';
-import { extension_settings } from '../../../../extensions.js';
+import { chat_metadata, getRequestHeaders, saveSettingsDebounced } from '../../../../../script.js';
+import { extension_settings, saveMetadataDebounced } from '../../../../extensions.js';
 import { EXTENSION_KEY, EXTENSION_NAME } from '../index.js';
 import { buildActionRegistry, CUSTOM_ACTION_ID } from './side-chat-actions.js';
 
@@ -165,6 +165,10 @@ let bundledCustomFallback = null;
 /** @type {TutorPreset|null} */
 let activePreset = null;
 
+/** Id of the currently active preset (null when nothing is loaded). */
+/** @type {string|null} */
+let activePresetId = null;
+
 /** Active preset's normalized action registry. */
 /** @type {{ actions: import('./side-chat-actions.js').ChatAction[], byId: Map<string, import('./side-chat-actions.js').ChatAction> }} */
 let activeRegistry = { actions: [], byId: new Map() };
@@ -246,6 +250,91 @@ export function getActivePreset() {
     return activePreset;
 }
 
+/**
+ * Id of the preset currently loaded into `activePreset`. Returns null when
+ * nothing has been loaded yet.
+ * @returns {string|null}
+ */
+export function getActivePresetId() {
+    return activePresetId;
+}
+
+// ===== Public API: Chat-bound preset (per ST chat) =====
+
+/**
+ * Per-ST-chat preset binding lives under `chat_metadata[EXTENSION_KEY].chatPresetId`.
+ * When set, it overrides the user's default preset id (from extension settings)
+ * for the duration of that chat. The default acts as the fallback for any chat
+ * that hasn't been pinned to a specific tutor.
+ *
+ *   Effective preset id = (chat-bound id) || (settings default id) || 'default'
+ *
+ * Storage uses `saveMetadataDebounced()` (the standard SillyTavern extension
+ * pattern — see `public/scripts/extensions.js`), so the binding survives chat
+ * reload / app restart and rides along when the chat is exported.
+ */
+
+/** Field used inside `chat_metadata[EXTENSION_KEY]` to store the bound preset id. */
+const CHAT_META_PRESET_FIELD = 'chatPresetId';
+
+/**
+ * Returns the chat-scoped preset id pinned to the currently loaded ST chat,
+ * or null when the chat is unpinned (uses the default).
+ * @returns {string|null}
+ */
+export function getChatBoundPresetId() {
+    const ns = chat_metadata && chat_metadata[EXTENSION_KEY];
+    if (!ns || typeof ns !== 'object') return null;
+    const id = ns[CHAT_META_PRESET_FIELD];
+    return (typeof id === 'string' && id) ? id : null;
+}
+
+/**
+ * Pins a preset id to the currently loaded ST chat. The next time this chat
+ * is opened the bound preset takes over from the settings default.
+ * @param {string} presetId
+ */
+export function setChatBoundPresetId(presetId) {
+    if (!chat_metadata[EXTENSION_KEY] || typeof chat_metadata[EXTENSION_KEY] !== 'object') {
+        chat_metadata[EXTENSION_KEY] = {};
+    }
+    chat_metadata[EXTENSION_KEY][CHAT_META_PRESET_FIELD] = presetId;
+    saveMetadataDebounced();
+}
+
+/**
+ * Removes any preset binding from the currently loaded ST chat. The chat
+ * reverts to following the settings default.
+ */
+export function clearChatBoundPresetId() {
+    const ns = chat_metadata && chat_metadata[EXTENSION_KEY];
+    if (ns && typeof ns === 'object' && CHAT_META_PRESET_FIELD in ns) {
+        delete ns[CHAT_META_PRESET_FIELD];
+        saveMetadataDebounced();
+    }
+}
+
+/**
+ * The user's default preset id (per-account, in extension settings).
+ * This is what unbound chats follow. Falls back to the canonical bundled
+ * `'default'` if the setting is missing or invalid.
+ * @returns {string}
+ */
+export function getDefaultPresetId() {
+    const settings = extension_settings[EXTENSION_KEY];
+    const id = settings?.chatPresetId;
+    return (typeof id === 'string' && id) ? id : DEFAULT_PRESET_ID;
+}
+
+/**
+ * Resolves the preset id that should currently be active: chat-bound first,
+ * settings default second, hard-coded `'default'` last.
+ * @returns {string}
+ */
+export function getEffectivePresetId() {
+    return getChatBoundPresetId() || getDefaultPresetId();
+}
+
 // ===== Public API: Init / Loading =====
 
 /**
@@ -300,11 +389,13 @@ export async function loadPreset(presetId) {
         }
         // Even the default failed — keep an empty registry so the extension stays usable.
         activePreset = null;
+        activePresetId = null;
         activeRegistry = buildActionRegistry({}, bundledCustomFallback);
         return false;
     }
 
     activePreset = data;
+    activePresetId = entry?.id || presetId;
     activeRegistry = buildActionRegistry(data.actions, bundledCustomFallback);
     console.debug(`[${EXTENSION_NAME}] Loaded preset: ${data.name} (v${data.v}, ${activeRegistry.actions.length} action(s))`);
     return true;
