@@ -45,7 +45,7 @@ import { messageFormatting } from '../../../../../script.js';
  * @property {string} sentence - Context sentence from chat
  * @property {string} paragraph - Broader paragraph context
  * @property {string} pos - Part of speech
- * @property {string} action - Action type (explain, translate, alternatives, grammar, custom)
+ * @property {string} action - Preset-defined action id (for example: explain, grammar, custom)
  * @property {string|null} messageId - Which ST chat message it was invoked from
  * @property {string|null} matchId - Token matcher span ID (for tooltip-originated queries)
  */
@@ -192,7 +192,7 @@ function buildChatView() {
 
     inputEl = document.createElement('textarea');
     inputEl.className = 'nihongo-chat-input';
-    inputEl.placeholder = 'Ask about a word or grammar...';
+    inputEl.placeholder = 'Ask about the Japanese here...';
     inputEl.rows = 1;
     inputEl.addEventListener('input', autoResizeInput);
     inputEl.addEventListener('keydown', (e) => {

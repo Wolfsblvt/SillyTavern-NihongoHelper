@@ -846,6 +846,7 @@ function wireHeaderActions(tip) {
             const actionId = btn.getAttribute('data-chat-action');
             const container = btn.closest('.nihongo-wt-chat-actions');
             const dictWord = container?.getAttribute('data-word') || '';
+            const reading = container?.getAttribute('data-reading') || '';
 
             if (actionId) {
                 // Use captured surface text (set when hoveredTarget was still valid)
@@ -855,6 +856,7 @@ function wireHeaderActions(tip) {
                 triggerChatAction(actionId, {
                     word: surfaceText || dictWord,
                     dictWord: dictWord !== surfaceText ? dictWord : '',
+                    reading,
                     sentence,
                 });
             }

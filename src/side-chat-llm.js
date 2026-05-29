@@ -51,7 +51,7 @@ const MAX_TOKENS = 1024;
  * Builds and substitutes all prompts for a chat request.
  * Returns pre-built prompt strings for storage on ChatMessage and for the LLM call.
  *
- * @param {string} actionId - Action type
+ * @param {string} actionId - Preset-defined action id
  * @param {Object} context - Word/sentence context
  * @param {string} [userMessage] - Free-form user input (for custom questions)
  * @returns {BuiltPrompts}
@@ -182,7 +182,7 @@ function buildDynamicMacros(context, userMessage) {
             handler: () => context.pos || 'unknown',
         },
         nihongoAction: {
-            description: 'The action type (explain, translate, alternatives, grammar)',
+            description: 'The preset-defined action id',
             handler: () => context.action || 'explain',
         },
         nihongoUserMessage: {

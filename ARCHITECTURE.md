@@ -11,7 +11,7 @@
 
 ### What is NihongoHelper?
 
-A **SillyTavern extension for learning Japanese through immersive chat**. Rather than treating language learning as a separate activity, it overlays linguistic information directly on the conversation — furigana, dictionary tooltips, kanji details, inflection analysis — so the user absorbs Japanese naturally while reading.
+A **SillyTavern extension for learning Japanese through immersive chat**. Rather than treating language learning as a separate activity, it overlays linguistic information directly on the conversation — furigana, dictionary tooltips, kanji details, inflection analysis — and adds a meta tutor for Japanese-aware support during ongoing conversation, RP, and co-writing.
 
 ### Core Design Principles
 
@@ -31,7 +31,7 @@ Build a complete Japanese immersion learning layer:
 - Grammar pattern recognition and structured review
 - Bridge passive reading into active recall (Anki export, session vocabulary)
 
-**Key insight:** Roleplay chat provides unlimited, engaging, level-appropriate reading material. The LLM can be prompted to use specific kanji/grammar. NihongoHelper closes the loop by (a) showing what words mean in-context, and (b) telling the LLM what the user already knows.
+**Key insight:** Roleplay chat provides unlimited, engaging, level-appropriate Japanese. The main LLM produces language to read and respond to; NihongoHelper helps the user understand it, ask about nuance and grammar, and write back more naturally without making the side tutor part of the fictional scene.
 
 ---
 
@@ -74,7 +74,7 @@ index.js (entry point)
 ├── side-chat-actions.js (normalized ChatAction registry: validation, visibility filtering, custom-action fallback)
 ├── side-chat-prompts.js (preset system: JSON loader, user-preset index in extension_settings, import/export, registry-backed prompt lookups)
 │   ├── side-chat-actions.js (buildActionRegistry, CUSTOM_ACTION_ID)
-│   └── data/presets/default.json (bundled default preset, v3 schema)
+│   └── data/presets/*.json (bundled tutor presets, v3 schema)
 ├── side-chat-llm.js    (LLM call wrapper, macro substitution)
 │   └── side-chat-prompts.js (getMainSystemPrompt, getActionInstructions, getUserPrompt)
 ├── side-chat.js        (chat tab UI, sessions, streaming, messageFormatting)
@@ -96,7 +96,7 @@ index.js (entry point)
 ### `index.js` — Entry Point
 
 Called by ST via `manifest.json` hook `{ activate: "init" }`. Init order:
-1. Settings (sync, ensure extension_settings namespace) → 2. Kanji state (sync, with legacy migration) → 3. Prompt presets (await: bundled default + active preset → seeds the action registry and the preset dropdown list) → 4. Settings UI (await, renders dropdown with the up-to-date preset list) → 5. Furigana system (await, registers hooks) → 6. Kanji Manager → 7. Side panel tabs (Search + Chat) → 8. Wand menu → 9. Inspect shortcut + Search shortcut → 10. Selection lookup → 11. Macros → 12. Meaning provider (async, non-blocking) → 13. Word tracking (async, non-blocking) → 14. Frequency data (async, non-blocking)
+1. Settings (sync, ensure extension_settings namespace) → 2. Kanji state (sync, with legacy migration) → 3. Prompt presets (await: bundled presets + active preset → seeds the action registry and the preset dropdown list) → 4. Settings UI (await, renders dropdown with the up-to-date preset list) → 5. Furigana system (await, registers hooks) → 6. Kanji Manager → 7. Side panel tabs (Search + Chat) → 8. Wand menu → 9. Inspect shortcut + Search shortcut → 10. Selection lookup → 11. Macros → 12. Meaning provider (async, non-blocking) → 13. Word tracking (async, non-blocking) → 14. Frequency data (async, non-blocking)
 
 **Why this order:** Settings first (everything reads them). Presets before the settings UI so the tutor preset dropdown shows imported user presets on first render and so the side-chat action registry is ready before any tooltip/chat action can fire. Furigana hooks before any messages render. JMdict, tracking, and frequency all load in background — furigana works immediately, tooltips/badges become available once loaded.
 
@@ -255,7 +255,7 @@ Sliding confidence model for per-word familiarity. Stores confidence score (0–
 
 Four-module architecture for the side chat feature:
 
-**`src/side-chat-actions.js`** — Action registry & validator. Owns the normalized `ChatAction` shape (`id`, `label`, `icon`, `visibility`, `requiresDictionaryMatch`, `system`, `user`) and the `VISIBILITY` constants (`tooltip` / `selection` / `manual`). `buildActionRegistry(rawActions, customFallback)` validates each preset entry, fills in defaults for missing label/icon/visibility, skips entries with no usable prompt, and ensures a usable `custom` action is always present (falling back to the bundled default's `custom`). Consumers query the registry via `getActionsForContext(actions, ctx)` and `findManualActionId(actions)`.
+**`src/side-chat-actions.js`** — Action registry & validator. Owns the normalized `ChatAction` shape (`id`, `label`, `description`, `icon`, `visibility`, `requiresDictionaryMatch`, `system`, `user`) and the `VISIBILITY` constants (`tooltip` / `selection` / `manual`). `buildActionRegistry(rawActions, customFallback)` validates each preset entry, fills in defaults for missing label/icon/visibility, skips entries with no usable prompt, and ensures a usable `custom` action is always present (falling back to the bundled default's `custom`). Consumers query the registry via `getActionsForContext(actions, ctx)` and `findManualActionId(actions)`.
 
 **`src/side-chat-prompts.js`** — Prompt Preset System. Presets are JSON files with:
 - `systemPrompt` — stable template (cacheable across all turns)
@@ -269,7 +269,7 @@ Key API:
 - `getMainSystemPrompt()` — stable system prompt template.
 - `getActionInstructions(actionId)`, `getUserPrompt(actionId)` — per-action prompt lookups (fall back to the registry's custom action when the requested id is unknown).
 - `getAction(actionId)`, `getActiveActions()` — read the normalized registry built from the active preset.
-- `initPresets(id)` / `loadPreset(id)` — load bundled default + the requested preset.
+- `initPresets(id)` / `loadPreset(id)` — load bundled presets + the requested preset.
 - `exportActivePreset()` / `importPresetFromJson(text)` / `deleteUserPreset(id)` / `isUserPreset(id)` — preset I/O surface used by the settings UI.
 
 **`src/side-chat-llm.js`** — LLM call wrapper. Handles:
@@ -302,8 +302,8 @@ Key API:
 - "Language Assistant" section with Connection Manager profile dropdown and tutor preset selector
 - `chatProfileId`, `chatPresetId`, and `userPresets` (array of imported-preset metadata) persisted in extension_settings
 - Profile list refreshed on connection profile events
-- Preset list populated from `getPresetList()` (bundled default + entries from `extension_settings.nihongo_helper.userPresets`)
-- Preset Import / Export / Delete buttons next to the dropdown (`registerPresetIoHandlers`): Import opens a hidden `<input type="file">` and pipes the selected JSON through `importPresetFromJson`; Export dumps `exportActivePreset()` as a downloaded `nihongo-preset-<id>.json`; Delete (only for user presets) confirms via `Popup.show.confirm`, calls `deleteUserPreset()`, and reverts to the bundled default. The bundled default is non-deletable.
+- Preset list populated from `getPresetList()` (bundled presets + entries from `extension_settings.nihongo_helper.userPresets`)
+- Preset Import / Export / Delete buttons next to the dropdown (`registerPresetIoHandlers`): Import opens a hidden `<input type="file">` and pipes the selected JSON through `importPresetFromJson`; Export dumps `exportActivePreset()` as a downloaded `nihongo-preset-<id>.json`; Delete (only for user presets) confirms via `Popup.show.confirm`, calls `deleteUserPreset()`, and reverts to the bundled default. Bundled presets are non-deletable.
 
 ### Side Chat — Prompt Building Flow
 
@@ -487,16 +487,16 @@ All processed data files are **committed to the repository** — users never nee
 - **Why bundled:** ST extensions are client-side only. No server component possible. Kuromoji runs in-browser, deterministic, fast (<50ms/message). Bundled for fully offline operation.
 
 ### Tutor Presets
-- **Bundled:** `data/presets/default.json` (v3 schema)
+- **Bundled:** `data/presets/default.json`, `strict.json`, `immersion.json`, and `anime-geek.json` (v3 schema), listed in `BUNDLED_PRESET_FILENAMES`
 - **User presets:** uploaded to `user/files/nihongo-preset-<slug>.json` via the standard `/api/files/upload` endpoint and indexed in `extension_settings.nihongo_helper.userPresets`. The flat naming scheme avoids the `validateAssetFileName` constraint (no `/` in upload names) and we don't need the missing `/api/files/list` endpoint to discover them.
-- Format (v3): `{ v, name, description, personality, rules, systemPrompt, actions: { <id>: { label, icon, visibility, requiresDictionaryMatch, system, user } } }`
+- Format (v3): `{ v, name, description, personality, rules, systemPrompt, actions: { <id>: { label, description, icon, visibility, requiresDictionaryMatch, system, user } } }`
 - `systemPrompt` is a stable template composing `{{nihongoPersonality}}` and `{{nihongoRules}}` — identical for all turns (cacheable)
 - `personality`, `description`, and `rules` are raw content fields exposed as dynamic macros
 - `actions[id].system` = action-specific instructions injected at depth (before user message)
 - `actions[id].user` = user message template with context macros
-- `actions[id].label` / `icon` / `visibility` / `requiresDictionaryMatch` drive tooltip/selection/manual button rendering — all data-driven, validated by `buildActionRegistry`
+- `actions[id].label` / `description` / `icon` / `visibility` / `requiresDictionaryMatch` drive tooltip/selection/manual button rendering — all data-driven, validated by `buildActionRegistry`. `description` is user-facing metadata, currently used as the button tooltip.
 - Visibility values: `tooltip` (word tooltip), `selection` (no-dictionary-match selection tooltip), `manual` (free-form follow-up). Unknown values are dropped silently.
-- Default action ids in the bundled preset: `explain`, `translate`, `alternatives`, `grammar`, `custom`. These are stable but fully overrideable per preset.
+- Bundled tutor presets: **Default Tutor** (balanced context help), **Strict Tutor** (correction/study precision), **Immersion Companion** (conversation-flow support), and **Anime Geek Tutor** (anime/media/RP dialogue, slang, character voice, and real-life naturalness checks). Action IDs differ by preset and are fully data-driven.
 - Templates use `{{nihongoWord}}`, `{{nihongoSentence}}`, `{{nihongoKnownKanjiCount}}`, `{{nihongoLearningKanjiCount}}`, `{{nihongoLearningKanji}}` etc.
 - Legacy v1 / v2 presets auto-migrated by `migrateToCurrent()`. Action-level metadata defaults (label/icon/visibility) are filled in by the registry, so older presets continue to work — they just look like a v3 preset where every action defaults to `[tooltip, selection]` visibility.
 

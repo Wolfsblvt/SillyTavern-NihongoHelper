@@ -15,6 +15,8 @@
  *   {{nihongoPos}}             — Part of speech (if known from tokenizer/dict)
  *   {{nihongoKnownKanjiCount}} — How many kanji the user knows
  *   {{nihongoKnownKanji}}      — Comma-separated list of known kanji
+ *   {{nihongoLearningKanjiCount}} — How many kanji the user is actively studying
+ *   {{nihongoLearningKanji}}   — Comma-separated list of learning kanji
  *   {{nihongoAction}}          — The action id (preset-defined)
  *   {{nihongoUserMessage}}     — Free-form user input (for custom questions)
  *   {{nihongoPersonality}}     — Preset personality field
@@ -82,7 +84,7 @@ import { buildActionRegistry, CUSTOM_ACTION_ID } from './side-chat-actions.js';
  * @property {string} name        Display name
  * @property {string} description Short description
  * @property {string} path        URL to fetch the preset JSON from
- * @property {boolean} bundled    True for the bundled default
+ * @property {boolean} bundled    True for bundled presets
  */
 
 /**
@@ -115,6 +117,9 @@ const USER_PRESET_FILENAME_SUFFIX = '.json';
  */
 const BUNDLED_PRESET_FILENAMES = Object.freeze([
     'default.json',
+    'immersion.json',
+    'strict.json',
+    'anime-geek.json',
 ]);
 
 /**

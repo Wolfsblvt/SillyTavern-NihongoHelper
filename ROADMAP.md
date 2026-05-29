@@ -57,21 +57,21 @@ Colored pills in tooltip: Top 1K (bright) → 1K-5K (medium) → 5K-15K (subtle)
 ## 2. Language Assistant Side Chat
 
 ### Problem
-User encounters something they want to ask about. Options: break RP to ask (ruins immersion), open separate ChatGPT (loses context). Both bad.
+User encounters Japanese they want help with during an ongoing LLM conversation, RP, or co-writing session. It may be the model's output, selected text, or the user's own draft. Options like breaking RP to ask the main chat or opening a separate tool both lose context and momentum.
 
 ### Idea
 Slide-out side panel with a dedicated language assistant. Runs separate LLM calls. Has full context: the word, sentence, user's known kanji, furigana state.
 
 ### Why This Matters
-Tooltips = passive (dictionary answer). Side chat = active (understanding, nuance, grammar breakdown). Together they cover the full "I don't understand this" spectrum without leaving the app.
+Tooltips = passive lookup (readings, definitions, kanji data, deinflection). Side chat = active contextual help: which meaning fits, why the grammar/form is used, what tone or implication it has, how to reply, and how to phrase the user's own Japanese naturally. Together they cover the full "I need help with this Japanese right now" spectrum without leaving the app.
 
 ### Interaction Model
-**Triggers:** Tooltip buttons ("Explain", "Translate in context", "Alternatives/Synonyms"), kanji tooltip ("Explain kanji"), manual input in panel.
+**Triggers:** Preset-defined tooltip buttons (for example Explain, Grammar, Nuance, Reply Help), selection fallback buttons, kanji/word tooltip context, and manual input in the panel.
 
 **Auto-injected context per call:**
 - Word/phrase in question + the sentence/paragraph it's in
-- Action chosen (explain / translate / alternatives / grammar)
-- User's known kanji (so explanations match level)
+- Preset-defined action chosen (for example explain, reply_help, naturalize, slang)
+- User's known and learning kanji (so explanations match level and can mention active study targets when relevant)
 - Whether furigana was shown (indicates reading unfamiliarity)
 
 **Panel:** Slide-out right side, persists while user reads, supports follow-up messages (mini-chat), dismissible/collapsible.
@@ -351,11 +351,18 @@ Side-chat action buttons (Explain, Translate, Grammar, Alternatives) used to be 
 ### Solution (shipped)
 The action registry now lives in the tutor preset JSON. Each preset declares its own actions; the extension consumes them as data via `src/side-chat-actions.js`. No code changes needed to add an action or build a specialized tutor.
 
+Bundled presets currently cover four intended modes:
+- **Default Tutor** — balanced contextual help for meaning, grammar, nuance, kanji, replies, and rewrites.
+- **Strict Tutor** — correction, grammar precision, conjugation, mistake analysis, naturalness, and tiny drills.
+- **Immersion Companion** — quick flow-preserving help for understanding, intent, tone, Japanese paraphrase, and reply ideas.
+- **Anime Geek Tutor** — anime/media/RP dialogue, slang, character voice, tropey phrasing, and real-life naturalness checks.
+
 ### Action Schema (preset JSON, v3)
 | Field | Purpose |
 |-------|---------|
 | _key_ | Action ID is the object key (e.g. `actions.explain`). Stable; used for tracking, history, dedup. |
 | `label` | Button text. Falls back to the id if missing. |
+| `description` | User-facing metadata used as the action button tooltip and preset/action documentation. |
 | `icon` | FontAwesome class (no `fa-solid` prefix). Falls back to a default icon. |
 | `visibility` | Array of contexts: `tooltip` (word tooltip), `selection` (selection-fallback tooltip), `manual` (free-form input). Unknown values dropped. |
 | `requiresDictionaryMatch` | If true, the action is excluded from contexts without a JMdict match. |
@@ -374,7 +381,7 @@ The action registry now lives in the tutor preset JSON. Each preset declares its
 
 ### Constraints
 - No arbitrary JavaScript in presets — only declarative fields and macro-substituted strings.
-- Built-in core actions ship as the bundled `data/presets/default.json`, fully overrideable.
+- Built-in action sets ship as bundled preset JSON files under `data/presets/`, fully overrideable by selecting or importing another preset.
 - Preset JSON validates leniently: one bad action does not crash the extension.
 
 ### Why
@@ -386,7 +393,7 @@ Settings panel exposes Import / Export / Delete buttons next to the preset dropd
 - **Import** picks a JSON file, validates the schema, slugifies the name, resolves id collisions (appends `-2`, `-3`, …), uploads it to `user/files/nihongo-preset-<slug>.json` via the standard files endpoint, and registers it in `extension_settings.nihongo_helper.userPresets` so it appears in the dropdown immediately.
 - **Delete** (visible only for user presets) removes the file and index entry, falling back to the bundled default.
 
-The bundled default cannot be deleted. Discovery no longer relies on the missing `/api/files/list` endpoint — the user-preset index is kept in extension_settings.
+Bundled presets cannot be deleted. Discovery no longer relies on the missing `/api/files/list` endpoint — the user-preset index is kept in extension_settings.
 
 ### Phases
 | Phase | Status | Scope | Depends On |
@@ -632,7 +639,7 @@ Sprints 4+ follow this dependency-aware sequence:
 | | 4b | Search UI (side panel tab) | ✅ |
 | | 7c | Tooltip nudge buttons (Easy/Got it/Meh/Hard/Anki/Reset) | ✅ |
 | **3: Side Chat MVP** | 2a | Side panel UI + LLM call wrapper | ✅ |
-| | 2b | Tooltip buttons → explain/translate → panel | ✅ |
+| | 2b | Tooltip buttons → preset-defined side-chat actions | ✅ |
 | | 2c | Structured prompts with full context (v2 presets) | ✅ |
 | | 4c | Search result actions (copy, insert, tooltip) | ✅ |
 | **4: Tracking & Action Registry** | 12a | Tracking correctness refactor (seenCount semantics, primary-match strictness) | 🔲 |
@@ -760,3 +767,10 @@ During message text processing, immediately after `analyzeTokens` returns greedy
   - Increment `seenCount` in tracking store
 - Only track spans whose primary match is the full-span match (not sub-matches)
 - Ignore single-kana particles and punctuation tokens
+
+## 18. Unsorted ToDos
+These ToDos will be listed and organized in the future.
+- [ ] Add Tutor/preset selector into the side chat panel
+- [ ] Add slash command support (get/select tutor, run tutor actions & more)
+- [ ] Refactor settings, resorting and adding sub drawers
+- [ ] Add Tutor edit/creation popup, with full support for action lists (including FA selector)
