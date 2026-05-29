@@ -10,9 +10,16 @@ import { loadTracking } from './src/tracking.js';
 import { loadFrequencyData } from './src/frequency.js';
 import { initDictSearchUI } from './src/dict-search-ui.js';
 import { initSideChat } from './src/side-chat.js';
-import { initPresets } from './src/side-chat-prompts.js';
-import { nihongoSettings } from './src/settings.js';
+import {
+    initPresets,
+    loadPreset,
+    getActivePresetId,
+    getEffectivePresetId,
+} from './src/side-chat-prompts.js';
+import { refreshAllPresetSelectors } from './src/preset-selector.js';
 import { registerSearchShortcut } from './src/side-panel.js';
+import { eventSource } from '../../../../script.js';
+import { event_types } from '../../../events.js';
 
 export const EXTENSION_KEY = 'nihongo_helper';
 export const EXTENSION_NAME = 'SillyTavern-NihongoHelper';
@@ -40,9 +47,18 @@ export async function init() {
     // Awaited BEFORE the settings UI is injected so the preset dropdown
     // is populated with imported user presets on first render, and so the
     // side-chat action registry is ready before any tooltip can fire.
-    await initPresets(nihongoSettings.chatPresetId);
+    //
+    // `getEffectivePresetId()` checks `chat_metadata` first (per-chat binding)
+    // and falls back to the user's default in extension settings, so a chat
+    // pinned to a specific tutor will load it on extension activation if the
+    // ST chat is already populated by then.
+    await initPresets(getEffectivePresetId());
 
     await injectSettingsUI();
+
+    // Re-evaluate the effective preset whenever the ST chat changes — a new
+    // chat may have its own binding (or none, falling back to the default).
+    eventSource.on(event_types.CHAT_CHANGED, onChatChanged);
 
     // Initialize furigana processing
     await initFurigana();
@@ -79,4 +95,20 @@ export async function init() {
     console.debug(`[${EXTENSION_NAME}] Extension activated`);
 
     initialized = true;
+}
+
+/**
+ * CHAT_CHANGED handler. The new ST chat may pin its own tutor preset (in
+ * `chat_metadata`) — switch to that, otherwise fall back to the user's
+ * default. No-op when the effective preset matches what's already loaded
+ * so we avoid an unnecessary `fetch()` on every chat switch.
+ */
+async function onChatChanged() {
+    const effective = getEffectivePresetId();
+    if (effective !== getActivePresetId()) {
+        await loadPreset(effective);
+    }
+    // Always refresh selectors so the chain button + title reflect the new
+    // chat's binding state, even when the preset itself didn't change.
+    refreshAllPresetSelectors();
 }

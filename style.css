@@ -2164,3 +2164,42 @@
     -webkit-line-clamp: 2;
     line-clamp: 2;
 }
+
+/* ── Chain button (side-chat selector instance) ── */
+
+/* Unpinned: muted slashed-link icon. */
+.nihongo-preset-selector-chain-btn {
+    opacity: 0.55;
+    transition: opacity 0.15s, color 0.15s;
+}
+
+.nihongo-preset-selector-chain-btn:hover {
+    opacity: 0.9;
+}
+
+/* Pinned: solid link icon, themed accent color, fully opaque. */
+.nihongo-preset-selector-chain-btn.chained {
+    opacity: 1;
+    color: var(--SmartThemeQuoteColor);
+}
+
+/* Optional subtle accent on the entire card while a binding is active. The
+   left-border treatment is chosen over background tint to stay readable on
+   both dark and light themes. */
+.nihongo-preset-selector.chained {
+    border-left: 3px solid var(--SmartThemeQuoteColor);
+    padding-left: 9px; /* 12px - 3px to keep the inner content aligned */
+}
+
+/* ── Side-chat preset bar (in-view placement of the selector card) ── */
+
+.nihongo-chat-preset-bar {
+    flex-shrink: 0;
+    padding: 6px 8px 0 8px;
+}
+
+.nihongo-chat-preset-bar .nihongo-preset-selector {
+    /* The selector card already has its own background/border; tighten the
+       margins so it sits flush with the side-chat width. */
+    margin: 0;
+}

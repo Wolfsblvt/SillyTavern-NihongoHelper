@@ -402,7 +402,31 @@ Bundled presets cannot be deleted. Discovery no longer relies on the missing `/a
 | 8b | ✅ | Refactor built-in actions into the default preset (v3 schema) | 8a |
 | 8c | ✅ | Tooltip / selection rendering driven by `visibility` flags | 8b |
 | 8d | ✅ | Preset import / export / delete UX (file picker + download) | 8c |
-| 8e | 🔲 | Inline preset editor inside settings (rename / edit actions in-app) | 8d |
+| 8e | ✅ | Searchable preset selector card (name + description) reused in settings + side chat | 8d |
+| 8f | ✅ | Per-chat tutor binding (chain icon, `chat_metadata` storage) | 8e |
+| 8g | 🔲 | Inline preset editor inside settings (rename / edit actions in-app) | 8d |
+
+### Per-chat tutor binding (8f)
+
+The settings panel hosts the user's **default tutor** ("My default tutor"). Any
+ST chat that hasn't been explicitly pinned follows this default. Inside the
+side chat, the same selector card carries an extra **chain button** that
+binds the active tutor to the current ST chat — useful when a particular
+character needs a stricter / more casual / domain-specific tutor than the
+account-wide default. The binding is stored under
+`chat_metadata[EXTENSION_KEY].chatPresetId` (standard SillyTavern extension
+pattern, persists with the chat export) and resolved on every `CHAT_CHANGED`
+event:
+
+```
+effective preset = chat_metadata[EXTENSION_KEY].chatPresetId
+                || extension_settings.nihongo_helper.chatPresetId
+                || 'default'
+```
+
+Picking a different tutor from the side-chat selector auto-pins it; clicking
+the chain icon while pinned reverts the chat to the default (whose name is
+surfaced in the icon's tooltip).
 
 ---
 
@@ -771,6 +795,7 @@ During message text processing, immediately after `analyzeTokens` returns greedy
 ## 18. Unsorted ToDos
 These ToDos will be listed and organized in the future.
 - [ ] Add Tutor/preset selector into the side chat panel
+- [ ] Bind tutors to chat-level and character level
 - [ ] Add slash command support (get/select tutor, run tutor actions & more)
 - [ ] Refactor settings, resorting and adding sub drawers
 - [ ] Add Tutor edit/creation popup, with full support for action lists (including FA selector)

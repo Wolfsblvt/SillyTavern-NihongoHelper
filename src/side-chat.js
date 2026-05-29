@@ -14,8 +14,19 @@
 
 import { registerTab, openSidePanel } from './side-panel.js';
 import { sendChatRequest, buildPrompts, getProfileIcon } from './side-chat-llm.js';
-import { getAction, getActiveActions } from './side-chat-prompts.js';
+import {
+    getAction,
+    getActiveActions,
+    getPresetList,
+    getEffectivePresetId,
+    getDefaultPresetId,
+    getChatBoundPresetId,
+    setChatBoundPresetId,
+    clearChatBoundPresetId,
+    loadPreset,
+} from './side-chat-prompts.js';
 import { findManualActionId, CUSTOM_ACTION_ID } from './side-chat-actions.js';
+import { mountPresetSelector, refreshAllPresetSelectors } from './preset-selector.js';
 import { nihongoSettings } from './settings.js';
 import { EXTENSION_NAME } from '../index.js';
 import { humanizeGenTime } from '../../../../RossAscends-mods.js';
@@ -179,6 +190,12 @@ function buildChatView() {
     headerBar.appendChild(viewPromptBtn);
     headerBar.appendChild(newChatBtn);
 
+    // Tutor preset selector — same card as in settings, plus a chain button
+    // for pinning the active tutor to the current ST chat (chat_metadata).
+    const presetBar = document.createElement('div');
+    presetBar.className = 'nihongo-chat-preset-bar';
+    mountSideChatPresetSelector(presetBar);
+
     // Message list
     messageList = document.createElement('div');
     messageList.className = 'nihongo-chat-messages';
@@ -212,10 +229,61 @@ function buildChatView() {
     inputBar.appendChild(sendBtn);
 
     view.appendChild(headerBar);
+    view.appendChild(presetBar);
     view.appendChild(messageList);
     view.appendChild(inputBar);
 
     return view;
+}
+
+/**
+ * Mounts the side-chat-flavoured preset selector card. Differences from the
+ * settings card:
+ *
+ *  - **Active id is the *effective* preset** for the current ST chat
+ *    (chat-binding overrides settings default).
+ *  - **Picking a different preset auto-pins it to the chat** (writes
+ *    chat_metadata + reloads). The user is "engaging with the tutor" here, so
+ *    silently making it stick is the natural behaviour.
+ *  - **Chain button is enabled.** Always-visible toggle:
+ *      - Unpinned → click pins the *currently active* preset to this chat,
+ *        even if it matches the default. Useful for explicitly committing.
+ *      - Pinned → click clears the binding, reverts to the settings default.
+ *  - **No import / export / delete buttons** — those are global preset
+ *    operations that live in the settings panel.
+ *
+ * @param {HTMLElement} container
+ */
+function mountSideChatPresetSelector(container) {
+    mountPresetSelector(container, {
+        getActiveId: () => getEffectivePresetId(),
+        onSelect: async (id) => {
+            // Picking from the side-chat selector is an explicit "use this
+            // tutor for this chat" action — pin it.
+            if (id === getChatBoundPresetId() && id === getEffectivePresetId()) return;
+            setChatBoundPresetId(id);
+            await loadPreset(id);
+            refreshAllPresetSelectors();
+        },
+        chain: {
+            isChained: () => getChatBoundPresetId() !== null,
+            getDefaultName: () => {
+                const defaultId = getDefaultPresetId();
+                return getPresetList().find(p => p.id === defaultId)?.name || defaultId;
+            },
+            onToggle: async () => {
+                if (getChatBoundPresetId() !== null) {
+                    // Unpin → revert to the user's default preset.
+                    clearChatBoundPresetId();
+                    await loadPreset(getDefaultPresetId());
+                } else {
+                    // Pin the currently-active preset (whatever it is).
+                    setChatBoundPresetId(getEffectivePresetId());
+                }
+                refreshAllPresetSelectors();
+            },
+        },
+    });
 }
 
 function showEmptyState() {
