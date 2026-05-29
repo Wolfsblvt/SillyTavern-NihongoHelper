@@ -13,7 +13,7 @@
             "visibility": ["tooltip", "selection"],
             "requiresDictionaryMatch": false,
             "system": "Explain the selected Japanese in context.\n\nAction-specific rules:\n- Start with the meaning that fits this sentence or line.\n- If the surface form is inflected, identify the base form only when useful.\n- Mention the local role of the word or phrase: predicate, modifier, set phrase, reaction, sentence ending, etc.\n- Call out one likely misunderstanding if there is one.\n- Keep it compact: usually 2-5 bullets or a short paragraph.",
-            "user": "Explain this Japanese in context.\n\nText: {{nihongoWord}}{{nihongoReading}}\nDictionary/base form if known: {{nihongoDictWord}}\nContext sentence: {{nihongoSentence}}\nBroader context: {{nihongoParagraph}}\n\nWhat does it mean here, and what should I understand from it?"
+            "user": "Explain this Japanese in context.\n\nText: {{nihongoWord}}\nDictionary/base form if known: {{nihongoDictWord}}\nContext sentence: {{nihongoSentence}}\nBroader context: {{nihongoParagraph}}\n\nWhat does it mean here, and what should I understand from it?"
         },
         "translate": {
             "label": "Translate",
@@ -31,7 +31,7 @@
             "visibility": ["tooltip", "selection"],
             "requiresDictionaryMatch": false,
             "system": "Explain the grammar or structure behind the selected Japanese.\n\nAction-specific rules:\n- Identify the relevant pattern, form, conjugation, particle use, or clause relationship.\n- Explain why it is used here, not just how it is formed.\n- Give a simple formation note when useful.\n- Include one tiny example only if it clarifies the pattern.\n- Avoid unrelated grammar lectures.",
-            "user": "Explain the grammar here.\n\nExpression: {{nihongoWord}}{{nihongoReading}}\nContext: {{nihongoSentence}}\n\nWhat structure or form is being used, and why does it fit here?"
+            "user": "Explain the grammar here.\n\nExpression: {{nihongoWord}}\nContext: {{nihongoSentence}}\n\nWhat structure or form is being used, and why does it fit here?"
         },
         "nuance": {
             "label": "Nuance",
@@ -49,7 +49,7 @@
             "visibility": ["tooltip", "selection"],
             "requiresDictionaryMatch": false,
             "system": "Explain the kanji contribution in context.\n\nAction-specific rules:\n- Do not dump every reading or generic kanji fact.\n- Explain how the kanji shape the meaning, image, register, or memorability of this word here.\n- Say clearly if the word is not compositional, has an irregular reading, ateji, jukujikun, rendaku, or misleading kanji.\n- Mention learning kanji from {{nihongoLearningKanji}} when they appear and matter.\n- Keep it practical for reading this line.",
-            "user": "Explain the kanji contribution here.\n\nExpression: {{nihongoWord}}{{nihongoReading}}\nContext: {{nihongoSentence}}\nKnown kanji: {{nihongoKnownKanji}}\nLearning kanji: {{nihongoLearningKanji}}\n\nHow do the kanji help me understand this in context?"
+            "user": "Explain the kanji contribution here.\n\nExpression: {{nihongoWord}}\nContext: {{nihongoSentence}}\nKnown kanji: {{nihongoKnownKanji}}\nLearning kanji: {{nihongoLearningKanji}}\n\nHow do the kanji help me understand this in context?"
         },
         "reply_help": {
             "label": "Reply Help",

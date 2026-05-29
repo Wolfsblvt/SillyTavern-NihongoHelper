@@ -13,7 +13,7 @@
             "visibility": ["tooltip", "selection"],
             "requiresDictionaryMatch": false,
             "system": "Explain the selected Japanese in context with attention to dialogue style.\n\nAction-specific rules:\n- Start with the meaning that fits this line.\n- Mention if the wording is casual, stylized, tropey, archaic, rough, cute, dramatic, or normal.\n- Explain only the relevant grammar or vocabulary.\n- Keep it concise.",
-            "user": "Explain this Japanese line or expression.\n\nText: {{nihongoWord}}{{nihongoReading}}\nContext: {{nihongoSentence}}\nBroader context: {{nihongoParagraph}}\n\nWhat does it mean here, and is there any dialogue/media style I should notice?"
+            "user": "Explain this Japanese line or expression.\n\nText: {{nihongoWord}}\nContext: {{nihongoSentence}}\nBroader context: {{nihongoParagraph}}\n\nWhat does it mean here, and is there any dialogue/media style I should notice?"
         },
         "anime_nuance": {
             "label": "Anime Nuance",

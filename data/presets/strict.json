@@ -13,7 +13,7 @@
             "visibility": ["tooltip", "selection"],
             "requiresDictionaryMatch": false,
             "system": "Explain the selected Japanese precisely.\n\nAction-specific rules:\n- State the meaning in this context first.\n- Identify the base form if relevant.\n- Point out one likely misunderstanding, false friend, or usage trap if present.\n- Mention register only when it affects correctness or interpretation.\n- Keep it compact and corrective.",
-            "user": "Explain this precisely.\n\nExpression: {{nihongoWord}}{{nihongoReading}}\nDictionary/base form if known: {{nihongoDictWord}}\nContext: {{nihongoSentence}}\n\nWhat does it mean here, and what should I not misunderstand?"
+            "user": "Explain this precisely.\n\nExpression: {{nihongoWord}}\nDictionary/base form if known: {{nihongoDictWord}}\nContext: {{nihongoSentence}}\n\nWhat does it mean here, and what should I not misunderstand?"
         },
         "grammar": {
             "label": "Grammar",
@@ -31,7 +31,7 @@
             "visibility": ["tooltip", "selection"],
             "requiresDictionaryMatch": false,
             "system": "Break down conjugation or inflection.\n\nAction-specific rules:\n- Identify the dictionary/base form.\n- Name each visible form or suffix: polite, negative, past, te-form, potential, passive, causative, volitional, conditional, progressive, etc.\n- Explain the resulting meaning in this sentence.\n- If it is not actually a conjugation, say what it is instead.\n- Keep the chain short and exact.",
-            "user": "Break down this conjugation or inflection.\n\nExpression: {{nihongoWord}}{{nihongoReading}}\nContext: {{nihongoSentence}}\n\nWhat is the base form, and how did it become this?"
+            "user": "Break down this conjugation or inflection.\n\nExpression: {{nihongoWord}}\nContext: {{nihongoSentence}}\n\nWhat is the base form, and how did it become this?"
         },
         "kanji": {
             "label": "Kanji",
@@ -40,7 +40,7 @@
             "visibility": ["tooltip", "selection"],
             "requiresDictionaryMatch": false,
             "system": "Give a study-focused kanji explanation.\n\nAction-specific rules:\n- For each relevant kanji, give the core meaning and reading used here when clear.\n- Explain whether the full word is compositional or must be memorized as a fixed word.\n- Call out irregular readings, jukujikun, ateji, rendaku, misleading kanji meanings, or visually similar traps.\n- Mark any kanji from {{nihongoLearningKanji}} as active study targets.\n- Do not list every reading.",
-            "user": "Break down the kanji for study.\n\nExpression: {{nihongoWord}}{{nihongoReading}}\nContext: {{nihongoSentence}}\nKnown kanji: {{nihongoKnownKanji}}\nLearning kanji: {{nihongoLearningKanji}}\n\nExplain the relevant kanji, readings, contribution, and traps."
+            "user": "Break down the kanji for study.\n\nExpression: {{nihongoWord}}\nContext: {{nihongoSentence}}\nKnown kanji: {{nihongoKnownKanji}}\nLearning kanji: {{nihongoLearningKanji}}\n\nExplain the relevant kanji, readings, contribution, and traps."
         },
         "fix": {
             "label": "Fix",
