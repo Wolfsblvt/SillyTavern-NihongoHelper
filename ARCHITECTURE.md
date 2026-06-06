@@ -79,6 +79,17 @@ index.js (entry point)
 │   └── side-chat-prompts.js (getMainSystemPrompt, getActionInstructions, getUserPrompt)
 ├── side-chat.js        (chat tab UI, sessions, streaming, messageFormatting)
 │   └── side-chat-llm.js, side-chat-prompts.js, side-chat-actions.js (findManualActionId, CUSTOM_ACTION_ID)
+├── feedback-schema.js  (PURE: categories/severity/confidence/sensitivity, parse+validate, anchoring, hashText)
+├── feedback-prompt.js  (global protocol + tutor guidance + context collection)
+│   └── feedback-schema.js, side-chat-prompts.js (getActivePresetFeedbackGuidance), kanji-state.js
+├── feedback-engine.js  (runFeedback: prompts → requestCompletion → parse; in-flight registry)
+│   └── feedback-prompt.js, feedback-schema.js, side-chat-llm.js (requestCompletion)
+├── feedback-render.js  (shared feedback card DOM: loading/error/ready, issue cards)
+│   └── feedback-schema.js
+├── feedback-messages.js (sent-message button, persist message.extra, attach card, auto mode)
+│   └── feedback-engine.js, feedback-render.js, feedback-schema.js, side-chat-prompts.js
+├── feedback-draft.js   (composer "Review Japanese" button + draft-review modal)
+│   └── feedback-engine.js, feedback-render.js, popup.js
 ├── dict-search-ui.js   (side panel search tab, result cards)
 │   └── dict-search.js  (3-phase search: direct → deinflect → Fuse)
 │       ├── romaji.js    (romaji-to-hiragana conversion)
@@ -459,6 +470,35 @@ All v2 refactoring has been implemented:
 9. **Preset migration** (`src/side-chat-prompts.js`) — `migrateV1ToV2()` handles legacy presets: `systemPrompt = "{{nihongoPersonality}}"`, personality stays as-is, `rules = ""`.
 10. **`sendChatRequest`** (`src/side-chat-llm.js`) — Now accepts pre-built prompts instead of building internally. `generateRaw` fallback concatenates main system + instructions.
 
+### Writing Feedback
+
+Higher-order feedback on Japanese the **user** writes (distinct from the mechanical tooltip lookup). One shared engine, two entry points, opt-in automatic mode. Six modules, plus a refactor of `side-chat-llm.js`.
+
+**`src/feedback-schema.js`** — **Dependency-free** (no ST imports) so the riskiest logic is unit-testable in plain Node. Owns:
+- The **category registry** (`CATEGORIES`: grammar, particle, conjugation, word_choice, naturalness, meaning, register, context, orthography, punctuation, + generic `other` fallback), the ordered **severity** scale (`info`/`minor`/`major`/`critical` with ranks + labels + icons), **confidence** levels, and **sensitivity** levels (`essential`/`balanced`/`strict`).
+- `parseFeedbackResponse(raw)` → strips markdown fences, trims to the outer `{…}`, parses, makes **one** conservative repair (trailing commas), validates. Never throws — returns `{ ok, result?, error?, raw }`.
+- `validateFeedbackResult()` → clamps string lengths / array sizes, drops malformed issues, normalizes unknown categories/severity/confidence to safe defaults, and **computes `highestSeverity` from the issues** (never trusts a contradictory top-level field).
+- `resolveAnchor(source, quote, occurrence)` / `resolveResultAnchors()` → **application-computed** offsets from the exact quote + 1-based occurrence. Degrades safely (not-found / out-of-range). `isIssueSafeToApply()` gates auto-apply (unique quote or explicitly disambiguated + has replacement).
+- `hashText()` (FNV-1a, whitespace-normalized) for source association / staleness, `hasJapaneseContent()` heuristic, and `DEFAULT_GLOBAL_FEEDBACK_INSTRUCTIONS` (editable prose; the JSON contract is assembled in code, not here).
+
+**`src/feedback-prompt.js`** — Assembles the two-layer prompt: the **global protocol** (editable instructions from settings or default + registry-derived category/severity/confidence tables + sensitivity instruction + the JSON contract + injection-resistance reminder) and the **tutor-specific guidance** (active preset's optional `feedback` field, or `NEUTRAL_FEEDBACK_GUIDANCE`). `collectFeedbackContext(beforeIndex)` gathers preceding **visible** main-chat messages (skips `is_system`/hidden, role-ordered, capped by `feedbackContextCount`; `beforeIndex` exclusive for sent-message review, `null` for draft). The user prompt clearly delimits `CONTEXT` vs `TARGET`. Global macros (`{{learningKanji}}`, …) are resolved via `substituteParams`.
+
+**`src/feedback-engine.js`** — `runFeedback({ targetText, beforeIndex, requestKey, controller, onReasoning })` builds prompts → one `requestCompletion` call → buffers the **final** response (no partial-JSON parsing) → parses/validates → resolves anchors. Returns `{ ok, result?, error?, aborted?, raw?, meta }`. Holds an **in-flight registry** keyed by `requestKey` (`buildRequestKey(chatId, text)`) so callers can dedupe, skip, or abort. Reasoning (if the provider streams it) is surfaced transiently via `onReasoning`; only the final content is parsed.
+
+**`src/feedback-render.js`** — Shared, framework-free DOM. `createFeedbackCard({ mode: 'attached'|'modal', expanded, showApply, callbacks })` is a small state machine (`setLoading`/`setError`/`setResult`/`setStale`) with collapsed/expanded header (badges: issue count + highest severity + loading/error/stale). `buildResultView` / `buildIssueCard` are exported for the modal. **All model text is inserted via `textContent`** (no `innerHTML`) — hostile reviewed content cannot inject markup.
+
+**`src/feedback-messages.js`** — Sent-message entry point. Injects a `.mes_nihongo_feedback` button into `#message_template .extraMesButtons` (cloned onto new messages) + existing messages; CSS hides it on non-user messages. `runFeedbackForMessage(id, { regenerate, auto })` persists results to **`message.extra.nihongoFeedback`** (custom key → never enters the prompt) and attaches the card at the end of `.mes_block`. Lifecycle hooks (`CHAT_CHANGED`, `MORE_MESSAGES_LOADED`, `MESSAGE_UPDATED/EDITED/SWIPED/DELETED`, `USER_MESSAGE_RENDERED`) re-attach cards, recompute **staleness** (current text hash vs stored `sourceHash`), and clean up. **Automatic mode** runs on `USER_MESSAGE_RENDERED`, detached (never awaited → never blocks main generation), gated by `hasJapaneseContent`, deduped by hash. **Chat-switch/deletion safety:** a late result is validated against `getCurrentChatId()` and `chat.indexOf(message)` before it ever persists or attaches.
+
+**`src/feedback-draft.js`** — Draft entry point. Adds `#nihongo_review_button` to `#leftSendForm`. Opens a blocking `Popup` (`okButton: 'Apply to composer'`, `cancelButton: 'Close'`) hosting the shared card (modal mode, `showApply`) plus an editable working copy. Applying a revision / single fix writes into the **working copy** only; the composer is touched **only** on `AFFIRMATIVE`. Closing aborts the request (`onClosing`). Per-issue apply re-resolves the quote against the *current* working text and bails when ambiguous.
+
+**Refactor:** `side-chat-llm.js` now exports a low-level `requestCompletion({ messages, onStream, signal, maxTokens, profileId, fallbackSystemPrompt, fallbackUserPrompt })` (Connection Manager streaming → non-streaming → `generateRaw` fallback). Both the side chat and the feedback engine go through it, so there is **one** model path and **no separate feedback model selector** (it reuses `chatProfileId`).
+
+**Persisted record** (`message.extra.nihongoFeedback`): `{ v, sourceHash, createdAt, presetId, presetName, sensitivity, result }`. Raw output and provider reasoning are **not** persisted.
+
+**Settings:** `feedbackAutoMode` (`off`/`japanese`), `feedbackContextCount` (0–10, default 4), `feedbackSensitivity` (default `balanced`), `feedbackExpandedByDefault`, `feedbackGlobalInstructions` (`''` = bundled default; reset button). Tutor presets gained an optional top-level `feedback` string (style only) — passed through `migrateToCurrent`, read via `getActivePresetFeedbackGuidance()`.
+
+**Tests:** `scripts/test-feedback.mjs` (run `node scripts/test-feedback.mjs`) — pure-logic assertions covering malformed/fenced parsing, validation/clamping, repeated-quote anchoring, apply-safety, severity ordering, hashing, and the JP heuristic.
+
 ---
 
 ## 4. Data Pipeline
@@ -569,6 +609,10 @@ node scripts/build-frequency.cjs --rebuild             # Rebuild output from sav
 | No reading in LLM context | LLM must infer reading | Dictionary reading often wrong for context (文=ぶん/ふみ). LLM does better with sentence context. |
 | History stores full prompt (v2) | More data per session | Each user message stores `prompt` (full) + `content` (display). LLM history uses `prompt` for accurate multi-turn. |
 | Stable system + action-at-depth (v2) | Slightly more complex prompt building | System prompt stays identical across all turns (cacheable). Action instructions injected at depth just before user message. |
+| Feedback in `message.extra` (custom key) | Lives in the chat file; not a first-class ST feature | Travels with the message (survives reload, dies on delete), and a custom key never enters the prompt — unlike `extra.display_text`. No fake chat message is inserted. |
+| Buffer-then-parse (no partial JSON) | No incremental issue rendering yet | Parsing unfinished JSON is fragile; we stream only reasoning/status and parse the final response once. A streamable protocol (NDJSON/events) is deferred. |
+| Application-computed anchors | Model can't point at exact offsets | The model gives a verbatim quote + occurrence; the extension resolves the position. Ambiguous/missing anchors degrade safely (shown, but not auto-applied). |
+| Reuse the side-tutor profile | No feedback-specific model | Feedback is a distinct *operation* but doesn't warrant a separate model selector. One `requestCompletion` path keeps provider handling consistent. |
 
 ---
 
@@ -609,6 +653,15 @@ node scripts/build-frequency.cjs --rebuild             # Rebuild output from sav
 
 ### Adding Tooltip Content
 Modify `buildSinglePage()` (word) or `populateKanjiTooltip()` (kanji) in kanji-tooltip.js. Add CSS under `.nihongo-tooltip` scope.
+
+### Adding a Feedback Category
+1. Add an entry to `CATEGORIES` in `feedback-schema.js` (`{ label, icon, description }`). It immediately appears in the prompt's category table (generated from the registry), the renderer's issue chips, and parsing/validation — no other code changes.
+2. (Optional) add a CSS hook if you want a distinct color. Unknown categories returned by the model already fall back to `other` and render generically, so this is non-breaking.
+
+### Adjusting Feedback Behavior
+- **Tutor style:** add/edit a preset's top-level `feedback` string (tone/emphasis only — never the JSON contract).
+- **Global protocol:** edit *Global feedback instructions* in settings (resettable). The category/severity/confidence tables and the JSON contract are assembled in code and are not user-editable, so parsing stays reliable.
+- **Severity/sensitivity wording:** `SEVERITY` / `SENSITIVITY` in `feedback-schema.js`; sensitivity instruction text in `feedback-prompt.js`.
 
 ---
 
@@ -672,7 +725,8 @@ Modify `buildSinglePage()` (word) or `populateKanjiTooltip()` (kanji) in kanji-t
 
 | Tier | Store | Content | Save Frequency |
 |------|-------|---------|---------------|
-| 1 | extension_settings | User prefs, known kanji, panel settings | On change (debounced) |
+| 1 | extension_settings | User prefs, known kanji, panel + feedback settings | On change (debounced) |
 | 2 | Files endpoint JSON | Word tracking DB (`nihongo-tracking.json`) | Every 30s / on unload |
+| 3 | Chat message `extra` | Writing Feedback results (`message.extra.nihongoFeedback`) — travels with the message, never enters the prompt | On generation (`saveChat`) |
 
 Each planned feature builds on existing architecture: tokenizer → linguistic analysis, tooltip → UI surface, settings → user control, tracking → confidence data, macros → LLM feedback loop.

@@ -103,45 +103,44 @@ Per-action specialized system prompts. Vague prompts → mediocre results. Each 
 
 ## 3. Writing Feedback / Grammar Check
 
+> **Status: 🧪 Implemented (first vertical slice).** Shipped as a shared feedback engine with two entry points (sent-message feedback + draft review) and an opt-in automatic mode. The tooltips already cover mechanical lookup; Writing Feedback covers higher-order quality: correctness, naturalness, register, meaning, and whether a reply fits the conversation.
+
 ### Problem
-When writing Japanese, learners make mistakes they don't notice. Existing tools (fixmyjapanese.com, Grammarly for Japanese) are paid, require leaving app, lack conversation context.
+When writing Japanese, learners make mistakes they don't notice. Existing tools (fixmyjapanese.com, Grammarly for Japanese) are paid, require leaving the app, and lack conversation context.
 
-### Idea
-Pre-send "Check Japanese" button. Separate LLM call analyzes user's input text, returns structured feedback:
-```
-がない → ではない
-[Word Choice] "ではない" is needed in this context.
+### Design as built
 
-とだします → と示します
-[Kanji] "示す" is the correct verb for "show".
-```
+**One engine, two entry points.** A single analysis engine (`feedback-engine.js`) builds prompts, calls the model, parses/validates the structured result, and resolves anchors. Two surfaces use it:
 
-### Why Separate Call (Not Main LLM)
-- Doesn't pollute RP with meta-commentary
-- User controls when they get feedback (explicit button)
-- Can use cheaper/faster model
-- Structured, predictable output
-- Pre-send = can fix before sending (unlike post-hoc feedback in reply)
+1. **Feedback on a sent message** — a per-message action button (`feedback-messages.js`) analyses a user message and attaches a collapsible card directly beneath it. Result persists in `message.extra.nihongoFeedback` (extension-owned metadata → never enters the main prompt), survives reload, goes **stale** on edit, and is removed on delete.
+2. **Draft review** — a "Review Japanese" composer button (`feedback-draft.js`) opens a blocking modal that reviews the unsent draft, shows the same view plus an editable working copy, and applies a revision back to the composer. Never sends automatically.
 
-Could optionally support in-reply feedback too (main LLM includes correction in structured block), but the pre-send check is primary.
+**Automatic mode** *(opt-in)* — `Off` / `Japanese messages only`. Runs after a user message renders, gated by a cheap local Japanese-content heuristic, deduped by source-text hash, detached so it never blocks main generation.
+
+### Why a separate call (not the main LLM)
+- Doesn't pollute RP with meta-commentary (feedback is never part of the character prompt).
+- User controls when they get feedback (explicit button), or opts into automatic mode.
+- Reuses the side-tutor connection profile (no separate model selector); shares the low-level `requestCompletion` wrapper.
+- Strict, versioned, structured output the extension parses and renders.
+
+### Structured contract
+Versioned JSON: `{ version, summary, revisedText|null, strengths[], issues[] }`. Each issue has `category`, `severity` (info/minor/major/critical), `confidence` (low/medium/high), `quote`, `occurrence`, `sentence?`, `explanation`, `replacement?`, `alternatives?`. The extension owns the contract and the category/severity tables (assembled from registries in `feedback-schema.js`); tutor presets only influence *style* via an optional `feedback` field. Parsing is defensive (fence-stripping, one trailing-comma repair, length/type clamping, unknown categories → generic fallback). Anchors are **application-computed** from the quote + occurrence, never trusted from the model.
 
 ### Categories
-Grammar, Word Choice, Kanji, Politeness/Register, Naturalness, Spelling/Typo.
-
-### Shares Infrastructure with #2
-Same side panel, same LLM call wrapper. "Check Japanese" is a specialized action with a correction-focused prompt. Follow-up questions ("why is ではない better?") use same conversation continuation.
-
-### Advanced: Interactive Correction
-"Apply fix" buttons that auto-replace incorrect segments in the input field. Turns it from informational into Grammarly-like editor.
+grammar, particle, conjugation, word_choice, naturalness, meaning, register, context, orthography, punctuation (+ generic `other` fallback).
 
 ### Phases
 | Phase | Status | Scope | Depends On |
 |-------|--------|-------|------------|
-| 3a | 🔲 | "Check Japanese" button next to Send, fires LLM call with input text | #2a (panel infra) |
-| 3b | 🔲 | Structured output parsing and display | 3a |
-| 3c | 🔲 | Context injection (recent messages for register awareness) | 3b |
-| 3d | 🔲 | "Apply fix" buttons for interactive correction | 3b |
-| 3e | 🔲 | Level-aware prompting (adjust explanations to user's knowledge) | #7 (tracking) |
+| 3a | ✅ | Draft-review entry point (composer button + modal) | #2a (panel infra) |
+| 3a′ | ✅ | Sent-message entry point (message action button + attached card) | #2a |
+| 3b | ✅ | Versioned structured output parsing, validation, and rendering | 3a |
+| 3c | ✅ | Conversation-context injection (configurable count, role-ordered, excludes hidden) | 3b |
+| 3d | � | "Apply fix" — full revised text + single-issue apply in the draft modal (safe-anchor gated). Inline composer underlines still deferred. | 3b |
+| 3e | ✅ | Sensitivity levels + learner-level (known/learning kanji) prompting | #7 (tracking) |
+| 3f | ✅ | Automatic feedback mode (Japanese-only), persistence, staleness, concurrency/chat-switch safety | 3a′, 3b |
+| 3g | 🔲 | Inline composer highlights / continuous review while typing | 3d |
+| 3h | 🔲 | Mistake analytics + Anki suggestions from recurring issues | tracking |
 
 ---
 
@@ -684,7 +683,9 @@ Sprints 4+ follow this dependency-aware sequence:
 | | 14a, 14b | Partial furigana suppression (experimental) + fall-back | 🔲 |
 | | 11c, 11d | AnkiConnect sync + periodic resync | 🔲 |
 | | 1d, 1e | Additional frequency lists + weights | 🔲 |
-| | 3a, 3b | "Check Japanese" pre-send button + structured display | 🔲 |
+| | 3a–3c, 3e, 3f | Writing Feedback: engine, sent-message + draft entry points, structured display, context, sensitivity, auto mode | ✅ |
+| | 3d | Writing Feedback: apply revised / single fix (inline underlines deferred) | 🟡 |
+| | 3g, 3h | Writing Feedback: inline highlights, mistake analytics / Anki suggestions | 🔲 |
 | | 14c | Partial furigana setting + opt-in telemetry | 🔲 |
 
 This order ensures: foundational data layers first → visible features quickly → LLM features once panel exists → tracking correctness before extension → schema-stable export before import → experimental work last.
