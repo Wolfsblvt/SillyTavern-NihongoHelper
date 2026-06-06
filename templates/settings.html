@@ -129,6 +129,53 @@
                     <small class="notes">Maximum conversation turns sent to the LLM as context</small>
                 </div>
                 <hr style="margin: 8px 0;" />
+                <span style="font-weight: 600; font-size: 0.9em; opacity: 0.7;">Writing Feedback</span>
+                <small class="notes">Higher-order feedback on Japanese you write: grammar, naturalness, register, meaning, and word choice. Uses the same connection profile as the Language Assistant.</small>
+                <div class="flex-container flexFlowColumn" style="margin-top: 4px;">
+                    <label for="nihongo_helper_feedback_auto_mode">
+                        <span>Automatic feedback</span>
+                    </label>
+                    <select id="nihongo_helper_feedback_auto_mode" class="text_pole">
+                        <option value="off">Off</option>
+                        <option value="japanese">Japanese messages only</option>
+                    </select>
+                    <small class="notes">Automatically analyze eligible messages you send. <b>Each eligible message triggers an extra model request.</b></small>
+                </div>
+                <div class="flex-container flexFlowColumn" style="margin-top: 4px;">
+                    <label for="nihongo_helper_feedback_sensitivity">
+                        <span>Sensitivity</span>
+                    </label>
+                    <select id="nihongo_helper_feedback_sensitivity" class="text_pole">
+                        <option value="essential">Essential — only real errors</option>
+                        <option value="balanced">Balanced — errors + useful improvements</option>
+                        <option value="strict">Strict — native-like polish</option>
+                    </select>
+                </div>
+                <div class="flex-container flexFlowColumn" style="margin-top: 4px;">
+                    <label for="nihongo_helper_feedback_context">
+                        <span>Conversation context: <span id="nihongo_helper_feedback_context_value">4</span> message(s)</span>
+                    </label>
+                    <input type="range" id="nihongo_helper_feedback_context" min="0" max="10" step="1" value="4" />
+                    <small class="notes">Preceding main-chat messages included so feedback can judge naturalness and whether the reply fits.</small>
+                </div>
+                <label class="checkbox_label" for="nihongo_helper_feedback_expanded" title="Show attached feedback cards expanded by default instead of collapsed.">
+                    <input type="checkbox" id="nihongo_helper_feedback_expanded" />
+                    <span>Expand feedback cards by default</span>
+                </label>
+                <div class="flex-container flexFlowColumn" style="margin-top: 4px;">
+                    <label for="nihongo_helper_feedback_instructions">
+                        <span>Global feedback instructions</span>
+                    </label>
+                    <textarea id="nihongo_helper_feedback_instructions" class="text_pole" rows="5" style="font-size: 0.85em;"></textarea>
+                    <small class="notes">The tutor's analysis philosophy. The machine-readable response format, categories, and severity scale are assembled automatically — you don't need to maintain any JSON here.</small>
+                    <div class="flex-container" style="margin-top: 4px;">
+                        <button id="nihongo_helper_feedback_instructions_reset" class="menu_button menu_button_icon" title="Reset global feedback instructions to the bundled default">
+                            <i class="fa-solid fa-rotate-left"></i>
+                            <span>Reset to default</span>
+                        </button>
+                    </div>
+                </div>
+                <hr style="margin: 8px 0;" />
                 <div class="flex-container">
                     <button id="nihongo_helper_open_kanji_manager" class="menu_button menu_button_icon" title="Open the Kanji Manager to browse, search, and mark kanji as known">
                         <i class="fa-solid fa-book-open"></i>

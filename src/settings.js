@@ -14,6 +14,7 @@ import {
 } from './side-chat-prompts.js';
 import { mountPresetSelector, refreshAllPresetSelectors } from './preset-selector.js';
 import { Popup } from '../../../../popup.js';
+import { DEFAULT_GLOBAL_FEEDBACK_INSTRUCTIONS } from './feedback-schema.js';
 
 /** @readonly Default settings values */
 const defaultSettings = {
@@ -35,6 +36,12 @@ const defaultSettings = {
     chatHistoryMode: 'remove',
     chatHistoryKeepN: 3,
     chatMaxHistory: 20,
+    // ── Writing Feedback ──
+    feedbackAutoMode: 'off',          // 'off' | 'japanese'
+    feedbackContextCount: 4,          // preceding main-chat messages included as context (0–10)
+    feedbackSensitivity: 'balanced',  // 'essential' | 'balanced' | 'strict'
+    feedbackExpandedByDefault: false, // attached feedback cards expanded vs collapsed
+    feedbackGlobalInstructions: '',   // editable global protocol prose ('' = use bundled default)
 };
 
 let uiInjected = false;
@@ -146,6 +153,42 @@ export const nihongoSettings = {
         ensureSettings().chatMaxHistory = val;
         saveSettingsDebounced();
     },
+    get feedbackAutoMode() {
+        return String(ensureSettings().feedbackAutoMode || 'off');
+    },
+    set feedbackAutoMode(val) {
+        ensureSettings().feedbackAutoMode = val;
+        saveSettingsDebounced();
+    },
+    get feedbackContextCount() {
+        const n = Number(ensureSettings().feedbackContextCount);
+        return Number.isFinite(n) ? Math.max(0, Math.min(10, n)) : 4;
+    },
+    set feedbackContextCount(val) {
+        ensureSettings().feedbackContextCount = val;
+        saveSettingsDebounced();
+    },
+    get feedbackSensitivity() {
+        return String(ensureSettings().feedbackSensitivity || 'balanced');
+    },
+    set feedbackSensitivity(val) {
+        ensureSettings().feedbackSensitivity = val;
+        saveSettingsDebounced();
+    },
+    get feedbackExpandedByDefault() {
+        return Boolean(ensureSettings().feedbackExpandedByDefault);
+    },
+    set feedbackExpandedByDefault(val) {
+        ensureSettings().feedbackExpandedByDefault = val;
+        saveSettingsDebounced();
+    },
+    get feedbackGlobalInstructions() {
+        return String(ensureSettings().feedbackGlobalInstructions || '');
+    },
+    set feedbackGlobalInstructions(val) {
+        ensureSettings().feedbackGlobalInstructions = val;
+        saveSettingsDebounced();
+    },
 };
 
 /**
@@ -249,6 +292,26 @@ function applySettingsToUI() {
     if (maxHistoryInput instanceof HTMLInputElement) maxHistoryInput.value = String(settings.chatMaxHistory);
     const maxHistoryValue = document.getElementById('nihongo_helper_max_history_value');
     if (maxHistoryValue) maxHistoryValue.textContent = String(settings.chatMaxHistory);
+
+    // ── Writing Feedback ──
+    const fbAutoMode = document.getElementById('nihongo_helper_feedback_auto_mode');
+    if (fbAutoMode instanceof HTMLSelectElement) fbAutoMode.value = settings.feedbackAutoMode;
+
+    const fbSensitivity = document.getElementById('nihongo_helper_feedback_sensitivity');
+    if (fbSensitivity instanceof HTMLSelectElement) fbSensitivity.value = settings.feedbackSensitivity;
+
+    const fbContext = document.getElementById('nihongo_helper_feedback_context');
+    if (fbContext instanceof HTMLInputElement) fbContext.value = String(settings.feedbackContextCount);
+    const fbContextValue = document.getElementById('nihongo_helper_feedback_context_value');
+    if (fbContextValue) fbContextValue.textContent = String(settings.feedbackContextCount);
+
+    const fbExpanded = document.getElementById('nihongo_helper_feedback_expanded');
+    if (fbExpanded instanceof HTMLInputElement) fbExpanded.checked = settings.feedbackExpandedByDefault;
+
+    const fbInstructions = document.getElementById('nihongo_helper_feedback_instructions');
+    if (fbInstructions instanceof HTMLTextAreaElement) {
+        fbInstructions.value = settings.feedbackGlobalInstructions || DEFAULT_GLOBAL_FEEDBACK_INSTRUCTIONS;
+    }
 
     applyCSSVariables();
 }
@@ -397,6 +460,56 @@ function registerSettingsEventListeners() {
         }
     });
 
+    // ── Writing Feedback ──
+    document.getElementById('nihongo_helper_feedback_auto_mode')?.addEventListener('change', (e) => {
+        if (e.target instanceof HTMLSelectElement) {
+            settings.feedbackAutoMode = e.target.value;
+            saveSettingsDebounced();
+        }
+    });
+
+    document.getElementById('nihongo_helper_feedback_sensitivity')?.addEventListener('change', (e) => {
+        if (e.target instanceof HTMLSelectElement) {
+            settings.feedbackSensitivity = e.target.value;
+            saveSettingsDebounced();
+        }
+    });
+
+    document.getElementById('nihongo_helper_feedback_context')?.addEventListener('input', (e) => {
+        if (e.target instanceof HTMLInputElement) {
+            settings.feedbackContextCount = parseInt(e.target.value, 10);
+            saveSettingsDebounced();
+            const display = document.getElementById('nihongo_helper_feedback_context_value');
+            if (display) display.textContent = String(settings.feedbackContextCount);
+        }
+    });
+
+    document.getElementById('nihongo_helper_feedback_expanded')?.addEventListener('change', (e) => {
+        if (e.target instanceof HTMLInputElement) {
+            settings.feedbackExpandedByDefault = e.target.checked;
+            saveSettingsDebounced();
+        }
+    });
+
+    const fbInstructions = document.getElementById('nihongo_helper_feedback_instructions');
+    if (fbInstructions instanceof HTMLTextAreaElement) {
+        fbInstructions.addEventListener('input', () => {
+            // Store '' when the text matches the bundled default, so future
+            // default changes still flow through for un-customized users.
+            const val = fbInstructions.value;
+            settings.feedbackGlobalInstructions = (val.trim() === DEFAULT_GLOBAL_FEEDBACK_INSTRUCTIONS.trim()) ? '' : val;
+            saveSettingsDebounced();
+        });
+    }
+
+    document.getElementById('nihongo_helper_feedback_instructions_reset')?.addEventListener('click', () => {
+        settings.feedbackGlobalInstructions = '';
+        saveSettingsDebounced();
+        if (fbInstructions instanceof HTMLTextAreaElement) {
+            fbInstructions.value = DEFAULT_GLOBAL_FEEDBACK_INSTRUCTIONS;
+        }
+        if (typeof toastr !== 'undefined') toastr.info('Feedback instructions reset to default.');
+    });
 }
 
 /**

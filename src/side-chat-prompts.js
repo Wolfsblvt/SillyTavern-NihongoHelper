@@ -75,6 +75,7 @@ import { buildActionRegistry, CUSTOM_ACTION_ID } from './side-chat-actions.js';
  * @property {string} personality
  * @property {string} rules
  * @property {string} systemPrompt - Stable system prompt template (cacheable)
+ * @property {string} [feedback] - Optional tutor-specific Writing Feedback guidance (tone/emphasis only).
  * @property {Record<string, any>} actions - Raw per-action definitions (validated by side-chat-actions)
  */
 
@@ -248,6 +249,17 @@ export function getPresetList() {
 /** @returns {TutorPreset|null} */
 export function getActivePreset() {
     return activePreset;
+}
+
+/**
+ * Returns the active preset's tutor-specific Writing Feedback guidance, or an
+ * empty string when the preset doesn't define any (the feedback engine then
+ * uses a neutral bundled fallback). This influences review *style* only — the
+ * machine-readable contract is owned by the extension, not the preset.
+ * @returns {string}
+ */
+export function getActivePresetFeedbackGuidance() {
+    return (activePreset && typeof activePreset.feedback === 'string') ? activePreset.feedback : '';
 }
 
 /**
@@ -632,6 +644,9 @@ function migrateToCurrent(data) {
         personality: typeof data.personality === 'string' ? data.personality : '',
         rules: typeof data.rules === 'string' ? data.rules : '',
         systemPrompt: typeof data.systemPrompt === 'string' ? data.systemPrompt : '',
+        // Optional tutor-specific Writing Feedback guidance. Absent in older
+        // presets; the feedback engine falls back to a neutral bundled default.
+        feedback: typeof data.feedback === 'string' ? data.feedback : '',
         actions: (data.actions && typeof data.actions === 'object') ? data.actions : {},
     };
 
