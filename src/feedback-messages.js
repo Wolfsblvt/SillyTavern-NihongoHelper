@@ -103,8 +103,10 @@ export async function runFeedbackForMessage(messageId, opts = {}) {
         return;
     }
 
-    // Avoid duplicate concurrent work for the same source text.
+    // Avoid duplicate concurrent work for the same source text. A manual click
+    // while a run is in flight just reveals the existing loading card.
     if (isFeedbackInFlight(requestKey) && !opts.regenerate) {
+        if (!opts.auto) liveCards.get(requestKey)?.setExpanded(true);
         return;
     }
 
@@ -117,6 +119,7 @@ export async function runFeedbackForMessage(messageId, opts = {}) {
         mode: 'attached',
         expanded: nihongoSettings.feedbackExpandedByDefault || !opts.auto,
         callbacks: {
+            onRegenerate: () => runFeedbackForMessage(findIndex(message), { regenerate: true }),
             onRemove: () => removeFeedback(message),
             onRetry: () => runFeedbackForMessage(findIndex(message), { regenerate: true }),
         },
@@ -155,10 +158,13 @@ export async function runFeedbackForMessage(messageId, opts = {}) {
             return;
         }
 
-        // Persist and render.
+        // Persist, then update the existing live card in place. (We can't call
+        // renderPersistedCard here — its live-card guard would no-op while this
+        // request is still registered; the card already has the right callbacks.)
         setRecord(message, buildRecord(outcome.result, sourceHash));
         await liveCtx.saveChat();
-        if (liveEl) renderPersistedCard(liveEl, message, { expand: nihongoSettings.feedbackExpandedByDefault || !opts.auto });
+        if (liveEl) placeCard(liveEl, card.element);
+        card.setResult(outcome.result, { stale: false });
     } catch (err) {
         console.error(`[${EXTENSION_NAME}] Feedback run error:`, err);
         card.setError(err?.message || 'Feedback failed.');
