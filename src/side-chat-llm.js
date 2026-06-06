@@ -17,7 +17,7 @@ import { getKnownChars, getLearningChars } from './kanji-state.js';
 import { EXTENSION_NAME } from '../index.js';
 
 /** Default max tokens for side chat responses */
-const MAX_TOKENS = 1024;
+const DEFAULT_MAX_TOKENS = 1024;
 
 // ===== Public API =====
 
@@ -85,18 +85,61 @@ export function buildPrompts(actionId, context, userMessage) {
 export async function sendChatRequest(options) {
     const { mainSystemPrompt, actionInstructions, userPrompt, history = [], onStream, signal } = options;
 
-    const profileId = nihongoSettings.chatProfileId;
-
     // Build message array: stable system + history + system-at-depth + user
     const messages = buildMessages(mainSystemPrompt, actionInstructions, userPrompt, history);
 
-    // Attempt LLM call
+    return await requestCompletion({
+        messages,
+        onStream,
+        signal,
+        maxTokens: DEFAULT_MAX_TOKENS,
+        fallbackSystemPrompt: [mainSystemPrompt, actionInstructions].filter(Boolean).join('\n\n'),
+        fallbackUserPrompt: userPrompt,
+    });
+}
+
+/**
+ * @typedef {Object} CompletionOptions
+ * @property {Array<{role: string, content: string}>} messages - Full message array to send.
+ * @property {(update: {text: string, reasoning: string}) => void} [onStream] - Streaming callback.
+ * @property {AbortSignal} [signal] - Abort signal.
+ * @property {number} [maxTokens] - Max response tokens.
+ * @property {string} [profileId] - Connection profile id (defaults to the side-chat profile setting).
+ * @property {string} [fallbackSystemPrompt] - System prompt for the generateRaw fallback (no CM profile).
+ * @property {string} [fallbackUserPrompt] - User prompt for the generateRaw fallback.
+ */
+
+/**
+ * Low-level completion request shared by the side chat and the Writing Feedback
+ * engine. Uses the configured Connection Manager profile when available
+ * (streaming first, non-streaming fallback); otherwise falls back to ST's
+ * `generateRaw` (no streaming/reasoning).
+ *
+ * This is the single place that talks to the model, so both features get the
+ * same provider handling, streaming, and abort behavior.
+ *
+ * @param {CompletionOptions} options
+ * @returns {Promise<LLMCallResult>}
+ */
+export async function requestCompletion(options) {
+    const {
+        messages,
+        onStream,
+        signal,
+        maxTokens = DEFAULT_MAX_TOKENS,
+        profileId = nihongoSettings.chatProfileId,
+        fallbackSystemPrompt,
+        fallbackUserPrompt,
+    } = options;
+
     if (profileId && isConnectionManagerAvailable()) {
-        return await callWithConnectionManager(profileId, messages, onStream, signal);
+        return await callWithConnectionManager(profileId, messages, onStream, signal, maxTokens);
     }
 
-    // Fallback: generateRaw (no streaming, no reasoning)
-    return await callWithGenerateRaw(userPrompt, mainSystemPrompt + '\n\n' + actionInstructions, signal);
+    // Fallback: generateRaw (no streaming, no reasoning).
+    const sys = fallbackSystemPrompt ?? joinMessages(messages, m => m.role === 'system');
+    const usr = fallbackUserPrompt ?? joinMessages(messages, m => m.role !== 'system');
+    return await callWithGenerateRaw(usr, sys, signal);
 }
 
 /**
@@ -252,7 +295,7 @@ function buildMessages(mainSystemPrompt, actionInstructions, userPrompt, history
  * @param {AbortSignal} [signal]
  * @returns {Promise<LLMCallResult>}
  */
-async function callWithConnectionManager(profileId, messages, onStream, signal) {
+async function callWithConnectionManager(profileId, messages, onStream, signal, maxTokens = DEFAULT_MAX_TOKENS) {
     let model = '';
     try {
         const profile = ConnectionManagerRequestService.getProfile(profileId);
@@ -265,7 +308,7 @@ async function callWithConnectionManager(profileId, messages, onStream, signal) 
             const streamResponse = await ConnectionManagerRequestService.sendRequest(
                 profileId,
                 messages,
-                MAX_TOKENS,
+                maxTokens,
                 { extractData: true, includePreset: true, stream: true, signal },
             );
 
@@ -294,12 +337,23 @@ async function callWithConnectionManager(profileId, messages, onStream, signal) 
     const response = await ConnectionManagerRequestService.sendRequest(
         profileId,
         messages,
-        MAX_TOKENS,
+        maxTokens,
         { extractData: true, includePreset: true, stream: false, signal },
     );
 
     const extracted = extractResponse(response);
     return { ...extracted, model, profileId, streamed: false };
+}
+
+/**
+ * Joins the content of messages matching a predicate into a single string,
+ * used to synthesize system/user prompts for the generateRaw fallback.
+ * @param {Array<{role: string, content: string}>} messages
+ * @param {(m: {role: string, content: string}) => boolean} predicate
+ * @returns {string}
+ */
+function joinMessages(messages, predicate) {
+    return (messages || []).filter(predicate).map(m => m.content).filter(Boolean).join('\n\n');
 }
 
 /**
