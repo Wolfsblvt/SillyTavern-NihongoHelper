@@ -11,6 +11,7 @@ import { loadFrequencyData } from './src/frequency.js';
 import { initDictSearchUI } from './src/dict-search-ui.js';
 import { initSideChat } from './src/side-chat.js';
 import { initFeedbackMessages } from './src/feedback-messages.js';
+import { initDraftReview } from './src/feedback-draft.js';
 import {
     initPresets,
     loadPreset,
@@ -73,6 +74,8 @@ export async function init() {
 
     // Writing Feedback: per-message action button, attached cards, auto mode.
     initFeedbackMessages();
+    // Writing Feedback: "Review Japanese" composer button + draft-review modal.
+    initDraftReview();
 
     // Add wand menu items
     injectWandMenu();

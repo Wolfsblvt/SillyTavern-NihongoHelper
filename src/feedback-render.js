@@ -114,7 +114,8 @@ export function createFeedbackCard(options = {}) {
         element.classList.add('nihongo-fb-loading');
         renderBadges({ phase: 'loading' });
         body.replaceChildren(buildLoadingView(reasoning));
-        if (mode === 'attached' && reasoning) setExpanded(true);
+        // Note: we intentionally do NOT force-expand here. Manual runs are
+        // created already-expanded; automatic runs stay collapsed/unobtrusive.
     }
 
     function setError(error, raw) {

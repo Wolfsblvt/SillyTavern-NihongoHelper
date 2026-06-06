@@ -2245,8 +2245,10 @@
     background: var(--white10a, rgba(255, 255, 255, 0.05));
 }
 
+/* In the modal the header stays visible (no collapse) to show the badges. */
 .nihongo-fb-mode-modal .nihongo-fb-header {
-    display: none; /* modal supplies its own header */
+    padding: 0 0 6px;
+    border-bottom: 1px solid color-mix(in srgb, var(--SmartThemeBorderColor) 40%, transparent);
 }
 
 .nihongo-fb-header-icon {
@@ -2307,7 +2309,9 @@
 }
 .nihongo-fb-mode-modal .nihongo-fb-body {
     border-top: none;
-    padding: 0;
+    padding: 4px 0 0;
+    max-height: 48vh;
+    overflow-y: auto;
 }
 
 /* ── Badges ── */
