@@ -2203,3 +2203,360 @@
        margins so it sits flush with the side-chat width. */
     margin: 0;
 }
+
+/* ============================================================
+   Writing Feedback
+   ============================================================ */
+
+/* The per-message action button only makes sense on user-authored messages. */
+.mes[is_user="false"] .mes_nihongo_feedback {
+    display: none;
+}
+
+/* ── Attached feedback card ── */
+
+.nihongo-feedback-card {
+    margin: 8px 0 2px;
+    border: 1px solid color-mix(in srgb, var(--SmartThemeBorderColor) 60%, transparent);
+    border-radius: 8px;
+    background: var(--black10a);
+    font-size: calc(var(--mainFontSize) * 0.92);
+    overflow: hidden;
+}
+
+.nihongo-feedback-card.nihongo-fb-mode-modal {
+    margin: 0;
+    background: transparent;
+    border: none;
+}
+
+.nihongo-fb-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    user-select: none;
+}
+
+.nihongo-fb-clickable {
+    cursor: pointer;
+}
+.nihongo-fb-clickable:hover {
+    background: var(--white10a, rgba(255, 255, 255, 0.05));
+}
+
+.nihongo-fb-mode-modal .nihongo-fb-header {
+    display: none; /* modal supplies its own header */
+}
+
+.nihongo-fb-header-icon {
+    color: var(--SmartThemeQuoteColor, #8ab4f8);
+    opacity: 0.85;
+}
+
+.nihongo-fb-title {
+    font-weight: 600;
+    opacity: 0.85;
+}
+
+.nihongo-fb-badges {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.nihongo-fb-header-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 2px;
+}
+
+.nihongo-fb-chevron {
+    transition: transform 0.2s;
+    font-size: 0.8em;
+    opacity: 0.6;
+}
+.nihongo-fb-collapsed .nihongo-fb-chevron {
+    transform: rotate(-90deg);
+}
+
+.nihongo-fb-icon-btn {
+    background: transparent;
+    border: none;
+    color: var(--SmartThemeBodyColor);
+    opacity: 0.55;
+    cursor: pointer;
+    padding: 3px 5px;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+.nihongo-fb-icon-btn:hover {
+    opacity: 1;
+    background: var(--white10a, rgba(255, 255, 255, 0.08));
+}
+
+/* Collapsed: hide body. Modal: always show. */
+.nihongo-fb-collapsed .nihongo-fb-body {
+    display: none;
+}
+
+.nihongo-fb-body {
+    padding: 4px 12px 12px;
+    border-top: 1px solid color-mix(in srgb, var(--SmartThemeBorderColor) 40%, transparent);
+}
+.nihongo-fb-mode-modal .nihongo-fb-body {
+    border-top: none;
+    padding: 0;
+}
+
+/* ── Badges ── */
+
+.nihongo-fb-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-size: 0.78em;
+    font-weight: 600;
+    line-height: 1.6;
+    white-space: nowrap;
+}
+
+.nihongo-fb-badge-count { background: var(--black30a, rgba(0, 0, 0, 0.25)); }
+.nihongo-fb-badge-loading { background: rgba(120, 160, 255, 0.18); }
+.nihongo-fb-badge-error,
+.nihongo-fb-badge-stale { background: rgba(255, 170, 60, 0.2); }
+.nihongo-fb-sev-none { background: rgba(80, 200, 120, 0.2); color: #6fd693; }
+
+/* Severity colors (badges + issue borders). */
+.nihongo-fb-sev-info { background: rgba(120, 160, 255, 0.18); }
+.nihongo-fb-sev-minor { background: rgba(230, 200, 90, 0.2); }
+.nihongo-fb-sev-major { background: rgba(255, 150, 70, 0.22); }
+.nihongo-fb-sev-critical { background: rgba(240, 90, 90, 0.25); }
+
+.nihongo-fb-sev-border-info { border-left: 3px solid rgba(120, 160, 255, 0.6); }
+.nihongo-fb-sev-border-minor { border-left: 3px solid rgba(230, 200, 90, 0.7); }
+.nihongo-fb-sev-border-major { border-left: 3px solid rgba(255, 150, 70, 0.8); }
+.nihongo-fb-sev-border-critical { border-left: 3px solid rgba(240, 90, 90, 0.9); }
+
+/* ── Result body ── */
+
+.nihongo-fb-summary {
+    margin: 6px 0;
+    line-height: 1.5;
+}
+
+.nihongo-fb-stale-note,
+.nihongo-fb-noissues {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 6px 8px;
+    margin: 6px 0;
+    border-radius: 6px;
+    font-size: 0.9em;
+    line-height: 1.4;
+}
+.nihongo-fb-stale-note { background: rgba(255, 170, 60, 0.12); }
+.nihongo-fb-noissues { background: rgba(80, 200, 120, 0.12); color: #6fd693; }
+
+.nihongo-fb-section { margin: 10px 0 4px; }
+
+.nihongo-fb-section-title {
+    font-weight: 600;
+    font-size: 0.85em;
+    opacity: 0.7;
+    margin-bottom: 4px;
+}
+
+.nihongo-fb-jp {
+    font-family: var(--monoFontFamily, monospace), 'Noto Sans JP', sans-serif;
+}
+
+.nihongo-fb-strength {
+    padding: 3px 0;
+    line-height: 1.5;
+}
+.nihongo-fb-strength .nihongo-fb-quote {
+    font-weight: 600;
+    color: #6fd693;
+}
+
+/* ── Revised text block ── */
+
+.nihongo-fb-revised-text {
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: var(--black30a, rgba(0, 0, 0, 0.2));
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.nihongo-fb-revised-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+/* ── Issue cards ── */
+
+.nihongo-fb-issue {
+    padding: 8px 10px;
+    margin: 6px 0;
+    border-radius: 6px;
+    background: var(--black20a, rgba(0, 0, 0, 0.15));
+}
+
+.nihongo-fb-issue-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 5px;
+}
+
+.nihongo-fb-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-size: 0.78em;
+    font-weight: 600;
+    background: var(--black30a, rgba(0, 0, 0, 0.25));
+}
+.nihongo-fb-conf { opacity: 0.75; font-weight: 500; }
+
+.nihongo-fb-change {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 4px 0;
+    line-height: 1.7;
+}
+.nihongo-fb-quote {
+    text-decoration: line-through;
+    text-decoration-color: rgba(240, 90, 90, 0.6);
+    opacity: 0.85;
+}
+.nihongo-fb-replacement {
+    color: #6fd693;
+    font-weight: 600;
+}
+.nihongo-fb-arrow { opacity: 0.5; font-size: 0.8em; }
+.nihongo-fb-anchor-warn { color: rgba(255, 170, 60, 0.9); font-size: 0.85em; }
+
+.nihongo-fb-issue-exp {
+    line-height: 1.5;
+    margin: 4px 0;
+}
+
+.nihongo-fb-alts {
+    font-size: 0.9em;
+    opacity: 0.85;
+    margin-top: 4px;
+}
+.nihongo-fb-alts-label { opacity: 0.7; }
+.nihongo-fb-alt { color: var(--SmartThemeQuoteColor, #8ab4f8); }
+
+.nihongo-fb-apply-issue,
+.nihongo-fb-apply-revised {
+    margin-top: 6px;
+    font-size: 0.85em;
+}
+
+/* ── Loading / error states ── */
+
+.nihongo-fb-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    opacity: 0.8;
+}
+
+.nihongo-fb-reasoning {
+    margin-top: 6px;
+    padding: 6px 8px;
+    max-height: 160px;
+    overflow-y: auto;
+    border-left: 2px solid rgba(255, 200, 50, 0.3);
+    font-size: 0.85em;
+    opacity: 0.75;
+    white-space: pre-wrap;
+    line-height: 1.4;
+}
+
+.nihongo-fb-error-msg {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    color: rgba(255, 150, 70, 0.95);
+    line-height: 1.4;
+}
+.nihongo-fb-error-actions { margin-top: 8px; }
+
+.nihongo-fb-raw {
+    margin-top: 8px;
+    font-size: 0.85em;
+}
+.nihongo-fb-raw pre {
+    max-height: 200px;
+    overflow: auto;
+    padding: 6px 8px;
+    background: var(--black30a, rgba(0, 0, 0, 0.25));
+    border-radius: 4px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* ── Draft review modal ── */
+
+.nihongo-fb-modal {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    text-align: left;
+    min-width: min(680px, 80vw);
+}
+
+.nihongo-fb-modal-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+}
+.nihongo-fb-modal-head .nihongo-fb-badges { margin-left: auto; }
+
+.nihongo-fb-modal-scroll {
+    max-height: 50vh;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.nihongo-fb-working {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.nihongo-fb-working label {
+    font-weight: 600;
+    font-size: 0.85em;
+    opacity: 0.7;
+}
+.nihongo-fb-working textarea {
+    width: 100%;
+    resize: vertical;
+    min-height: 60px;
+    border-radius: 6px;
+    line-height: 1.7;
+}
+.nihongo-fb-working-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}

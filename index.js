@@ -10,6 +10,7 @@ import { loadTracking } from './src/tracking.js';
 import { loadFrequencyData } from './src/frequency.js';
 import { initDictSearchUI } from './src/dict-search-ui.js';
 import { initSideChat } from './src/side-chat.js';
+import { initFeedbackMessages } from './src/feedback-messages.js';
 import {
     initPresets,
     loadPreset,
@@ -69,6 +70,9 @@ export async function init() {
     // Register side panel tabs (must come before wand menu)
     initDictSearchUI();
     initSideChat();
+
+    // Writing Feedback: per-message action button, attached cards, auto mode.
+    initFeedbackMessages();
 
     // Add wand menu items
     injectWandMenu();
