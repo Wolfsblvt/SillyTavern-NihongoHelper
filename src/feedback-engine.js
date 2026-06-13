@@ -40,6 +40,7 @@ const inFlight = new Map();
  * @property {string} [error]      Human-readable error (parse/validation/network/abort).
  * @property {boolean} [aborted]   True when the request was cancelled.
  * @property {string} [raw]        Raw model output (for a debug disclosure).
+ * @property {string} [reasoning]  Final provider reasoning/thinking (when available).
  * @property {FeedbackRunMeta} meta
  *
  * @typedef {Object} FeedbackRunMeta
@@ -124,7 +125,7 @@ export async function runFeedback(options) {
         }
 
         resolveResultAnchors(parsed.result, targetText);
-        return { ok: true, result: parsed.result, raw: parsed.raw, meta };
+        return { ok: true, result: parsed.result, raw: parsed.raw, reasoning: response.reasoning || '', meta };
     } catch (error) {
         meta.durationMs = Date.now() - startTime;
         if (signal.aborted || error?.name === 'AbortError') {

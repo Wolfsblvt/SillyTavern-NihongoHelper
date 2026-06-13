@@ -161,10 +161,10 @@ export async function runFeedbackForMessage(messageId, opts = {}) {
         // Persist, then update the existing live card in place. (We can't call
         // renderPersistedCard here — its live-card guard would no-op while this
         // request is still registered; the card already has the right callbacks.)
-        setRecord(message, buildRecord(outcome.result, sourceHash));
+        setRecord(message, buildRecord(outcome.result, sourceHash, outcome.reasoning));
         await liveCtx.saveChat();
         if (liveEl) placeCard(liveEl, card.element);
-        card.setResult(outcome.result, { stale: false });
+        card.setResult(outcome.result, { stale: false, reasoning: outcome.reasoning });
     } catch (err) {
         console.error(`[${EXTENSION_NAME}] Feedback run error:`, err);
         card.setError(err?.message || 'Feedback failed.');
@@ -219,9 +219,10 @@ function setRecord(message, record) {
 /**
  * @param {import('./feedback-schema.js').FeedbackResult} result
  * @param {string} sourceHash
+ * @param {string} [reasoning] - Model reasoning/thinking captured during the run.
  * @returns {object}
  */
-function buildRecord(result, sourceHash) {
+function buildRecord(result, sourceHash, reasoning = '') {
     const preset = getActivePreset();
     return {
         v: RECORD_VERSION,
@@ -230,6 +231,7 @@ function buildRecord(result, sourceHash) {
         presetId: getActivePresetId() || '',
         presetName: preset?.name || '',
         sensitivity: nihongoSettings.feedbackSensitivity,
+        reasoning: typeof reasoning === 'string' ? reasoning : '',
         result,
     };
 }
@@ -277,7 +279,7 @@ function renderPersistedCard(mesEl, message, opts = {}) {
             onRemove: () => removeFeedback(message),
         },
     });
-    card.setResult(record.result, { stale });
+    card.setResult(record.result, { stale, reasoning: record.reasoning });
     placeCard(mesEl, card.element);
 }
 

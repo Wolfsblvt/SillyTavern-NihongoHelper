@@ -14,6 +14,7 @@ import { Popup, POPUP_TYPE, POPUP_RESULT } from '../../../../popup.js';
 import { EXTENSION_NAME } from '../index.js';
 import { runFeedback, buildRequestKey } from './feedback-engine.js';
 import { createFeedbackCard } from './feedback-render.js';
+import { attachKanjiTooltip, detachKanjiTooltip } from './kanji-tooltip.js';
 
 const COMPOSER_BUTTON_ID = 'nihongo_review_button';
 const COMPOSER_TEXTAREA_ID = 'send_textarea';
@@ -100,6 +101,12 @@ async function openDraftReview() {
         onClosing: () => { controller.abort(); return true; },
     });
 
+    // Give the modal the same kanji/word hover tooltips as the chat. The
+    // tooltip element is parented to the dialog so it layers above the popup.
+    if (popup.dlg) {
+        attachKanjiTooltip(popup.dlg, { boundingEl: popup.dlg, appendTo: popup.dlg });
+    }
+
     // ── Kick off analysis (re-runnable via the card's retry). ──
     async function runAnalysis() {
         card.setLoading();
@@ -116,7 +123,7 @@ async function openDraftReview() {
                 card.setError(outcome.error || 'Feedback failed.', outcome.raw);
                 return;
             }
-            card.setResult(outcome.result);
+            card.setResult(outcome.result, { reasoning: outcome.reasoning });
         } catch (err) {
             if (controller.signal.aborted) return;
             console.error(`[${EXTENSION_NAME}] Draft review failed:`, err);
@@ -133,6 +140,7 @@ async function openDraftReview() {
     } finally {
         modalOpen = false;
         controller.abort();
+        if (popup.dlg) detachKanjiTooltip(popup.dlg);
     }
 
     // Apply the working text to the composer only on explicit confirmation.
