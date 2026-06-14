@@ -1520,6 +1520,14 @@ export function isChatInspectActive() {
 }
 
 /**
+ * Immediately hides the hover word/kanji tooltip. Used by the feedback overlay
+ * so its click-opened popover doesn't overlap a tooltip left over from a hover.
+ */
+export function hideKanjiTooltip() {
+    hideTooltip();
+}
+
+/**
  * Enables kanji inspect mode on the chat area.
  * Hover over any kanji in messages to see a tooltip with details.
  */

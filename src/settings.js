@@ -42,6 +42,8 @@ const defaultSettings = {
     feedbackSensitivity: 'balanced',  // 'essential' | 'balanced' | 'strict'
     feedbackExpandedByDefault: false, // attached feedback cards expanded vs collapsed
     feedbackGlobalInstructions: '',   // editable global protocol prose ('' = use bundled default)
+    feedbackInlineMode: 'off',        // inline highlights on sent messages: 'off' | 'auto' | 'always'
+    feedbackApplyPolicy: 'one-reply', // when in-place apply is offered: 'latest-only' | 'one-reply' | 'always'
 };
 
 let uiInjected = false;
@@ -189,6 +191,20 @@ export const nihongoSettings = {
         ensureSettings().feedbackGlobalInstructions = val;
         saveSettingsDebounced();
     },
+    get feedbackInlineMode() {
+        return String(ensureSettings().feedbackInlineMode || 'off');
+    },
+    set feedbackInlineMode(val) {
+        ensureSettings().feedbackInlineMode = val;
+        saveSettingsDebounced();
+    },
+    get feedbackApplyPolicy() {
+        return String(ensureSettings().feedbackApplyPolicy || 'one-reply');
+    },
+    set feedbackApplyPolicy(val) {
+        ensureSettings().feedbackApplyPolicy = val;
+        saveSettingsDebounced();
+    },
 };
 
 /**
@@ -307,6 +323,12 @@ function applySettingsToUI() {
 
     const fbExpanded = document.getElementById('nihongo_helper_feedback_expanded');
     if (fbExpanded instanceof HTMLInputElement) fbExpanded.checked = settings.feedbackExpandedByDefault;
+
+    const fbInlineMode = document.getElementById('nihongo_helper_feedback_inline_mode');
+    if (fbInlineMode instanceof HTMLSelectElement) fbInlineMode.value = settings.feedbackInlineMode;
+
+    const fbApplyPolicy = document.getElementById('nihongo_helper_feedback_apply_policy');
+    if (fbApplyPolicy instanceof HTMLSelectElement) fbApplyPolicy.value = settings.feedbackApplyPolicy;
 
     const fbInstructions = document.getElementById('nihongo_helper_feedback_instructions');
     if (fbInstructions instanceof HTMLTextAreaElement) {
@@ -487,6 +509,21 @@ function registerSettingsEventListeners() {
     document.getElementById('nihongo_helper_feedback_expanded')?.addEventListener('change', (e) => {
         if (e.target instanceof HTMLInputElement) {
             settings.feedbackExpandedByDefault = e.target.checked;
+            saveSettingsDebounced();
+        }
+    });
+
+    document.getElementById('nihongo_helper_feedback_inline_mode')?.addEventListener('change', (e) => {
+        if (e.target instanceof HTMLSelectElement) {
+            settings.feedbackInlineMode = e.target.value;
+            saveSettingsDebounced();
+            document.dispatchEvent(new CustomEvent('nihongo-feedback-inline-mode-changed'));
+        }
+    });
+
+    document.getElementById('nihongo_helper_feedback_apply_policy')?.addEventListener('change', (e) => {
+        if (e.target instanceof HTMLSelectElement) {
+            settings.feedbackApplyPolicy = e.target.value;
             saveSettingsDebounced();
         }
     });

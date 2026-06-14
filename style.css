@@ -2617,3 +2617,135 @@
     gap: 6px;
     flex-wrap: wrap;
 }
+
+/* ── Inline overlay: marks on the sent message ── */
+
+/* A flagged span underneath the original Japanese. Underline (not background)
+   keeps furigana ruby readable; click opens the issue popover. */
+.nihongo-fb-mark {
+    cursor: pointer;
+    border-radius: 2px;
+    text-decoration-line: underline;
+    text-decoration-style: solid;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 3px;
+    transition: background-color 0.12s ease;
+}
+.nihongo-fb-mark:hover {
+    background: var(--white10a, rgba(255, 255, 255, 0.09));
+}
+
+.nihongo-fb-mark-sev-info { text-decoration-color: rgba(120, 160, 255, 0.85); }
+.nihongo-fb-mark-sev-minor { text-decoration-color: rgba(230, 200, 90, 0.9); }
+.nihongo-fb-mark-sev-major { text-decoration-color: rgba(255, 150, 70, 0.95); }
+.nihongo-fb-mark-sev-critical { text-decoration-color: rgba(240, 90, 90, 1); }
+
+/* Staged for apply: tinted + dashed so it reads as "pending change". */
+.nihongo-fb-mark-staged {
+    background: rgba(111, 214, 147, 0.18);
+    text-decoration-style: dashed;
+}
+
+/* Header inline-highlights toggle, active state. */
+.nihongo-fb-inline-toggle.nihongo-fb-inline-active {
+    color: var(--SmartThemeQuoteColor, #8ab4f8);
+    opacity: 1;
+}
+
+/* ── Issue popover (click-opened from a mark) ── */
+
+.nihongo-fb-popover {
+    position: fixed;
+    z-index: 10000;
+    max-width: min(380px, 92vw);
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid color-mix(in srgb, var(--SmartThemeBorderColor) 70%, transparent);
+    background: var(--SmartThemeBlurTintColor, rgba(20, 20, 25, 0.96));
+    backdrop-filter: blur(6px);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+    font-size: 0.92em;
+    line-height: 1.5;
+    text-align: left;
+}
+
+.nihongo-fb-popover-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+.nihongo-fb-popover-head .nihongo-fb-badge { font-size: 0.78em; }
+
+.nihongo-fb-popover-close {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    color: var(--SmartThemeBodyColor);
+    cursor: pointer;
+    opacity: 0.6;
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+.nihongo-fb-popover-close:hover {
+    opacity: 1;
+    background: var(--white10a, rgba(255, 255, 255, 0.08));
+}
+
+.nihongo-fb-popover .nihongo-fb-change { margin: 4px 0; }
+.nihongo-fb-popover .nihongo-fb-issue-exp { margin: 6px 0 0; }
+
+.nihongo-fb-popover-actions {
+    margin-top: 8px;
+    display: flex;
+    justify-content: flex-end;
+}
+
+/* ── Staging tray + per-issue stage toggles ── */
+
+.nihongo-fb-stage-btn {
+    margin-top: 6px;
+    font-size: 0.85em;
+}
+.nihongo-fb-stage-btn.nihongo-fb-staged {
+    color: #6fd693;
+    border-color: rgba(111, 214, 147, 0.6);
+}
+
+.nihongo-fb-staging-tray {
+    margin-top: 12px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px dashed color-mix(in srgb, var(--SmartThemeBorderColor) 60%, transparent);
+    background: var(--black20a, rgba(0, 0, 0, 0.15));
+}
+
+.nihongo-fb-staging-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.nihongo-fb-staging-info {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.88em;
+    opacity: 0.85;
+}
+.nihongo-fb-staging-apply {
+    margin-left: auto;
+    font-size: 0.85em;
+}
+
+.nihongo-fb-staging-preview {
+    margin-top: 8px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: var(--black30a, rgba(0, 0, 0, 0.22));
+    border-left: 3px solid rgba(111, 214, 147, 0.7);
+    line-height: 1.7;
+    word-break: break-word;
+}
+.nihongo-fb-staging-preview p { margin: 0 0 0.4em; }
+.nihongo-fb-staging-preview p:last-child { margin-bottom: 0; }

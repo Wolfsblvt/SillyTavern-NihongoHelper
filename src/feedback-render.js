@@ -58,6 +58,14 @@ export function createFeedbackCard(options = {}) {
     let lastReasoning = '';
     /** @type {HTMLElement|null} Live reasoning text element during streaming. */
     let loadingReasoningTextEl = null;
+    /** @type {import('./feedback-overlay.js').FeedbackSession|null} */
+    let currentSession = null;
+    /** @type {(() => void)|null} */
+    let sessionUnsub = null;
+    /** Opts from the last setResult, so session-driven re-renders can reuse them. */
+    let lastResultOpts = {};
+    /** @type {HTMLElement|null} Header inline-highlights toggle button. */
+    let inlineToggleBtn = null;
 
     const element = document.createElement('div');
     element.className = `nihongo-feedback-card nihongo-fb-mode-${mode}`;
@@ -118,6 +126,7 @@ export function createFeedbackCard(options = {}) {
     // ── State setters ──
     function setLoading(reasoning) {
         currentResult = null;
+        clearSession();
         element.classList.remove('nihongo-fb-has-error', 'nihongo-fb-stale');
         element.classList.add('nihongo-fb-loading');
         renderBadges({ phase: 'loading' });
@@ -144,6 +153,7 @@ export function createFeedbackCard(options = {}) {
 
     function setError(error, raw) {
         currentResult = null;
+        clearSession();
         loadingReasoningTextEl = null;
         element.classList.remove('nihongo-fb-loading', 'nihongo-fb-stale');
         element.classList.add('nihongo-fb-has-error');
@@ -157,20 +167,61 @@ export function createFeedbackCard(options = {}) {
         loadingReasoningTextEl = null;
         element.classList.remove('nihongo-fb-loading', 'nihongo-fb-has-error');
         element.classList.toggle('nihongo-fb-stale', Boolean(opts.stale));
-        renderBadges({ phase: 'ready', result, stale: opts.stale });
-        body.replaceChildren(buildResultView(result, {
+
+        // (Re)bind the session that drives staging + inline highlights; the card
+        // re-renders its body and inline toggle whenever the session changes.
+        clearSession();
+        if (opts.session) {
+            currentSession = opts.session;
+            sessionUnsub = currentSession.subscribe(() => { renderInlineToggle(); refreshResult(); });
+        }
+        lastResultOpts = {
             stale: opts.stale,
+            // Prefer explicitly-supplied (persisted) reasoning, else this run's.
+            reasoning: opts.reasoning ?? lastReasoning,
+        };
+        renderInlineToggle();
+        refreshResult();
+    }
+
+    function refreshResult() {
+        if (!currentResult) return;
+        renderBadges({ phase: 'ready', result: currentResult, stale: lastResultOpts.stale });
+        body.replaceChildren(buildResultView(currentResult, {
+            stale: lastResultOpts.stale,
             showApply: Boolean(options.showApply),
             callbacks,
-            // Prefer an explicitly-supplied (persisted) reasoning, else the
-            // reasoning streamed during this run. Collapsed once the result shows.
-            reasoning: opts.reasoning ?? lastReasoning,
+            reasoning: lastResultOpts.reasoning,
+            session: currentSession,
         }));
     }
 
     function setStale(stale) {
         element.classList.toggle('nihongo-fb-stale', Boolean(stale));
-        if (currentResult) renderBadges({ phase: 'ready', result: currentResult, stale });
+        lastResultOpts.stale = Boolean(stale);
+        if (currentResult) refreshResult();
+    }
+
+    function clearSession() {
+        if (sessionUnsub) { sessionUnsub(); sessionUnsub = null; }
+        currentSession = null;
+        renderInlineToggle();
+    }
+
+    /** (Re)renders the header inline-highlights toggle from the current session. */
+    function renderInlineToggle() {
+        if (inlineToggleBtn) { inlineToggleBtn.remove(); inlineToggleBtn = null; }
+        if (mode !== 'attached') return;
+        const s = currentSession;
+        if (!s || !s.inlineToggleable) return;
+        const active = s.inlineVisible;
+        inlineToggleBtn = iconButton('fa-highlighter', active ? 'Hide inline highlights' : 'Show inline highlights', (e) => {
+            e.stopPropagation();
+            s.toggleInline();
+        });
+        inlineToggleBtn.classList.add('nihongo-fb-inline-toggle');
+        inlineToggleBtn.classList.toggle('nihongo-fb-inline-active', active);
+        actions.insertBefore(inlineToggleBtn, actions.firstChild);
     }
 
     function renderBadges(state) {
@@ -224,11 +275,14 @@ export function createFeedbackCard(options = {}) {
 /**
  * Builds the full result body: summary, strengths, revised text, and issues.
  * @param {import('./feedback-schema.js').FeedbackResult} result
- * @param {{stale?: boolean, showApply?: boolean, callbacks?: FeedbackCardCallbacks}} [opts]
+ * @param {{stale?: boolean, showApply?: boolean, callbacks?: FeedbackCardCallbacks, reasoning?: string, session?: import('./feedback-overlay.js').FeedbackSession}} [opts]
  * @returns {HTMLElement}
  */
 export function buildResultView(result, opts = {}) {
-    const { stale = false, showApply = false, callbacks = {}, reasoning = '' } = opts;
+    const { stale = false, showApply = false, callbacks = {}, reasoning = '', session = null } = opts;
+    // In-place staging is offered only by the attached card (via a session),
+    // never the modal, and never on stale feedback (anchors no longer match).
+    const staging = (session && session.applyAllowed && !stale) ? session : null;
     const view = document.createElement('div');
     view.className = 'nihongo-fb-result';
 
@@ -259,11 +313,11 @@ export function buildResultView(result, opts = {}) {
     }
 
     if (result.revisedText) {
-        view.appendChild(buildRevisedBlock(result.revisedText, { showApply, onApply: callbacks.onApplyRevised }));
+        view.appendChild(buildRevisedBlock(result.revisedText, { showApply, onApply: callbacks.onApplyRevised, staging }));
     }
 
     if (result.issues?.length) {
-        const issueEls = result.issues.map(issue => buildIssueCard(issue, { showApply, onApplyIssue: callbacks.onApplyIssue }));
+        const issueEls = result.issues.map(issue => buildIssueCard(issue, { showApply, onApplyIssue: callbacks.onApplyIssue, staging }));
         view.appendChild(buildSection(`Issues (${result.issues.length})`, 'fa-list-check', issueEls));
     } else {
         const ok = document.createElement('div');
@@ -273,13 +327,19 @@ export function buildResultView(result, opts = {}) {
         view.appendChild(ok);
     }
 
+    // Staging tray (attached card, apply allowed, not stale): stage fixes and
+    // commit them to the message in one edit.
+    if (staging && (result.revisedText || result.issues?.some(isIssueSafeToApply))) {
+        view.appendChild(buildStagingTray(staging));
+    }
+
     return view;
 }
 
 /**
  * Builds a single issue card.
  * @param {import('./feedback-schema.js').FeedbackIssue} issue
- * @param {{showApply?: boolean, onApplyIssue?: (issue: any) => void}} [opts]
+ * @param {{showApply?: boolean, onApplyIssue?: (issue: any) => void, staging?: import('./feedback-overlay.js').FeedbackSession}} [opts]
  * @returns {HTMLElement}
  */
 export function buildIssueCard(issue, opts = {}) {
@@ -378,7 +438,82 @@ export function buildIssueCard(issue, opts = {}) {
         card.appendChild(applyBtn);
     }
 
+    // Per-issue staging (attached card). Only safe-anchored fixes can stage.
+    if (opts.staging && isIssueSafeToApply(issue)) {
+        card.appendChild(buildStageToggle(issue, opts.staging));
+    }
+
     return card;
+}
+
+/**
+ * Builds a reversible "Stage fix" toggle for an issue, shared by the issue card
+ * and the inline popover. Reflects and drives the session's staging state.
+ * @param {import('./feedback-schema.js').FeedbackIssue} issue
+ * @param {import('./feedback-overlay.js').FeedbackSession} session
+ * @returns {HTMLButtonElement}
+ */
+export function buildStageToggle(issue, session) {
+    const staged = session.isStaged(issue);
+    const btn = document.createElement('button');
+    btn.className = `menu_button menu_button_icon nihongo-fb-stage-btn${staged ? ' nihongo-fb-staged' : ''}`;
+    btn.innerHTML = `<i class="fa-solid ${staged ? 'fa-square-check' : 'fa-square'}"></i> `;
+    btn.appendChild(document.createTextNode(staged ? 'Staged' : 'Stage fix'));
+    btn.addEventListener('click', (e) => { e.stopPropagation(); session.toggleStage(issue); });
+    return btn;
+}
+
+/**
+ * Builds the staging tray: a status line, apply/clear actions, and a live
+ * preview of the resulting message text.
+ * @param {import('./feedback-overlay.js').FeedbackSession} session
+ * @returns {HTMLElement}
+ */
+function buildStagingTray(session) {
+    const tray = document.createElement('div');
+    tray.className = 'nihongo-fb-staging-tray';
+
+    const bar = document.createElement('div');
+    bar.className = 'nihongo-fb-staging-bar';
+
+    const info = document.createElement('span');
+    info.className = 'nihongo-fb-staging-info';
+
+    if (!session.hasStaged()) {
+        info.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> ';
+        info.appendChild(document.createTextNode('Stage fixes above to apply them to your message.'));
+        bar.appendChild(info);
+        tray.appendChild(bar);
+        return tray;
+    }
+
+    const count = session.stagedCount();
+    info.innerHTML = '<i class="fa-solid fa-layer-group"></i> ';
+    info.appendChild(document.createTextNode(
+        session.isRevisedStaged() ? 'Full revision staged' : `${count} fix${count === 1 ? '' : 'es'} staged`));
+    bar.appendChild(info);
+
+    const applyBtn = document.createElement('button');
+    applyBtn.className = 'menu_button menu_button_icon nihongo-fb-staging-apply';
+    applyBtn.innerHTML = '<i class="fa-solid fa-arrow-down-to-line"></i> ';
+    applyBtn.appendChild(document.createTextNode('Apply to message'));
+    applyBtn.addEventListener('click', () => {
+        applyBtn.disabled = true;
+        Promise.resolve(session.commit()).catch((err) => {
+            console.error('[NihongoHelper:Feedback] apply to message failed', err);
+            applyBtn.disabled = false;
+        });
+    });
+    bar.appendChild(applyBtn);
+    bar.appendChild(iconTextButton('fa-xmark', 'Clear', () => session.clearStaging()));
+    tray.appendChild(bar);
+
+    const preview = document.createElement('div');
+    preview.className = 'nihongo-fb-staging-preview nihongo-fb-jp';
+    renderFormatted(preview, session.previewText());
+    tray.appendChild(preview);
+
+    return tray;
 }
 
 // ===== Internal builders =====
@@ -504,7 +639,7 @@ function buildStrengthItem(strength) {
     return item;
 }
 
-function buildRevisedBlock(text, { showApply, onApply } = {}) {
+function buildRevisedBlock(text, { showApply, onApply, staging } = {}) {
     const block = document.createElement('div');
     block.className = 'nihongo-fb-section nihongo-fb-revised';
 
@@ -530,6 +665,16 @@ function buildRevisedBlock(text, { showApply, onApply } = {}) {
         applyBtn.addEventListener('click', () => onApply(text));
         actions.appendChild(applyBtn);
     }
+    // Attached-card staging: stage the whole revision (supersedes individual fixes).
+    if (staging) {
+        const staged = staging.isRevisedStaged();
+        const stageBtn = document.createElement('button');
+        stageBtn.className = `menu_button menu_button_icon nihongo-fb-stage-btn${staged ? ' nihongo-fb-staged' : ''}`;
+        stageBtn.innerHTML = `<i class="fa-solid ${staged ? 'fa-square-check' : 'fa-square'}"></i> `;
+        stageBtn.appendChild(document.createTextNode(staged ? 'Revision staged' : 'Stage revision'));
+        stageBtn.addEventListener('click', (e) => { e.stopPropagation(); staging.toggleRevised(); });
+        actions.appendChild(stageBtn);
+    }
     block.appendChild(actions);
     return block;
 }
@@ -550,7 +695,7 @@ function buildRevisedBlock(text, { showApply, onApply } = {}) {
  * @param {string} text
  * @param {{inline?: boolean, reasoning?: boolean}} [opts]
  */
-function renderFormatted(el, text, opts = {}) {
+export function renderFormatted(el, text, opts = {}) {
     const { inline = false, reasoning = false } = opts;
     const html = messageFormatting(String(text ?? ''), '', false, false, -1, {}, reasoning);
     if (!inline) {

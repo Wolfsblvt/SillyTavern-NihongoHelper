@@ -127,7 +127,34 @@ When writing Japanese, learners make mistakes they don't notice. Existing tools 
 Versioned JSON: `{ version, summary, revisedText|null, strengths[], issues[] }`. Each issue has `category`, `severity` (info/minor/major/critical), `confidence` (low/medium/high), `quote`, `occurrence`, `sentence?`, `explanation`, `replacement?`, `alternatives?`. The extension owns the contract and the category/severity tables (assembled from registries in `feedback-schema.js`); tutor presets only influence *style* via an optional `feedback` field. Parsing is defensive (fence-stripping, one trailing-comma repair, length/type clamping, unknown categories → generic fallback). Anchors are **application-computed** from the quote + occurrence, never trusted from the model.
 
 ### Categories
-grammar, particle, conjugation, word_choice, naturalness, meaning, register, context, orthography, punctuation (+ generic `other` fallback).
+grammar, particle, conjugation, word_choice, naturalness, meaning, register, context, orthography, punctuation (+ generic `other` fallback). The 10 substantive categories split the axes a learner actually wants separated (particle/conjugation pulled out of grammar = highest-frequency correctable errors; naturalness vs meaning vs word_choice = "unnatural-but-correct" vs "wrong meaning" vs "wrong word"). **Category ids are a stable API** — they live in persisted records, so wording can evolve but renaming an id orphans old feedback (falls back to `other`).
+
+### Feedback language & rendering (round 2)
+Feedback prose is **English by mandate** (summary, explanations, strengths); Japanese is reserved for the learner's own language content (quotes, replacements, alternatives, revised text). All model text renders through ST's `messageFormatting` (markdown + the `afterMarkdown` furigana hook + DOMPurify) — the same path as the main chat — so feedback gets automatic furigana + inspect-mode word/kanji tooltips with no extra wiring, and DOMPurify is the sanitization boundary for untrusted output. The model's reasoning is captured, persisted, and shown in a collapsible block (streaming-expanded during analysis, auto-collapsed on result).
+
+### Inline anchored feedback on sent messages (highlights + staged apply)
+
+**Goal.** Render anchored issues as underlines directly over the original Japanese in a sent message, with a click-to-open popover per span, and let the user fix the message in place.
+
+**Activation — global setting `feedbackInlineMode`** (`off` default / `auto` / `always`):
+- `auto` is **positional**: it targets the *latest user message in the branch* (no newer user message after it), regardless of AI replies or whether feedback exists yet. Once a newer user message arrives, the older one is "locked" (auto → off) — the assumption being the user has moved on and won't rewrite buried history.
+- `always` shows marks on every message that has feedback.
+- A **per-message toggle** lives on the **feedback card header** (not the message button row — the overlay only means anything where feedback exists). It reflects the effective state (including auto/always having turned it on) and is **hidden in `always` mode** (redundant there). Manual override is ephemeral (runtime, resets to mode default on reload).
+
+**Offset → DOM mapping (the hard part).** Source offsets from the anchor do **not** map cleanly onto `.mes_text` (markdown transforms characters; `<rt>` furigana readings aren't in the source). So the overlay **searches for the issue's `quote` (occurrence-aware) in the rendered text while ignoring `<rt>` reading text** (the same ruby-skipping text-node walk the kanji tooltip uses), builds a DOM `Range`, and wraps the covered segments in `.nihongo-fb-mark` spans (possibly several per issue across inline boundaries). Severity drives the underline color. Unlocatable quotes are silently skipped for highlighting — the card still lists them. Marks are re-applied after furigana on `MESSAGE_UPDATED/EDITED/SWIPED` + `CHAT_CHANGED`.
+
+**Popover vs inspect-mode conflict.** Marks contain `.nihongo-word` spans, so a hover popover would collide with the inspect tooltip on the same pixels. Resolution: **word/dictionary tooltip stays on hover; the feedback popover opens on click** of a mark. Zero hover conflict in any mode; opening the popover dismisses any active word tooltip. (Optional later: also hover-open when inspect mode is off.)
+
+**Apply via staging (not destructive per-click).** Editing a sent message mutates persisted history with a rendered DOM and surrounding AI messages, so we don't mutate per-click like the draft modal does to its working copy. Instead:
+- Each safe issue (in the card list **and** the inline popover) gets a reversible **"Stage fix"** toggle.
+- A **staging tray** on the card shows the count + a **live preview** of the result and an **Apply to message** / **Clear** action.
+- The preview/commit applies staged replacements **right-to-left using the original anchors** (rightmost edit first → earlier offsets stay valid, no re-search needed; overlapping stages are detected and flagged). The full-revision ("use revised text") is an all-or-nothing stage that supersedes individual fixes.
+- **Apply to message** = one ST message edit → one `saveChat` → one stale event → offer regenerate. We never auto-swipe the AI reply; the user does that.
+- This pure transform (`applyStagedFixes(source, issues)`) lives in `feedback-schema.js` and is unit-tested.
+
+**Apply availability — global setting `feedbackApplyPolicy`** (`latest-only` / `one-reply` default / `always`): gates whether the staging UI appears based on how many assistant messages follow the user message. `one-reply` is the default because the common flow is *send → feedback + auto-reply generate in parallel → user spots a critical error → fix the message → swipe the reply.*
+
+**Scope (v1):** sent user messages only. The draft modal (textarea) and "continuous review while typing" (3g) remain separate.
 
 ### Phases
 | Phase | Status | Scope | Depends On |
@@ -136,9 +163,13 @@ grammar, particle, conjugation, word_choice, naturalness, meaning, register, con
 | 3a′ | ✅ | Sent-message entry point (message action button + attached card) | #2a |
 | 3b | ✅ | Versioned structured output parsing, validation, and rendering | 3a |
 | 3c | ✅ | Conversation-context injection (configurable count, role-ordered, excludes hidden) | 3b |
-| 3d | � | "Apply fix" — full revised text + single-issue apply in the draft modal (safe-anchor gated). Inline composer underlines still deferred. | 3b |
+| 3d | ✅ | "Apply fix" — full revised text + single-issue apply in the draft modal (safe-anchor gated) | 3b |
 | 3e | ✅ | Sensitivity levels + learner-level (known/learning kanji) prompting | #7 (tracking) |
 | 3f | ✅ | Automatic feedback mode (Japanese-only), persistence, staleness, concurrency/chat-switch safety | 3a′, 3b |
+| 3d′ | ✅ | English feedback + chat-parity rendering (furigana/markdown/tooltips) + persisted reasoning | 3b |
+| 3i | 🧪 | Inline anchored highlights on sent messages (quote→DOM range ignoring ruby, severity underlines, click popover, inspect coordination) | 3b |
+| 3j | 🧪 | Apply-on-sent-message: staging tray + live preview + single commit (`applyStagedFixes`, ST edit path) | 3i |
+| 3k | 🧪 | Settings `feedbackInlineMode` (off/auto/always) + `feedbackApplyPolicy` (latest-only/one-reply/always) | 3i, 3j |
 | 3g | 🔲 | Inline composer highlights / continuous review while typing | 3d |
 | 3h | 🔲 | Mistake analytics + Anki suggestions from recurring issues | tracking |
 

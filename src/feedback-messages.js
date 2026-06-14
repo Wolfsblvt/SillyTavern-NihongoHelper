@@ -16,7 +16,7 @@
  * continued presence before they attach or persist.
  */
 
-import { eventSource } from '../../../../../script.js';
+import { eventSource, updateMessageBlock, saveChatConditional } from '../../../../../script.js';
 import { event_types } from '../../../../events.js';
 import { EXTENSION_NAME } from '../index.js';
 import { nihongoSettings } from './settings.js';
@@ -24,6 +24,7 @@ import { getActivePresetId, getActivePreset } from './side-chat-prompts.js';
 import { hasJapaneseContent } from './feedback-schema.js';
 import { runFeedback, buildRequestKey, isFeedbackInFlight, feedbackSourceHash } from './feedback-engine.js';
 import { createFeedbackCard } from './feedback-render.js';
+import { createFeedbackSession, applyOverlayState, clearInlineMarks, closeFeedbackPopover } from './feedback-overlay.js';
 
 /** Persisted record schema version. */
 const RECORD_VERSION = 1;
@@ -64,6 +65,9 @@ export function initFeedbackMessages() {
         runAutoFeedback(id);
     });
     eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (id) => ensureButtonOnMessage(getMessageElement(id)));
+
+    // Re-evaluate inline-overlay visibility on all cards when the mode changes.
+    document.addEventListener('nihongo-feedback-inline-mode-changed', () => refreshAllFeedbackCards());
 }
 
 /**
@@ -163,8 +167,10 @@ export async function runFeedbackForMessage(messageId, opts = {}) {
         // request is still registered; the card already has the right callbacks.)
         setRecord(message, buildRecord(outcome.result, sourceHash, outcome.reasoning));
         await liveCtx.saveChat();
+        const session = makeSession(message, outcome.result, false);
         if (liveEl) placeCard(liveEl, card.element);
-        card.setResult(outcome.result, { stale: false, reasoning: outcome.reasoning });
+        card.setResult(outcome.result, { stale: false, reasoning: outcome.reasoning, session });
+        updateOverlay(message, session, false);
     } catch (err) {
         console.error(`[${EXTENSION_NAME}] Feedback run error:`, err);
         card.setError(err?.message || 'Feedback failed.');
@@ -249,7 +255,9 @@ async function removeFeedback(message) {
     if (index != null && index >= 0) {
         const mesEl = getMessageElement(index);
         mesEl?.querySelector(':scope .mes_block > .nihongo-feedback-card')?.remove();
+        clearInlineMarks(mesEl);
     }
+    closeFeedbackPopover();
     try { await ctx?.saveChat(); } catch { /* ignore */ }
 }
 
@@ -279,8 +287,94 @@ function renderPersistedCard(mesEl, message, opts = {}) {
             onRemove: () => removeFeedback(message),
         },
     });
-    card.setResult(record.result, { stale, reasoning: record.reasoning });
+    const session = makeSession(message, record.result, stale);
+    card.setResult(record.result, { stale, reasoning: record.reasoning, session });
     placeCard(mesEl, card.element);
+    updateOverlay(message, session, stale);
+}
+
+// ===== Inline overlay + staging =====
+
+/**
+ * Creates a per-message feedback session wiring staging + inline highlights to
+ * the current settings, and subscribes the overlay to it.
+ * @param {object} message
+ * @param {import('./feedback-schema.js').FeedbackResult} result
+ * @param {boolean} stale
+ * @returns {import('./feedback-overlay.js').FeedbackSession}
+ */
+function makeSession(message, result, stale) {
+    const mode = nihongoSettings.feedbackInlineMode;
+    const index = findIndex(message);
+    const session = createFeedbackSession({
+        result,
+        getSourceText: () => (typeof message.mes === 'string' ? message.mes : ''),
+        applyAllowed: !stale && isApplyAllowed(index),
+        inlineToggleable: mode !== 'always',
+        initialInlineVisible: computeInitialInline(index, mode),
+        onCommit: (text) => applyTextToMessage(message, text),
+    });
+    // Drive the inline marks from staging/visibility changes (staleness is fixed
+    // for this card's lifetime — an edit rebuilds the card with a new session).
+    session.subscribe(() => updateOverlay(message, session, stale));
+    return session;
+}
+
+/** Brings a message's inline marks in line with its session + staleness. */
+function updateOverlay(message, session, stale) {
+    const idx = findIndex(message);
+    const el = idx >= 0 ? getMessageElement(idx) : null;
+    applyOverlayState(el, session, { stale });
+}
+
+/** Whether `auto` mode should auto-show marks here: the latest user message. */
+function computeInitialInline(index, mode) {
+    if (mode === 'always') return true;
+    if (mode === 'auto') return isLatestUserMessage(index);
+    return false; // off — revealed only via the per-message toggle
+}
+
+/** True when no newer user message follows `index` (positional 'latest'). */
+function isLatestUserMessage(index) {
+    const chat = safeContext()?.chat;
+    if (!chat || index < 0) return false;
+    for (let i = index + 1; i < chat.length; i++) {
+        if (chat[i]?.is_user) return false;
+    }
+    return true;
+}
+
+/** Whether in-place apply is offered for `index`, per the apply policy. */
+function isApplyAllowed(index) {
+    const chat = safeContext()?.chat;
+    if (!chat || index < 0) return false;
+    const policy = nihongoSettings.feedbackApplyPolicy;
+    if (policy === 'always') return true;
+    const after = chat.length - 1 - index;
+    if (policy === 'latest-only') return after <= 0;
+    return after <= 1; // one-reply (default): tolerate a single reply after
+}
+
+/**
+ * Commits staged text to the message in one edit, then persists + re-renders.
+ * The feedback then goes stale (text changed) and a regenerate is offered.
+ * @param {object} message
+ * @param {string} newText
+ */
+async function applyTextToMessage(message, newText) {
+    const ctx = safeContext();
+    const index = ctx?.chat?.indexOf(message);
+    if (index == null || index < 0) return;
+
+    closeFeedbackPopover();
+    message.mes = newText;
+    if (message.swipe_id !== undefined && Array.isArray(message.swipes)) {
+        message.swipes[message.swipe_id] = newText;
+    }
+    // Re-render the message body (re-applies furigana), persist, and notify.
+    updateMessageBlock(index, message);
+    await saveChatConditional();
+    await eventSource.emit(event_types.MESSAGE_UPDATED, index);
 }
 
 /**

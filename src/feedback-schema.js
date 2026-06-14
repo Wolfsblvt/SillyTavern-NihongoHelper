@@ -339,6 +339,62 @@ export function isIssueSafeToApply(issue) {
     return issue.anchor.count === 1 || issue.occurrenceProvided === true;
 }
 
+/**
+ * Applies a set of issue replacements to the source text in a single pass.
+ *
+ * Used by the sent-message "staging" apply flow: the user stages N fixes, then
+ * commits them all at once. Each issue is re-anchored **fresh** against the
+ * current `sourceText` (by its exact quote + 1-based occurrence) so callers
+ * never have to trust a stale offset. Accepted edits are applied
+ * **right-to-left** so earlier offsets stay valid without any re-search, and
+ * overlapping edits are detected and skipped rather than corrupting the output.
+ *
+ * Pure (no DOM, no ST imports) so it is unit-testable in Node.
+ *
+ * @param {string} sourceText
+ * @param {FeedbackIssue[]} issues  Issues to apply; each needs `quote` + a string `replacement`.
+ * @returns {{ text: string, applied: FeedbackIssue[], skipped: Array<{issue: FeedbackIssue, reason: 'unresolved'|'overlap'}> }}
+ */
+export function applyStagedFixes(sourceText, issues) {
+    const src = typeof sourceText === 'string' ? sourceText : '';
+    const list = Array.isArray(issues) ? issues : [];
+    const skipped = [];
+
+    // Resolve each issue's span fresh against the current source.
+    const resolved = [];
+    for (const issue of list) {
+        const replacement = issue && typeof issue.replacement === 'string' ? issue.replacement : null;
+        const anchor = resolveAnchor(src, issue?.quote, issue?.occurrence);
+        if (replacement === null || !anchor.found) {
+            skipped.push({ issue, reason: 'unresolved' });
+            continue;
+        }
+        resolved.push({ issue, start: anchor.start, end: anchor.end, replacement });
+    }
+
+    // Greedily accept non-overlapping spans (earliest start, then shortest, wins).
+    resolved.sort((a, b) => a.start - b.start || a.end - b.end);
+    const accepted = [];
+    let lastEnd = -1;
+    for (const r of resolved) {
+        if (r.start < lastEnd) {
+            skipped.push({ issue: r.issue, reason: 'overlap' });
+            continue;
+        }
+        accepted.push(r);
+        lastEnd = r.end;
+    }
+
+    // Apply right-to-left so earlier (smaller) offsets remain valid as we edit.
+    let text = src;
+    for (let i = accepted.length - 1; i >= 0; i--) {
+        const r = accepted[i];
+        text = text.slice(0, r.start) + r.replacement + text.slice(r.end);
+    }
+
+    return { text, applied: accepted.map(r => r.issue), skipped };
+}
+
 // ===== Public: misc helpers =====
 
 /**

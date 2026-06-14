@@ -14,6 +14,7 @@ import {
     resolveAnchor,
     resolveResultAnchors,
     isIssueSafeToApply,
+    applyStagedFixes,
     computeHighestSeverity,
     hashText,
     hasJapaneseContent,
@@ -201,6 +202,63 @@ function eq(name, actual, expected) {
 {
     const out = parseFeedbackResponse('{"summary":"ok","issues":[]}');
     check('version: defaults when missing', out.ok && out.result.version === FEEDBACK_SCHEMA_VERSION);
+}
+
+// ── 14. applyStagedFixes: multi-fix commit, right-to-left, overlap handling ──
+{
+    // Two non-adjacent fixes apply cleanly in one pass.
+    const src = 'これはペンです。あれは本です。';
+    const issues = [
+        { quote: 'ペン', occurrence: 1, replacement: '鉛筆' },
+        { quote: '本', occurrence: 1, replacement: '雑誌' },
+    ];
+    const out = applyStagedFixes(src, issues);
+    eq('stage: both applied', out.applied.length, 2);
+    eq('stage: result text', out.text, 'これは鉛筆です。あれは雑誌です。');
+    eq('stage: nothing skipped', out.skipped.length, 0);
+}
+{
+    // Replacement that changes length must not corrupt a later (leftward) edit:
+    // right-to-left application keeps earlier offsets valid.
+    const src = 'AAA BBB CCC';
+    const issues = [
+        { quote: 'AAA', occurrence: 1, replacement: 'X' },        // shortens
+        { quote: 'CCC', occurrence: 1, replacement: 'LONGWORD' }, // lengthens, to the right
+    ];
+    const out = applyStagedFixes(src, issues);
+    eq('stage: length-changing edits correct', out.text, 'X BBB LONGWORD');
+}
+{
+    // Occurrence-aware: only the 2nd "ねこ" is replaced.
+    const src = 'ねこ と ねこ';
+    const out = applyStagedFixes(src, [{ quote: 'ねこ', occurrence: 2, replacement: '犬' }]);
+    eq('stage: occurrence targeting', out.text, 'ねこ と 犬');
+}
+{
+    // Overlapping spans: the second (overlapping) edit is skipped, not corrupted.
+    const src = '食べたい';
+    const out = applyStagedFixes(src, [
+        { quote: '食べたい', occurrence: 1, replacement: '飲みたい' },
+        { quote: 'たい', occurrence: 1, replacement: 'たくない' },
+    ]);
+    eq('stage: overlap keeps first', out.text, '飲みたい');
+    eq('stage: overlap skips second', out.skipped.filter(s => s.reason === 'overlap').length, 1);
+}
+{
+    // Unresolvable quote is skipped; the resolvable one still applies.
+    const src = 'りんご';
+    const out = applyStagedFixes(src, [
+        { quote: 'みかん', occurrence: 1, replacement: 'X' },
+        { quote: 'りんご', occurrence: 1, replacement: '林檎' },
+    ]);
+    eq('stage: unresolved skipped', out.skipped.filter(s => s.reason === 'unresolved').length, 1);
+    eq('stage: resolvable still applied', out.text, '林檎');
+}
+{
+    // No staged issues → text unchanged.
+    const out = applyStagedFixes('そのまま', []);
+    eq('stage: empty leaves text', out.text, 'そのまま');
+    eq('stage: empty applied none', out.applied.length, 0);
 }
 
 console.log(`\nWriting Feedback schema tests: ${passed} passed, ${failed} failed.`);

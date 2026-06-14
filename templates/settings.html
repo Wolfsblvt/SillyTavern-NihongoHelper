@@ -163,6 +163,28 @@
                     <span>Expand feedback cards by default</span>
                 </label>
                 <div class="flex-container flexFlowColumn" style="margin-top: 4px;">
+                    <label for="nihongo_helper_feedback_inline_mode">
+                        <span>Inline highlights</span>
+                    </label>
+                    <select id="nihongo_helper_feedback_inline_mode" class="text_pole">
+                        <option value="off">Off — show via the card's marker button</option>
+                        <option value="auto">Auto — on your latest message</option>
+                        <option value="always">Always — on every reviewed message</option>
+                    </select>
+                    <small class="notes">Underline flagged spans directly in the message. A marker button on each feedback card toggles it per message (hidden in <b>Always</b>).</small>
+                </div>
+                <div class="flex-container flexFlowColumn" style="margin-top: 4px;">
+                    <label for="nihongo_helper_feedback_apply_policy">
+                        <span>Allow fixing sent messages</span>
+                    </label>
+                    <select id="nihongo_helper_feedback_apply_policy" class="text_pole">
+                        <option value="latest-only">Only the latest message (no reply yet)</option>
+                        <option value="one-reply">Up to one reply after it</option>
+                        <option value="always">Always</option>
+                    </select>
+                    <small class="notes">Whether feedback can edit an already-sent message in place. Editing rewrites the message; you may then re-swipe the reply.</small>
+                </div>
+                <div class="flex-container flexFlowColumn" style="margin-top: 4px;">
                     <label for="nihongo_helper_feedback_instructions">
                         <span>Global feedback instructions</span>
                     </label>
