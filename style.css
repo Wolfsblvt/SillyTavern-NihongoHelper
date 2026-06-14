@@ -2622,30 +2622,24 @@
 
 /* ── Inline overlay: marks on the sent message ── */
 
-/* A flagged span underneath the original Japanese. Underline (not background)
-   keeps furigana ruby readable; click opens the issue popover. */
+/* A flagged span underneath the original Japanese. Underlines are drawn as
+   stacked background gradients (one per covering issue) in feedback-overlay.js,
+   so overlapping notes can show separate severity-coloured lines while keeping
+   furigana ruby readable. Click opens the issue popover. */
 .nihongo-fb-mark {
     cursor: pointer;
     border-radius: 2px;
-    text-decoration-line: underline;
-    text-decoration-style: solid;
-    text-decoration-thickness: 2px;
-    text-underline-offset: 3px;
     transition: background-color 0.12s ease;
 }
 .nihongo-fb-mark:hover {
-    background: var(--white10a, rgba(255, 255, 255, 0.09));
+    /* background-color only — must not reset the inline background-image underlines. */
+    background-color: var(--white10a, rgba(255, 255, 255, 0.09));
 }
 
-.nihongo-fb-mark-sev-info { text-decoration-color: rgba(120, 160, 255, 0.85); }
-.nihongo-fb-mark-sev-minor { text-decoration-color: rgba(230, 200, 90, 0.9); }
-.nihongo-fb-mark-sev-major { text-decoration-color: rgba(255, 150, 70, 0.95); }
-.nihongo-fb-mark-sev-critical { text-decoration-color: rgba(240, 90, 90, 1); }
-
-/* Staged for apply: tinted + dashed so it reads as "pending change". */
+/* Staged for apply: green tint so it reads as "pending change" (the underline
+   gradients stay on top via the inline background-image). */
 .nihongo-fb-mark-staged {
-    background: rgba(111, 214, 147, 0.18);
-    text-decoration-style: dashed;
+    background-color: rgba(111, 214, 147, 0.18);
 }
 
 /* Header inline-highlights toggle, active state. */

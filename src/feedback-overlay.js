@@ -26,6 +26,24 @@ import { hideKanjiTooltip } from './kanji-tooltip.js';
 
 const MARK_CLASS = 'nihongo-fb-mark';
 
+/** Underline colour per severity. Single source for inline mark underlines. */
+const MARK_SEV_COLOR = Object.freeze({
+    info: 'rgba(120, 160, 255, 0.85)',
+    minor: 'rgba(230, 200, 90, 0.9)',
+    major: 'rgba(255, 150, 70, 0.95)',
+    critical: 'rgba(240, 90, 90, 1)',
+});
+
+/**
+ * Stacked-underline geometry (px). A mark draws one underline per covering
+ * issue: the longest/outer issue is the line closest to the text (`base` px
+ * below it), so it reads as one continuous underline across the phrase; nested
+ * shorter notes stack progressively further below (`gap` apart), each in its own
+ * severity colour. `paddingBottom` is constant for every mark so that outer line
+ * aligns across all segments of the same issue (continuity).
+ */
+const MARK_UNDERLINE = Object.freeze({ thickness: 2, gap: 3, base: 3, max: 2, paddingBottom: 8 });
+
 // ===== Session =====
 
 /**
@@ -210,14 +228,15 @@ export function renderInlineMarks(mesEl, session) {
 
     // Wrap each sub-segment. Rebuild the map per segment: wrapping changes node
     // boundaries but not text content, so the offsets stay valid. Order covering
-    // issues by severity (then span length) so the primary drives the underline.
+    // issues longest-span first (then severity) so the outer issue is the
+    // continuous top line and nested notes stack below it.
     for (const sub of subs) {
-        const ordered = sub.covering
+        const stack = sub.covering
             .slice()
-            .sort((a, b) => severityRank(b.issue) - severityRank(a.issue) || (b.end - b.start) - (a.end - a.start))
+            .sort((a, b) => (b.end - b.start) - (a.end - a.start) || severityRank(b.issue) - severityRank(a.issue))
             .map(c => c.issue);
         const map = buildTextMap(mesText);
-        wrapOffsets(map, sub.start, sub.end, () => makeMark(ordered, session));
+        wrapOffsets(map, sub.start, sub.end, () => makeMark(stack, session));
     }
 }
 
@@ -275,19 +294,19 @@ function markIssueIndices(mark) {
 // ===== Mark creation =====
 
 /**
- * Builds a mark span covering one or more issues (the first is the primary,
- * driving the underline severity).
- * @param {any[]} issues - Covering issues, primary first.
+ * Builds a mark span covering one or more issues, drawing one stacked underline
+ * per issue (the first/longest sits lowest).
+ * @param {any[]} issues - Covering issues, longest-span first.
  * @param {FeedbackSession} session
  * @returns {HTMLElement}
  */
 function makeMark(issues, session) {
-    const primary = issues[0];
     const span = document.createElement('span');
-    span.className = `${MARK_CLASS} nihongo-fb-mark-sev-${primary.severity}`;
+    span.className = MARK_CLASS;
     const allIssues = session.result?.issues || [];
     const idxs = issues.map(it => allIssues.indexOf(it)).filter(i => i >= 0);
     span.setAttribute('data-fb-issues', idxs.join(','));
+    applyMarkUnderlines(span, issues);
     if (session.applyAllowed && issues.some(it => session.isStaged(it))) {
         span.classList.add('nihongo-fb-mark-staged');
     }
@@ -301,6 +320,28 @@ function makeMark(issues, session) {
         openFeedbackPopover(span, issues, session);
     });
     return span;
+}
+
+/**
+ * Paints one stacked underline per covering issue onto a mark via layered
+ * `background-image` gradients (the robust way to draw N underlines that still
+ * wrap per line fragment). Top line (closest to text) = `issues[0]`
+ * (longest/outer); nested notes stack below it, each in its own severity colour.
+ * Capped at `max`; any extra issues are still listed in the popover.
+ * @param {HTMLElement} span
+ * @param {any[]} issues - Covering issues, longest-span first.
+ */
+function applyMarkUnderlines(span, issues) {
+    const { thickness, gap, base, max, paddingBottom } = MARK_UNDERLINE;
+    const colors = issues.slice(0, max).map(it => MARK_SEV_COLOR[it?.severity] || MARK_SEV_COLOR.minor);
+    span.style.backgroundImage = colors.map(c => `linear-gradient(${c}, ${c})`).join(', ');
+    span.style.backgroundRepeat = 'no-repeat';
+    span.style.backgroundSize = colors.map(() => `100% ${thickness}px`).join(', ');
+    // Lowest line `base` px below the text; each subsequent line `gap` px lower.
+    span.style.backgroundPosition = colors
+        .map((_, i) => `0 calc(100% - ${paddingBottom - base - i * gap}px)`)
+        .join(', ');
+    span.style.paddingBottom = `${paddingBottom}px`;
 }
 
 // ===== Text ↔ DOM mapping (ruby-aware) =====
