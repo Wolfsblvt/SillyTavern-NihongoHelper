@@ -120,7 +120,13 @@ export function createFeedbackCard(options = {}) {
     const body = document.createElement('div');
     body.className = 'nihongo-fb-body';
 
-    element.append(header, body);
+    // Staging tray host — kept OUTSIDE the collapsible body so the "Apply to
+    // message" controls stay reachable while the card is collapsed (inline marks
+    // + the popover let you stage fixes without ever expanding the card).
+    const tray = document.createElement('div');
+    tray.className = 'nihongo-fb-tray-host';
+
+    element.append(header, body, tray);
     applyExpanded();
 
     // ── State setters ──
@@ -194,6 +200,24 @@ export function createFeedbackCard(options = {}) {
             reasoning: lastResultOpts.reasoning,
             session: currentSession,
         }));
+        refreshTray();
+    }
+
+    /**
+     * Rebuilds the always-visible staging tray (sits outside the collapsible
+     * body). When collapsed we omit the empty-state hint and the live preview
+     * to stay compact — only the Apply/Clear bar shows once fixes are staged.
+     */
+    function refreshTray() {
+        tray.replaceChildren();
+        const staging = (currentSession && currentSession.applyAllowed && !lastResultOpts.stale)
+            ? currentSession : null;
+        if (!staging || !currentResult) return;
+        const hasStageable = Boolean(currentResult.revisedText)
+            || currentResult.issues?.some(isIssueSafeToApply);
+        if (!hasStageable) return;
+        if (!expanded && !staging.hasStaged()) return;
+        tray.appendChild(buildStagingTray(staging, { showPreview: expanded }));
     }
 
     function setStale(stale) {
@@ -205,6 +229,7 @@ export function createFeedbackCard(options = {}) {
     function clearSession() {
         if (sessionUnsub) { sessionUnsub(); sessionUnsub = null; }
         currentSession = null;
+        tray.replaceChildren();
         renderInlineToggle();
     }
 
@@ -257,6 +282,8 @@ export function createFeedbackCard(options = {}) {
     function applyExpanded() {
         element.classList.toggle('nihongo-fb-expanded', expanded);
         element.classList.toggle('nihongo-fb-collapsed', !expanded);
+        // The tray's empty-hint + preview visibility depend on expanded state.
+        refreshTray();
     }
 
     return {
@@ -325,12 +352,6 @@ export function buildResultView(result, opts = {}) {
         ok.innerHTML = '<i class="fa-solid fa-circle-check"></i> ';
         ok.appendChild(document.createTextNode('No issues found — this reads well.'));
         view.appendChild(ok);
-    }
-
-    // Staging tray (attached card, apply allowed, not stale): stage fixes and
-    // commit them to the message in one edit.
-    if (staging && (result.revisedText || result.issues?.some(isIssueSafeToApply))) {
-        view.appendChild(buildStagingTray(staging));
     }
 
     return view;
@@ -464,12 +485,14 @@ export function buildStageToggle(issue, session) {
 }
 
 /**
- * Builds the staging tray: a status line, apply/clear actions, and a live
- * preview of the resulting message text.
+ * Builds the staging tray: a status line, apply/clear actions, and (optionally)
+ * a live preview of the resulting message text.
  * @param {import('./feedback-overlay.js').FeedbackSession} session
+ * @param {{showPreview?: boolean}} [opts]
  * @returns {HTMLElement}
  */
-function buildStagingTray(session) {
+function buildStagingTray(session, opts = {}) {
+    const { showPreview = true } = opts;
     const tray = document.createElement('div');
     tray.className = 'nihongo-fb-staging-tray';
 
@@ -480,8 +503,9 @@ function buildStagingTray(session) {
     info.className = 'nihongo-fb-staging-info';
 
     if (!session.hasStaged()) {
+        tray.classList.add('nihongo-fb-staging-empty');
         info.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> ';
-        info.appendChild(document.createTextNode('Stage fixes above to apply them to your message.'));
+        info.appendChild(document.createTextNode('Stage fixes to apply them to your message.'));
         bar.appendChild(info);
         tray.appendChild(bar);
         return tray;
@@ -508,10 +532,12 @@ function buildStagingTray(session) {
     bar.appendChild(iconTextButton('fa-xmark', 'Clear', () => session.clearStaging()));
     tray.appendChild(bar);
 
-    const preview = document.createElement('div');
-    preview.className = 'nihongo-fb-staging-preview nihongo-fb-jp';
-    renderFormatted(preview, session.previewText());
-    tray.appendChild(preview);
+    if (showPreview) {
+        const preview = document.createElement('div');
+        preview.className = 'nihongo-fb-staging-preview nihongo-fb-jp';
+        renderFormatted(preview, session.previewText());
+        tray.appendChild(preview);
+    }
 
     return tray;
 }

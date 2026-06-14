@@ -2712,8 +2712,17 @@
     border-color: rgba(111, 214, 147, 0.6);
 }
 
+/* Always-visible host for the staging tray (sibling of the collapsible body,
+   so Apply/Clear stay reachable on a collapsed card). Collapses to nothing
+   when no fixes are staged. */
+.nihongo-fb-tray-host {
+    padding: 8px 12px 12px;
+}
+.nihongo-fb-tray-host:empty {
+    display: none;
+}
+
 .nihongo-fb-staging-tray {
-    margin-top: 12px;
     padding: 8px 10px;
     border-radius: 6px;
     border: 1px dashed color-mix(in srgb, var(--SmartThemeBorderColor) 60%, transparent);
