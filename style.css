@@ -2386,6 +2386,8 @@
 .nihongo-fb-strength .nihongo-fb-quote {
     font-weight: 600;
     color: #6fd693;
+    /* Strengths highlight what's *good* — don't strike them through like a correction. */
+    text-decoration: none;
 }
 
 /* ── Revised text block ── */
@@ -2694,6 +2696,24 @@
 
 .nihongo-fb-popover .nihongo-fb-change { margin: 4px 0; }
 .nihongo-fb-popover .nihongo-fb-issue-exp { margin: 6px 0 0; }
+
+.nihongo-fb-popover-title {
+    font-weight: 600;
+    opacity: 0.85;
+}
+
+/* Multi-issue popover (a mark sitting in an overlap region): one block per issue. */
+.nihongo-fb-popover-issue + .nihongo-fb-popover-issue {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid color-mix(in srgb, var(--SmartThemeBorderColor) 40%, transparent);
+}
+.nihongo-fb-popover-issue-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+}
 
 .nihongo-fb-popover-actions {
     margin-top: 8px;

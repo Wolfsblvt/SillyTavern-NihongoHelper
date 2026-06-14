@@ -166,7 +166,14 @@ export function applyOverlayState(mesEl, session, opts = {}) {
 
 /**
  * Wraps each locatable issue quote in `.mes_text` with a mark span. Existing
- * marks are cleared first. Non-overlapping spans only (earliest-start wins).
+ * marks are cleared first.
+ *
+ * Overlapping issues are common (e.g. a broad particle fix that contains a
+ * narrow orthography fix). Instead of dropping overlaps, the union of all
+ * ranges is split at every boundary into maximal sub-segments, each carrying
+ * the set of issues that cover it. Adjacent sub-segments render as touching
+ * marks, so a multi-word issue still reads as one continuous underline, while
+ * the overlap region opens a popover listing every issue there.
  * @param {HTMLElement} mesEl
  * @param {FeedbackSession} session
  */
@@ -178,30 +185,45 @@ export function renderInlineMarks(mesEl, session) {
     const issues = (session.result?.issues || []).filter(it => it && it.quote);
     if (!issues.length) return;
 
-    // Resolve a span (in rendered-text coordinates) for each issue once.
+    // Resolve a [start, end) range (in rendered-text coords) for each locatable issue.
     const map0 = buildTextMap(mesText);
-    const spans = [];
+    const intervals = [];
     for (const issue of issues) {
         const off = findOffsets(map0, issue.quote, issue.occurrence);
-        if (off) spans.push({ issue, start: off.start, end: off.end });
+        if (off && off.end > off.start) intervals.push({ issue, start: off.start, end: off.end });
+    }
+    if (!intervals.length) return;
+
+    // Split at every interval boundary into maximal sub-segments + their covering issues.
+    const bounds = new Set();
+    for (const iv of intervals) { bounds.add(iv.start); bounds.add(iv.end); }
+    const points = [...bounds].sort((a, b) => a - b);
+
+    const subs = [];
+    for (let i = 0; i < points.length - 1; i++) {
+        const start = points[i];
+        const end = points[i + 1];
+        if (end <= start) continue;
+        const covering = intervals.filter(iv => iv.start <= start && iv.end >= end);
+        if (covering.length) subs.push({ start, end, covering });
     }
 
-    // Greedily keep non-overlapping spans (earliest start, then shortest).
-    spans.sort((a, b) => a.start - b.start || a.end - b.end);
-    const accepted = [];
-    let lastEnd = -1;
-    for (const s of spans) {
-        if (s.start < lastEnd) continue;
-        accepted.push(s);
-        lastEnd = s.end;
-    }
-
-    // Wrap each accepted span. Rebuild the map per issue: wrapping never changes
-    // the text content (only node boundaries), so the offsets stay valid.
-    for (const s of accepted) {
+    // Wrap each sub-segment. Rebuild the map per segment: wrapping changes node
+    // boundaries but not text content, so the offsets stay valid. Order covering
+    // issues by severity (then span length) so the primary drives the underline.
+    for (const sub of subs) {
+        const ordered = sub.covering
+            .slice()
+            .sort((a, b) => severityRank(b.issue) - severityRank(a.issue) || (b.end - b.start) - (a.end - a.start))
+            .map(c => c.issue);
         const map = buildTextMap(mesText);
-        wrapOffsets(map, s.start, s.end, () => makeMark(s.issue, session));
+        wrapOffsets(map, sub.start, sub.end, () => makeMark(ordered, session));
     }
+}
+
+/** Severity rank for a single issue (higher = more severe), -1 if unknown. */
+function severityRank(issue) {
+    return SEVERITY[issue?.severity]?.rank ?? -1;
 }
 
 /**
@@ -231,27 +253,44 @@ export function clearInlineMarks(mesEl) {
 export function updateMarkStaging(mesEl, session) {
     const mesText = mesEl?.querySelector('.mes_text');
     if (!mesText) return;
+    const allIssues = session.result?.issues || [];
     for (const mark of mesText.querySelectorAll(`.${MARK_CLASS}`)) {
-        const idx = Number(mark.getAttribute('data-fb-issue'));
-        const issue = session.result?.issues?.[idx];
-        const staged = Boolean(session.applyAllowed && issue && session.isStaged(issue));
+        const idxs = markIssueIndices(mark);
+        const staged = Boolean(session.applyAllowed && idxs.some(i => {
+            const issue = allIssues[i];
+            return issue && session.isStaged(issue);
+        }));
         mark.classList.toggle('nihongo-fb-mark-staged', staged);
     }
+}
+
+/** Parses the issue indices a mark covers from its `data-fb-issues` attribute. */
+function markIssueIndices(mark) {
+    return (mark.getAttribute('data-fb-issues') || '')
+        .split(',')
+        .filter(Boolean)
+        .map(Number);
 }
 
 // ===== Mark creation =====
 
 /**
- * @param {any} issue
+ * Builds a mark span covering one or more issues (the first is the primary,
+ * driving the underline severity).
+ * @param {any[]} issues - Covering issues, primary first.
  * @param {FeedbackSession} session
  * @returns {HTMLElement}
  */
-function makeMark(issue, session) {
+function makeMark(issues, session) {
+    const primary = issues[0];
     const span = document.createElement('span');
-    span.className = `${MARK_CLASS} nihongo-fb-mark-sev-${issue.severity}`;
-    const idx = session.result?.issues?.indexOf(issue) ?? -1;
-    span.setAttribute('data-fb-issue', String(idx));
-    if (session.applyAllowed && session.isStaged(issue)) span.classList.add('nihongo-fb-mark-staged');
+    span.className = `${MARK_CLASS} nihongo-fb-mark-sev-${primary.severity}`;
+    const allIssues = session.result?.issues || [];
+    const idxs = issues.map(it => allIssues.indexOf(it)).filter(i => i >= 0);
+    span.setAttribute('data-fb-issues', idxs.join(','));
+    if (session.applyAllowed && issues.some(it => session.isStaged(it))) {
+        span.classList.add('nihongo-fb-mark-staged');
+    }
     span.addEventListener('click', (e) => {
         // Never hijack an active text selection.
         const sel = window.getSelection();
@@ -259,7 +298,7 @@ function makeMark(issue, session) {
         e.preventDefault();
         e.stopPropagation();
         hideKanjiTooltip();
-        openFeedbackPopover(span, issue, session);
+        openFeedbackPopover(span, issues, session);
     });
     return span;
 }
@@ -353,22 +392,24 @@ function ensurePopover() {
 }
 
 /**
- * Opens the issue popover anchored to a mark span.
+ * Opens the issue popover anchored to a mark span. Accepts one issue or several
+ * (when the span sits in an overlap region).
  * @param {HTMLElement} anchorEl
- * @param {any} issue
+ * @param {any|any[]} issues
  * @param {FeedbackSession} session
  */
-export function openFeedbackPopover(anchorEl, issue, session) {
+export function openFeedbackPopover(anchorEl, issues, session) {
+    const list = Array.isArray(issues) ? issues : [issues];
     const pop = ensurePopover();
     popoverAnchor = anchorEl;
-    renderPopoverContent(pop, issue, session);
+    renderPopoverContent(pop, list, session);
     pop.style.display = '';
     positionPopover(pop, anchorEl);
 
     if (popoverUnsub) popoverUnsub();
     popoverUnsub = session.subscribe(() => {
         if (popoverAnchor && document.body.contains(popoverAnchor)) {
-            renderPopoverContent(pop, issue, session);
+            renderPopoverContent(pop, list, session);
             positionPopover(pop, popoverAnchor);
         } else {
             closeFeedbackPopover();
@@ -407,18 +448,49 @@ export function closeFeedbackPopover() {
 }
 
 /**
+ * Renders the popover for one or more issues sharing a span.
  * @param {HTMLElement} pop
- * @param {any} issue
+ * @param {any[]} issues
  * @param {FeedbackSession} session
  */
-function renderPopoverContent(pop, issue, session) {
-    const cat = getCategory(issue.category);
-    const sev = SEVERITY[issue.severity] || SEVERITY.minor;
+function renderPopoverContent(pop, issues, session) {
     pop.replaceChildren();
+    const multi = issues.length > 1;
 
-    // Header: category + severity + close.
+    // Header: per-issue chips (single) or a count (multi) + close.
     const head = document.createElement('div');
     head.className = 'nihongo-fb-popover-head';
+    if (multi) {
+        const title = document.createElement('span');
+        title.className = 'nihongo-fb-popover-title';
+        title.textContent = `${issues.length} issues here`;
+        head.appendChild(title);
+    } else {
+        head.append(...buildIssueChips(issues[0]));
+    }
+    const close = document.createElement('button');
+    close.className = 'nihongo-fb-popover-close';
+    close.title = 'Close';
+    close.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+    close.addEventListener('click', () => closeFeedbackPopover());
+    head.appendChild(close);
+    pop.appendChild(head);
+
+    // One block per issue (separated when there are several).
+    for (const issue of issues) {
+        const block = multi ? document.createElement('div') : pop;
+        if (multi) {
+            block.className = 'nihongo-fb-popover-issue';
+            pop.appendChild(block);
+        }
+        renderPopoverIssue(block, issue, session, multi);
+    }
+}
+
+/** Builds the category + severity chips for an issue. */
+function buildIssueChips(issue) {
+    const cat = getCategory(issue.category);
+    const sev = SEVERITY[issue.severity] || SEVERITY.minor;
 
     const catChip = document.createElement('span');
     catChip.className = 'nihongo-fb-chip nihongo-fb-cat';
@@ -430,14 +502,24 @@ function renderPopoverContent(pop, issue, session) {
     sevChip.innerHTML = `<i class="fa-solid ${sev.icon}"></i> `;
     sevChip.appendChild(document.createTextNode(sev.label));
 
-    const close = document.createElement('button');
-    close.className = 'nihongo-fb-popover-close';
-    close.title = 'Close';
-    close.innerHTML = '<i class="fa-solid fa-xmark"></i>';
-    close.addEventListener('click', () => closeFeedbackPopover());
+    return [catChip, sevChip];
+}
 
-    head.append(catChip, sevChip, close);
-    pop.appendChild(head);
+/**
+ * Renders a single issue's content (optional chips, quote→replacement,
+ * explanation, stage toggle) into a container.
+ * @param {HTMLElement} container
+ * @param {any} issue
+ * @param {FeedbackSession} session
+ * @param {boolean} showChips - Show the category/severity chips inline (multi-issue mode).
+ */
+function renderPopoverIssue(container, issue, session, showChips) {
+    if (showChips) {
+        const chips = document.createElement('div');
+        chips.className = 'nihongo-fb-popover-issue-head';
+        chips.append(...buildIssueChips(issue));
+        container.appendChild(chips);
+    }
 
     // Quote → replacement.
     if (issue.quote || issue.replacement) {
@@ -457,7 +539,7 @@ function renderPopoverContent(pop, issue, session) {
             renderFormatted(r, issue.replacement, { inline: true });
             change.append(arrow, r);
         }
-        pop.appendChild(change);
+        container.appendChild(change);
     }
 
     // Explanation (English).
@@ -465,7 +547,7 @@ function renderPopoverContent(pop, issue, session) {
         const exp = document.createElement('div');
         exp.className = 'nihongo-fb-issue-exp';
         renderFormatted(exp, issue.explanation);
-        pop.appendChild(exp);
+        container.appendChild(exp);
     }
 
     // Stage toggle — only when in-place apply is allowed and the fix is safe.
@@ -473,7 +555,7 @@ function renderPopoverContent(pop, issue, session) {
         const actions = document.createElement('div');
         actions.className = 'nihongo-fb-popover-actions';
         actions.appendChild(buildStageToggle(issue, session));
-        pop.appendChild(actions);
+        container.appendChild(actions);
     }
 }
 
