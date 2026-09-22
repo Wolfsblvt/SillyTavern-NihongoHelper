@@ -8,7 +8,7 @@ A SillyTavern extension to help with learning Japanese through chat interactions
 ## Feature Status
 
 A compact overview of what's solid, what's still being shaped, and what's on the roadmap.
-For full design context, dependencies, and phased plans see [`ROADMAP.md`](ROADMAP.md).
+For full design context, dependencies, and phased plans see [`roadmap.md`](roadmap.md).
 For internal architecture see [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ### ✅ Stable / Usable
@@ -51,7 +51,7 @@ Working but not finalised. Expect rough edges, schema changes, and behaviour shi
 
 ### 🔮 Planned
 
-Designed but not implemented. See [`ROADMAP.md`](ROADMAP.md) for rationale, dependencies, and phased plans.
+Designed but not implemented. See [`roadmap.md`](roadmap.md) for rationale, dependencies, and phased plans.
 
 - **Tracking Correctness Improvements** — Fix seen-count semantics and primary-match strictness before extending tracking further.
 - **Extended Interaction Tracking** — Hover / lookup / per-action counts and a small bounded list of useful contexts per word.

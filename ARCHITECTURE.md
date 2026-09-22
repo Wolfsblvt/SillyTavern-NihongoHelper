@@ -706,7 +706,7 @@ Modify `buildSinglePage()` (word) or `populateKanjiTooltip()` (kanji) in kanji-t
 
 ## 9. Roadmap & Planned Architecture
 
-> See [`ROADMAP.md`](ROADMAP.md) for full feature designs, rationale, and phased plans.
+> See [`roadmap.md`](roadmap.md) for full feature designs, rationale, and phased plans.
 
 ### Implemented Architectural Expansions
 
