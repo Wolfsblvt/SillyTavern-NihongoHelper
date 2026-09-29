@@ -8,9 +8,6 @@ Japanese reading, lookup, and optional tutor feedback inside SillyTavern.
 
 NihongoHelper is for people who already read, write, roleplay, or converse in Japanese in SillyTavern and want help without breaking the flow of the chat. It adds automatic furigana, local dictionary and kanji inspection, study-state controls, a side-panel language assistant, and review tools for Japanese you write.
 
-> [!IMPORTANT]
-> NihongoHelper is an independent third-party extension. It is not maintained by, affiliated with, or endorsed by the SillyTavern project.
-
 > [!WARNING]
 > This is pre-release software (`0.1.0`). Reading and lookup are the most mature paths. Tutor chat, writing feedback, and word-confidence tracking are experimental and can still change.
 
