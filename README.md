@@ -113,7 +113,7 @@ Writing Feedback has two entry points:
 
 The draft-review path never sends the chat message for you. Applying a correction to an already-sent message is also an explicit action and follows the configured apply policy.
 
-Feedback requests can include the target Japanese plus a configurable number of preceding chat messages so the model can judge context and naturalness. The default is four preceding messages; set it to zero to send no conversation context.
+Feedback requests include the target Japanese, the count of kanji you have marked as known, and any kanji you have marked as actively studying. They can also include a configurable number of preceding chat messages so the model can judge context and naturalness. The default is four preceding messages; set it to zero to send no conversation context. The learner-state fields remain in the prompt when conversation context is set to zero.
 
 Automatic feedback is **off by default**. Enabling it for Japanese messages creates one additional model request for each eligible message.
 
@@ -239,7 +239,7 @@ The reading path includes committed copies or processed data derived from:
 - [kanji-data](https://github.com/davidluzgouveia/kanji-data) for kanji metadata;
 - [JPDB frequency list](https://github.com/MarvNC/jpdb-freq-list) for word-frequency ranks.
 
-Those components and data retain their own upstream terms and notices.
+These links identify the upstream sources, but this repository does not yet contain a complete bundled-data licence and attribution record. The bundled kuromoji JavaScript carries Apache-2.0 headers. [jmdict-simplified's licence account](https://github.com/scriptin/jmdict-simplified#license) distinguishes the original JMdict data's EDRDG terms from the CC BY-SA 4.0 terms for other project files. The kanji-data repository identifies an MIT licence for its project; the rights of its underlying data have not been reconciled here. The JPDB frequency-list repository does not declare a licence in its repository metadata. In particular, frequency-data rights and complete attribution remain unresolved; this project's AGPL licence does not settle them.
 
 ## License
 
